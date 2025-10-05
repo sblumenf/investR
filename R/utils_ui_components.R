@@ -167,3 +167,73 @@ create_standard_card <- function(..., class = NULL) {
 
   card(class = combined_class, ...)
 }
+
+#' Create a strategy card for home page
+#'
+#' Generates a standardized strategy card (well component) with title,
+#' description, and navigation button. Used for organizing strategies
+#' on the home page.
+#'
+#' @param title Strategy title string
+#' @param description Character vector of description paragraphs
+#' @param href Navigation link (e.g., "/aristocrats")
+#' @param button_text Text for the navigation button
+#' @return HTML div element with well styling
+#' @export
+create_strategy_card <- function(title, description, href, button_text) {
+  # Build description paragraphs
+  description_tags <- purrr::map(description, ~ tags$p(.x))
+
+  div(
+    class = "well",
+    h4(title),
+    description_tags,
+    tags$a(
+      href = href,
+      class = "btn btn-primary btn-lg",
+      button_text
+    )
+  )
+}
+
+#' Create a home page accordion section with strategy cards
+#'
+#' Generates an accordion section containing strategy cards arranged in
+#' a two-column layout. Uses HTML5 details/summary for native accordion
+#' behavior.
+#'
+#' @param title Section title (e.g., "Covered Call Strategies")
+#' @param strategies List of strategy metadata (each with title, description, href, button_text)
+#' @param is_open Logical, should section be open by default
+#' @return HTML details element with strategy cards
+#' @export
+create_home_accordion_section <- function(title, strategies, is_open = FALSE) {
+  # Split strategies into pairs for 2-column layout
+  strategy_pairs <- split(strategies, ceiling(seq_along(strategies) / 2))
+
+  # Create rows of strategy cards
+  card_rows <- purrr::map(strategy_pairs, function(pair) {
+    # Create columns for each strategy in the pair
+    columns <- purrr::map(pair, function(strategy) {
+      column(
+        width = 6,
+        create_strategy_card(
+          title = strategy$title,
+          description = strategy$description,
+          href = strategy$href,
+          button_text = strategy$button_text
+        )
+      )
+    })
+
+    # Return a fluidRow with the columns
+    do.call(fluidRow, columns)
+  })
+
+  # Wrap in accordion section
+  create_accordion_section(
+    title = title,
+    is_open = is_open,
+    card_rows
+  )
+}
