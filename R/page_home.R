@@ -81,13 +81,13 @@ page_home <- function() {
     ),
     portfolio_management = list(
       list(
-        title = "Portfolio Management Tools",
+        title = "Portfolio Positions",
         description = c(
-          "Coming soon: Tools for managing your investment portfolio, tracking positions, and analyzing performance.",
-          "This section is under development."
+          "View current holdings across all your Questrade accounts (RRSP, SRRSP, LIRA).",
+          "Track quantities, costs, current values, and unrealized P/L for all positions."
         ),
-        href = "#",
-        button_text = "Coming Soon"
+        href = "/portfolio/positions",
+        button_text = "View Positions"
       )
     )
   )

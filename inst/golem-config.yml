@@ -88,6 +88,18 @@ default:
     cache_ttl_hours: 8  # Cache valid for 8 hours (trading day)
     enable_async: true  # Enable async analysis in Shiny
 
+  # Portfolio management configuration
+  portfolio:
+    database_path: portfolio.duckdb  # DuckDB file name (stored in inst/database/)
+    stale_threshold_minutes: 15  # Auto-refresh if data older than this
+    default_visible_columns:
+      - symbol
+      - open_quantity
+      - current_price
+      - average_entry_price
+      - current_market_value
+      - total_cost
+
 production:
   app_prod: yes
 

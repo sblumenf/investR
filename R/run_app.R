@@ -68,6 +68,18 @@ run_app <- function(
   validate_dynamic_config()  # Dynamic Covered Calls
   validate_collar_config()  # Collar Strategy
 
+  # Questrade API health check - keeps refresh token alive
+  tryCatch({
+    # Immediate ping on startup
+    ping_questrade()
+
+    # Start background ping (runs every 24 hours while app is running)
+    start_questrade_background_ping()
+  }, error = function(e) {
+    # Silent failure - app continues even if Questrade is unreachable
+    NULL
+  })
+
   with_golem_options(
     app = brochureApp(
       # Add external resources (CSS, JS, favicon)
@@ -82,6 +94,7 @@ run_app <- function(
       page_dividend_capture_weekly(),
       page_dividend_capture_monthly(),
       page_dividend_capture_russell_2000(),
+      page_portfolio_positions(),
       page_about(),
 
       # Brochure configuration
