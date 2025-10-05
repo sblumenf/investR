@@ -1,0 +1,3 @@
+- Always use tidyverse syntax
+- Make sure that all Shiny functionality follows Golem frameworkd best practices.  Make sure to look up the official documentation and best practices from the web.
+- Make sure to use testthat for testng purposes

@@ -1,0 +1,463 @@
+/* ============================================================================
+   investR - Modern Financial Dashboard CSS
+   Design System: 2025 Best Practices - Enhanced Typography & Native Accordions
+   ============================================================================ */
+
+/* CSS Variables - Design Tokens
+   ========================================================================== */
+:root {
+  /* Spacing Scale - 8px base system */
+  --spacing-xs: 0.5rem;    /* 8px */
+  --spacing-sm: 1rem;      /* 16px */
+  --spacing-md: 1.5rem;    /* 24px */
+  --spacing-lg: 2rem;      /* 32px */
+  --spacing-xl: 2.5rem;    /* 40px */
+
+  /* Shadow System - Depth Hierarchy */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.16);
+
+  /* Color System */
+  --success-color: #10b981;
+  --success-hover: #059669;
+  --warning-color: #f59e0b;
+  --warning-hover: #d97706;
+  --secondary-color: #6c757d;
+  --secondary-hover: #5a6268;
+
+  --text-primary: #212529;
+  --text-secondary: #495057;
+  --text-muted: #adb5bd;
+
+  --bg-white: #ffffff;
+  --bg-light: #f8f9fa;
+  --bg-lighter: #f1f3f5;
+  --bg-warning-subtle: #fefce8;
+
+  --border-light: #dee2e6;
+  --border-warning: #f59e0b;
+
+  /* Typography Scale - Research-Based Uniform Sizing */
+  --font-size-xs: 0.875rem;        /* 14px */
+  --font-size-sm: 0.9375rem;       /* 15px */
+  --font-size-base: 1rem;          /* 16px - Labels & Values (unified) */
+  --font-size-md: 1.125rem;        /* 18px - Section headers */
+  --font-size-value: 1rem;         /* 16px - All metric values (unified) */
+  --font-size-value-primary: 1rem; /* 16px - Primary metrics (same size, bolder weight) */
+  --font-size-header: 1.125rem;    /* 18px - Card header company name */
+  --font-size-price: 1.25rem;      /* 20px - Stock price emphasis */
+  --font-size-xl: 1.5rem;          /* 24px */
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* Border Radius */
+  --radius-sm: 0.375rem;   /* 6px */
+  --radius-md: 0.5rem;     /* 8px */
+  --radius-lg: 0.75rem;    /* 12px */
+  --radius-pill: 1.5rem;   /* 24px */
+}
+
+/* Base Styles
+   ========================================================================== */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+/* Navigation
+   ========================================================================== */
+.navbar {
+  margin-bottom: var(--spacing-lg);
+  border-radius: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Opportunity Cards Container
+   ========================================================================== */
+.opportunity-cards-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+  padding: 0;
+}
+
+/* Modern Card Design
+   ========================================================================== */
+.bslib-card.opportunity-card {
+  border: none !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-md) !important;
+  transition: all var(--transition-base) !important;
+  background: var(--bg-white);
+  overflow: hidden;
+}
+
+.bslib-card.opportunity-card:hover {
+  box-shadow: var(--shadow-lg) !important;
+  transform: translateY(-2px);
+}
+
+/* Low Dividend Warning - Subtle Left Border Accent */
+.bslib-card.opportunity-card.low-dividend-warning {
+  background: var(--bg-warning-subtle) !important;
+  border-left: 4px solid var(--border-warning) !important;
+}
+
+/* Card Header - Two-Line Stacked Layout
+   ========================================================================== */
+.card-header {
+  padding: var(--spacing-md) !important;
+  background: transparent !important;
+  border-bottom: 1px solid var(--border-light) !important;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+/* Company Name and Ticker - Line 1 */
+.company-info {
+  font-size: var(--font-size-header);
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  margin: 0;
+}
+
+/* Stock Price - Line 2 */
+.stock-price {
+  font-size: var(--font-size-price);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+/* Card Body
+   ========================================================================== */
+.card-body {
+  padding: var(--spacing-md) !important;
+}
+
+/* HTML5 Details/Summary - Native Accordion
+   ========================================================================== */
+.accordion-section {
+  margin-bottom: 0.75rem;
+  border: none;
+}
+
+.accordion-section:last-child {
+  margin-bottom: 0;
+}
+
+/* Summary (Accordion Header) - Minimal & Clean */
+.accordion-header {
+  list-style: none;
+  cursor: pointer;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  border-bottom: 1px solid var(--border-light);
+  background-color: transparent;
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: background-color var(--transition-base);
+  position: relative;
+  display: block;
+  user-select: none;
+}
+
+/* Hide native disclosure triangle */
+.accordion-header::-webkit-details-marker {
+  display: none;
+}
+
+.accordion-header::marker {
+  display: none;
+}
+
+/* Custom chevron on RIGHT side only */
+.accordion-header::after {
+  content: "▼";
+  position: absolute;
+  right: var(--spacing-md);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  color: var(--text-secondary);
+  transition: transform var(--transition-base);
+}
+
+/* Rotate chevron when closed */
+details:not([open]) .accordion-header::after {
+  transform: translateY(-50%) rotate(-90deg);
+}
+
+/* Hover state */
+.accordion-header:hover {
+  background-color: var(--bg-light);
+}
+
+/* Open state */
+details[open] .accordion-header {
+  background-color: var(--bg-light);
+  border-bottom-color: var(--border-light);
+}
+
+/* Focus state for accessibility */
+.accordion-header:focus {
+  outline: 2px solid var(--success-color);
+  outline-offset: -2px;
+}
+
+/* Accordion Body */
+.accordion-body {
+  padding: var(--spacing-md);
+  background-color: var(--bg-white);
+  border-bottom: 1px solid var(--border-light);
+  animation: fadeIn 200ms ease-out;
+}
+
+/* Metric Rows - Uniform Size, Weight-Based Hierarchy
+   ========================================================================== */
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 1rem;
+  padding: 0.25rem 0;
+  gap: var(--spacing-sm);
+}
+
+.metric-row:last-child {
+  margin-bottom: 0;
+}
+
+/* Labels - 16px, medium weight */
+.metric-label {
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* Regular Values - 16px, semibold weight */
+.metric-value {
+  font-size: var(--font-size-value);
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Primary metrics - 16px, bold weight (NOT larger size) */
+.metric-value-primary {
+  font-size: var(--font-size-value-primary);
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: right;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Negative values (like drawdown) */
+.negative-value {
+  color: #dc3545;
+}
+
+/* Status Messages
+   ========================================================================== */
+.alert {
+  border-radius: var(--radius-md);
+  border: none;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.alert-success {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+/* Strategy Overview Well
+   ========================================================================== */
+.well {
+  background-color: var(--bg-light);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  transition: box-shadow var(--transition-base);
+}
+
+.well:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.well h4 {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
+}
+
+.well p {
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.well ul {
+  color: var(--text-secondary);
+  padding-left: var(--spacing-md);
+}
+
+.well li {
+  margin-bottom: 0.375rem;
+}
+
+/* Buttons
+   ========================================================================== */
+.btn {
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background-color: var(--success-color);
+  border-color: var(--success-color);
+}
+
+.btn-primary:hover {
+  background-color: var(--success-hover);
+  border-color: var(--success-hover);
+}
+
+/* Sidebar
+   ========================================================================== */
+.sidebar {
+  background-color: var(--bg-light);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Main Panel
+   ========================================================================== */
+.main {
+  padding: var(--spacing-md);
+}
+
+/* Typography Enhancements
+   ========================================================================== */
+h2, .h2 {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: var(--spacing-md);
+}
+
+h4, .h4 {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+a {
+  transition: color var(--transition-fast);
+  color: var(--success-color);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--success-hover);
+  text-decoration: underline;
+}
+
+/* Loading States & Animations
+   ========================================================================== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.opportunity-card {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Accessibility
+   ========================================================================== */
+.accordion-header:focus-visible {
+  outline: 2px solid var(--success-color);
+  outline-offset: 2px;
+}
+
+/* Ensure keyboard users can see focus */
+*:focus-visible {
+  outline: 2px solid var(--success-color);
+  outline-offset: 2px;
+}
+
+/* Responsive Adjustments
+   ========================================================================== */
+@media (max-width: 1200px) {
+  .opportunity-cards-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .opportunity-cards-container {
+    grid-template-columns: 1fr;
+  }
+
+  .card-header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
+
+  .return-badge {
+    align-self: flex-start;
+  }
+}
+
+/* Print Styles
+   ========================================================================== */
+@media print {
+  .bslib-card {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid var(--border-light) !important;
+  }
+
+  details .accordion-body {
+    display: block !important;
+  }
+
+  .accordion-header::after {
+    display: none;
+  }
+}

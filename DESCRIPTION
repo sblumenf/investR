@@ -1,0 +1,44 @@
+Package: investR
+Title: Investment Research Shiny Application
+Version: 0.0.0.9000
+Authors@R:
+    person("First", "Last", , "first.last@example.com", role = c("cre", "aut"))
+Description: A production-grade Shiny application built with golem and
+    Brochure for multi-page investment research capabilities.
+License: MIT + file LICENSE
+URL: https://github.com/yourusername/investR
+BugReports: https://github.com/yourusername/investR/issues
+Depends:
+    R (>= 4.1.0)
+Imports:
+    brochure,
+    bslib,
+    config (>= 0.3.1),
+    dplyr,
+    furrr,
+    future,
+    golem (>= 0.4.1),
+    logger,
+    lubridate,
+    purrr,
+    quantmod,
+    R.utils,
+    readr,
+    rvest,
+    shiny (>= 1.7.4),
+    stats,
+    stringr,
+    tibble,
+    utils,
+    zoo
+Suggests:
+    attachment,
+    here,
+    spelling,
+    testthat (>= 3.0.0),
+    xts
+Config/testthat/edition: 3
+Encoding: UTF-8
+Language: en-US
+LazyData: true
+RoxygenNote: 7.3.3

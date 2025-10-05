@@ -1,0 +1,95 @@
+default:
+  golem_name: investR
+  golem_version: 0.0.0.9000
+  app_prod: no
+
+  # Shared constants across all strategies
+  shared:
+    days_per_year: 365
+    trading_days_per_year: 252
+    default_max_workers: 4
+    max_workers_limit: 10
+    min_workers: 1
+
+  # Aristocrats strategy configuration
+  aristocrats:
+    max_workers: 10
+    strike_threshold_pct: 0.8
+    target_days: null
+    min_aristocrats: 50
+    min_dividend_quarters: 4
+    min_option_bid: 0.01
+    min_open_interest: 0
+    sgov_yield_default: 0.05
+    shares_per_contract: 100
+    history_years: 5
+    short_expiry_warning_days: 14
+    negative_return_threshold: 0
+    low_dividend_threshold: 0.5
+    error_truncate_length: 50
+    max_sgov_yield_sanity: 0.20
+    default_top_n: 10
+    output_dir: strategies
+
+  # Weekly dividend capture strategy configuration
+  weekly_capture:
+    weeks_per_year: 52
+    investment_amount: 10000
+    min_dividend_events: 5
+    rate_limit_seconds: 2
+    max_workers: 4
+
+  # Monthly dividend capture strategy configuration
+  monthly_capture:
+    months_per_year: 12
+    investment_amount: 10000
+    min_dividend_events: 5
+    rate_limit_seconds: 2
+    max_workers: 4
+
+  # Zero-dividend strategy configuration
+  zero_dividend:
+    max_workers: 10
+    strike_threshold_pct: 0.85  # Deeper ITM than aristocrats
+    min_days: 45  # Minimum days to expiry
+    max_days: 120  # Maximum days to expiry
+    min_option_bid: 0.01
+    min_open_interest: 10  # Minimum 10 contracts for liquidity
+    max_stock_price: 250  # Maximum stock price filter
+    shares_per_contract: 100
+    history_years: 5
+    cache_ttl_days: 30
+    short_expiry_warning_days: 14
+    negative_return_threshold: 0
+    error_truncate_length: 50
+    default_top_n: 10
+    output_dir: strategies
+
+  # Dynamic covered calls strategy configuration
+  dynamic_covered_calls:
+    max_workers: 4  # Balanced parallel processing (increased from 1)
+    default_max_price: 250  # Default maximum stock price filter
+    default_lookback_years: 5  # Years of history for drawdown calculation
+    default_min_strike_pct: 0.50  # Minimum strike as % of current price
+    default_max_strike_pct: 0.95  # Maximum strike as % of current price
+    min_target_days: 30  # Minimum days to expiry
+    max_target_days: 730  # Maximum days to expiry (2 years)
+    expiration_filter_tolerance: 0.50  # +/- 50% tolerance for expiration filtering (reduced from 100%)
+    rate_limit_seconds: 0.5  # Delay between stocks (reduced from 1.0)
+    min_option_bid: 0.01
+    min_open_interest: 0
+    min_option_volume: 10  # Minimum average option volume for pre-filtering
+    shares_per_contract: 100
+    negative_return_threshold: 0
+    error_truncate_length: 50
+    default_top_n: 10
+    output_dir: strategies
+    cache_enabled: true  # Enable session-level caching
+    cache_ttl_hours: 8  # Cache valid for 8 hours (trading day)
+    enable_async: true  # Enable async analysis in Shiny
+
+production:
+  app_prod: yes
+
+dev:
+  golem_wd: !expr here::here()
