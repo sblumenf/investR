@@ -25,6 +25,12 @@ mod_portfolio_positions_controls_ui <- function(id){
       br(),
       br(),
 
+      # Create group button
+      uiOutput(ns("create_group_button")),
+
+      br(),
+      br(),
+
       # Last updated display
       uiOutput(ns("last_updated")),
 
@@ -47,18 +53,22 @@ mod_portfolio_positions_controls_ui <- function(id){
 #'   Handles fetching positions from Questrade and saving to database
 #'
 #' @param id Module ID
+#' @param has_selection Reactive returning TRUE if rows are selected
 #'
-#' @return A list with reactive values: results_data, status_ui, last_updated
+#' @return A list with reactive values: results_data, status_ui, last_updated, create_group_trigger
 #'
 #' @noRd
 #'
 #' @importFrom shiny moduleServer reactive reactiveVal renderUI req observeEvent
-mod_portfolio_positions_controls_server <- function(id){
+mod_portfolio_positions_controls_server <- function(id, has_selection = reactive(FALSE)){
   moduleServer(id, function(input, output, session){
     ns <- session$ns
 
     # Reactive value to store last update timestamp
     last_updated_time <- reactiveVal(NULL)
+
+    # Reactive value to store save status for custom messaging
+    save_status <- reactiveVal(NULL)
 
     # Analysis function: fetch positions and save to database
     fetch_and_save_positions <- function() {
@@ -66,14 +76,19 @@ mod_portfolio_positions_controls_server <- function(id){
       positions <- fetch_all_positions_sequential()
 
       if (nrow(positions) == 0) {
+        save_status("error")
         return(tibble::tibble())
       }
 
       # Save to database with current timestamp
       snapshot_timestamp <- Sys.time()
-      save_success <- save_positions_snapshot(positions, snapshot_timestamp)
+      status <- save_positions_snapshot(positions, snapshot_timestamp)
 
-      if (save_success) {
+      # Store status for custom messaging
+      save_status(status)
+
+      # Update timestamp on successful save or unchanged (both mean data is fresh)
+      if (status %in% c("saved", "unchanged")) {
         last_updated_time(snapshot_timestamp)
       }
 
@@ -91,6 +106,61 @@ mod_portfolio_positions_controls_server <- function(id){
       no_results_message = "No positions found in any account",
       download_filename_prefix = "portfolio_positions"
     )
+
+    # Custom status UI that shows save status information
+    custom_status_ui <- reactive({
+      base_ui <- controls$status_ui()
+
+      # Add save status information if available
+      status <- save_status()
+      if (!is.null(status) && !is.null(controls$results_data()) &&
+          nrow(controls$results_data()) > 0) {
+
+        if (status == "unchanged") {
+          # Override success message to indicate no changes
+          return(
+            tags$div(
+              class = "alert alert-info alert-dismissible fade in",
+              role = "alert",
+              tags$button(
+                type = "button",
+                class = "close",
+                `data-dismiss` = "alert",
+                `aria-label` = "Close",
+                tags$span(`aria-hidden` = "true", HTML("&times;"))
+              ),
+              tags$strong(icon("info-circle"), " Info: "),
+              sprintf("Refreshed %d positions - no changes since last snapshot",
+                      nrow(controls$results_data()))
+            )
+          )
+        } else if (status == "saved") {
+          # Standard success message is fine, but we could customize if needed
+          return(base_ui)
+        }
+      }
+
+      return(base_ui)
+    })
+
+    # Render create group button (enabled/disabled based on selection)
+    output$create_group_button <- renderUI({
+      if (has_selection()) {
+        actionButton(
+          ns("create_group"),
+          "Create Group from Selection",
+          class = "btn-success btn-block",
+          icon = icon("object-group")
+        )
+      } else {
+        tags$button(
+          class = "btn btn-secondary btn-block disabled",
+          disabled = "disabled",
+          icon("object-group"),
+          " Create Group from Selection"
+        )
+      }
+    })
 
     # Render last updated timestamp
     output$last_updated <- renderUI({
@@ -113,11 +183,12 @@ mod_portfolio_positions_controls_server <- function(id){
       }
     })
 
-    # Return controls plus last_updated_time
+    # Return controls with custom status UI
     list(
       results_data = controls$results_data,
-      status_ui = controls$status_ui,
-      last_updated_time = last_updated_time
+      status_ui = custom_status_ui,
+      last_updated_time = last_updated_time,
+      create_group_trigger = reactive(input$create_group)
     )
   })
 }

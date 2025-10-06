@@ -94,11 +94,26 @@ default:
     stale_threshold_minutes: 15  # Auto-refresh if data older than this
     default_visible_columns:
       - symbol
+      - group_name
       - open_quantity
       - current_price
       - average_entry_price
       - current_market_value
       - total_cost
+    groups:
+      strategy_types:
+        - "Dividend Aristocrats"
+        - "Zero-Dividend Stocks"
+        - "Dynamic Covered Calls"
+        - "Collar Strategy"
+        - "Weekly Dividend Capture"
+        - "Monthly Dividend Capture"
+        - "Russell 2000 High-Yield"
+        - "Other"
+      position_roles:
+        - "underlying_stock"
+        - "short_call"
+      match_confidence_threshold: 0.7
 
 production:
   app_prod: yes

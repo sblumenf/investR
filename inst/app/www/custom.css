@@ -420,6 +420,18 @@ a:hover {
   outline-offset: 2px;
 }
 
+/* Position Groups - Table Row Styling
+   ========================================================================== */
+/* Grouped rows get subtle left border accent (enhancement to formatStyle background) */
+.dataTables_wrapper table.dataTable tbody tr.grouped-row {
+  border-left: 3px solid var(--success-color);
+}
+
+/* Enhance hover state for grouped rows */
+.dataTables_wrapper table.dataTable tbody tr.grouped-row:hover {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+
 /* Responsive Adjustments
    ========================================================================== */
 @media (max-width: 1200px) {

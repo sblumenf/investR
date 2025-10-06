@@ -237,3 +237,87 @@ create_home_accordion_section <- function(title, strategies, is_open = FALSE) {
     card_rows
   )
 }
+
+################################################################################
+# POSITION GROUPS UI COMPONENTS
+################################################################################
+
+#' Create a status badge for position groups
+#'
+#' Creates a colored badge indicating group status (active, incomplete, broken)
+#'
+#' @param status Character: "active", "incomplete", or "broken"
+#' @return HTML span element with badge styling
+#' @export
+create_group_status_badge <- function(status) {
+  # Determine badge class and icon based on status
+  badge_info <- switch(status,
+    "active" = list(class = "success", icon = "check-circle", text = "Active"),
+    "incomplete" = list(class = "warning", icon = "exclamation-triangle", text = "Incomplete"),
+    "broken" = list(class = "danger", icon = "times-circle", text = "Broken"),
+    list(class = "secondary", icon = "question-circle", text = "Unknown")
+  )
+
+  tags$span(
+    class = sprintf("badge badge-%s", badge_info$class),
+    style = "font-size: 12px;",
+    icon(badge_info$icon),
+    " ",
+    badge_info$text
+  )
+}
+
+#' Create a summary alert for broken groups
+#'
+#' Creates a dismissible alert showing count of groups needing attention
+#'
+#' @param broken_count Number of broken groups
+#' @param incomplete_count Number of incomplete groups
+#' @return HTML div element with alert styling
+#' @export
+create_groups_summary_alert <- function(broken_count = 0, incomplete_count = 0) {
+  total_count <- broken_count + incomplete_count
+
+  if (total_count == 0) {
+    return(NULL)
+  }
+
+  message_parts <- c()
+  if (incomplete_count > 0) {
+    message_parts <- c(message_parts,
+                       sprintf("%d incomplete group%s", incomplete_count,
+                               if (incomplete_count > 1) "s" else ""))
+  }
+  if (broken_count > 0) {
+    message_parts <- c(message_parts,
+                       sprintf("%d broken group%s", broken_count,
+                               if (broken_count > 1) "s" else ""))
+  }
+
+  div(
+    class = "alert alert-warning alert-dismissible fade in",
+    role = "alert",
+    style = "margin-bottom: 20px;",
+    tags$button(
+      type = "button",
+      class = "close",
+      `data-dismiss` = "alert",
+      `aria-label` = "Close",
+      tags$span(`aria-hidden` = "true", HTML("&times;"))
+    ),
+    tags$h5(
+      icon("exclamation-triangle"),
+      sprintf(" %d Position Group%s Need%s Attention",
+              total_count,
+              if (total_count > 1) "s" else "",
+              if (total_count == 1) "s" else "")
+    ),
+    tags$p(paste(message_parts, collapse = " and ")),
+    tags$a(
+      href = "/portfolio/groups",
+      class = "btn btn-sm btn-warning",
+      icon("cog"),
+      " Manage Groups"
+    )
+  )
+}
