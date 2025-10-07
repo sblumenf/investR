@@ -220,7 +220,25 @@ delete_position_group <- function(group_id) {
     # Begin transaction
     dbExecute(conn, "BEGIN TRANSACTION")
 
-    # Delete members first (manual cascade)
+    # Delete cash flows (manual cascade) - use IF EXISTS for robustness
+    tryCatch({
+      dbExecute(conn, "DELETE FROM position_group_cash_flows WHERE group_id = ?",
+                params = list(group_id))
+    }, error = function(e) {
+      # Table might not exist yet, that's OK
+      log_debug("Portfolio Groups DB: Cash flows table not found (OK if not using income projections)")
+    })
+
+    # Delete recalculation logs (manual cascade) - use IF EXISTS for robustness
+    tryCatch({
+      dbExecute(conn, "DELETE FROM projection_recalculations WHERE group_id = ?",
+                params = list(group_id))
+    }, error = function(e) {
+      # Table might not exist yet, that's OK
+      log_debug("Portfolio Groups DB: Recalculations table not found (OK if not using income projections)")
+    })
+
+    # Delete members (manual cascade)
     dbExecute(conn, "DELETE FROM position_group_members WHERE group_id = ?",
               params = list(group_id))
 

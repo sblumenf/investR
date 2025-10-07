@@ -254,7 +254,7 @@ create_positions_table <- function(data, visible_columns, ns = NULL) {
         target = 'row',
         backgroundColor = styleEqual(
           c(FALSE, TRUE),
-          c('transparent', 'rgba(16, 185, 129, 0.08)')  # Light success-green for grouped rows
+          c('transparent', 'rgba(168, 85, 247, 0.08)')  # Light purple for grouped rows
         ),
         valueColumns = 'is_grouped'
       )

@@ -424,12 +424,12 @@ a:hover {
    ========================================================================== */
 /* Grouped rows get subtle left border accent (enhancement to formatStyle background) */
 .dataTables_wrapper table.dataTable tbody tr.grouped-row {
-  border-left: 3px solid var(--success-color);
+  border-left: 3px solid #a855f7;
 }
 
 /* Enhance hover state for grouped rows */
 .dataTables_wrapper table.dataTable tbody tr.grouped-row:hover {
-  background-color: rgba(16, 185, 129, 0.12) !important;
+  background-color: rgba(168, 85, 247, 0.12) !important;
 }
 
 /* Responsive Adjustments

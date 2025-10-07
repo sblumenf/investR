@@ -194,6 +194,9 @@ page_portfolio_positions <- function() {
         )
 
         if (success) {
+          # Generate income projections for the new group
+          generate_initial_projections(group_id, members, account)
+
           showNotification(
             sprintf("Created group '%s'", input$group_name),
             type = "message",
