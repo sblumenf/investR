@@ -65,11 +65,139 @@ initialize_groups_schema <- function(conn) {
       ON position_group_members(group_id)
     ")
 
+    # Migrate schema to add P&L and status columns if they don't exist
+    migrate_groups_schema_for_pnl(conn)
+
+    # Migrate schema to add allocated_quantity column if it doesn't exist
+    migrate_members_schema_for_allocation(conn)
+
     log_info("Portfolio Groups DB: Schema initialized successfully")
     return(TRUE)
   }, error = function(e) {
     log_error("Portfolio Groups DB: Schema initialization failed - {e$message}")
     return(FALSE)
+  })
+}
+
+#' Migrate position_groups schema to add P&L and status columns
+#'
+#' Adds status, total_return_pct, total_return_amount, and annualized_return_pct
+#' columns if they don't exist. Safe to call multiple times.
+#'
+#' @param conn DBI connection object
+#' @return Logical TRUE if successful
+#' @noRd
+migrate_groups_schema_for_pnl <- function(conn) {
+  tryCatch({
+    # Check if status column exists
+    result <- dbGetQuery(conn, "
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'position_groups'
+        AND column_name = 'status'
+    ")
+
+    if (nrow(result) == 0) {
+      # Add status column (open, closed)
+      dbExecute(conn, "
+        ALTER TABLE position_groups
+        ADD COLUMN status VARCHAR DEFAULT 'open'
+      ")
+      log_info("Portfolio Groups DB: Added status column to position_groups")
+    }
+
+    # Check if total_return_pct column exists
+    result <- dbGetQuery(conn, "
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'position_groups'
+        AND column_name = 'total_return_pct'
+    ")
+
+    if (nrow(result) == 0) {
+      # Add total_return_pct column
+      dbExecute(conn, "
+        ALTER TABLE position_groups
+        ADD COLUMN total_return_pct DOUBLE
+      ")
+      log_info("Portfolio Groups DB: Added total_return_pct column to position_groups")
+    }
+
+    # Check if total_return_amount column exists
+    result <- dbGetQuery(conn, "
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'position_groups'
+        AND column_name = 'total_return_amount'
+    ")
+
+    if (nrow(result) == 0) {
+      # Add total_return_amount column
+      dbExecute(conn, "
+        ALTER TABLE position_groups
+        ADD COLUMN total_return_amount DOUBLE
+      ")
+      log_info("Portfolio Groups DB: Added total_return_amount column to position_groups")
+    }
+
+    # Check if annualized_return_pct column exists
+    result <- dbGetQuery(conn, "
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'position_groups'
+        AND column_name = 'annualized_return_pct'
+    ")
+
+    if (nrow(result) == 0) {
+      # Add annualized_return_pct column
+      dbExecute(conn, "
+        ALTER TABLE position_groups
+        ADD COLUMN annualized_return_pct DOUBLE
+      ")
+      log_info("Portfolio Groups DB: Added annualized_return_pct column to position_groups")
+    }
+
+    return(TRUE)
+  }, error = function(e) {
+    log_warn("Portfolio Groups DB: Schema migration warning - {e$message}")
+    # Don't fail if migration has issues - schema might already be updated
+    return(TRUE)
+  })
+}
+
+#' Migrate position_group_members schema to add allocated_quantity column
+#'
+#' Adds allocated_quantity column for stock position splitting across multiple groups.
+#' For stock members: stores allocated shares. For options: NULL (uses full position).
+#' Safe to call multiple times.
+#'
+#' @param conn DBI connection object
+#' @return Logical TRUE if successful
+#' @noRd
+migrate_members_schema_for_allocation <- function(conn) {
+  tryCatch({
+    # Check if allocated_quantity column exists
+    result <- dbGetQuery(conn, "
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'position_group_members'
+        AND column_name = 'allocated_quantity'
+    ")
+
+    if (nrow(result) == 0) {
+      # Add allocated_quantity column (NULL for options, quantity for stocks)
+      dbExecute(conn, "
+        ALTER TABLE position_group_members
+        ADD COLUMN allocated_quantity DOUBLE
+      ")
+      log_info("Portfolio Groups DB: Added allocated_quantity column to position_group_members")
+    }
+
+    return(TRUE)
+  }, error = function(e) {
+    log_warn("Portfolio Groups DB: Members schema migration warning - {e$message}")
+    # Don't fail if migration has issues - schema might already be updated
+    return(TRUE)
   })
 }
 
@@ -122,8 +250,16 @@ create_position_group <- function(group_id, group_name, strategy_type,
           group_id = group_id,
           account_number = account_number,
           added_at = timestamp
-        ) %>%
-        select(group_id, account_number, symbol, role, added_at)
+        )
+
+      # Select columns based on whether allocated_quantity is present
+      if ("allocated_quantity" %in% names(members_data)) {
+        members_data <- members_data %>%
+          select(group_id, account_number, symbol, role, allocated_quantity, added_at)
+      } else {
+        members_data <- members_data %>%
+          select(group_id, account_number, symbol, role, added_at)
+      }
 
       dbWriteTable(conn, "position_group_members", members_data, append = TRUE)
       log_info("Portfolio Groups DB: Created group '{group_name}' with {nrow(members)} members")
@@ -288,6 +424,7 @@ get_all_groups <- function() {
         g.group_name,
         g.strategy_type,
         g.account_number,
+        g.status,
         g.created_at,
         g.updated_at
       FROM position_groups g
@@ -479,15 +616,14 @@ check_group_integrity <- function(group_id, current_positions) {
   }
 
   # Check which members exist in current positions
-  # Match on account_number AND symbol
-  members_check <- members %>%
-    left_join(
+  # Use anti_join to find members NOT in current positions (tidyverse best practice)
+  missing_members <- members %>%
+    anti_join(
       current_positions %>% select(account_number, symbol),
       by = c("account_number", "symbol")
-    ) %>%
-    mutate(exists = !is.na(symbol))
+    )
 
-  missing_count <- sum(!members_check$exists)
+  missing_count <- nrow(missing_members)
 
   if (missing_count == 0) {
     return("active")

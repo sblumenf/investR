@@ -32,6 +32,28 @@ generate_initial_projections <- function(group_id, members, account_number) {
   tryCatch({
     log_info("Income Projection: Generating initial projections for group {group_id}")
 
+    # Check strategy type - skip projections for strategies that don't hold long-term
+    group_info <- get_group_by_id(group_id)
+
+    if (nrow(group_info) == 0) {
+      log_warn("Income Projection: Group {group_id} not found")
+      return(FALSE)
+    }
+
+    # Strategies that should NOT have projections (short-term or unstructured)
+    no_projection_strategies <- c(
+      "Other",
+      "Weekly Dividend Capture",
+      "Monthly Dividend Capture",
+      "Dividend Capture"
+    )
+
+    if (group_info$strategy_type[1] %in% no_projection_strategies) {
+      log_info("Income Projection: Skipping projections for '{group_info$strategy_type[1]}' strategy group {group_id}")
+      log_projection_recalculation(group_id, "initial_creation", 0, 0)
+      return(TRUE)
+    }
+
     # Get current positions to fetch quantities and prices
     current_positions <- get_latest_positions() %>%
       filter(account_number == !!account_number)
@@ -49,7 +71,17 @@ generate_initial_projections <- function(group_id, members, account_number) {
       return(FALSE)
     }
 
-    shares <- stock_position$open_quantity[1]
+    # Check if allocated_quantity is specified in members
+    stock_member <- members %>% filter(role == "underlying_stock")
+    if ("allocated_quantity" %in% names(stock_member) && !is.na(stock_member$allocated_quantity[1])) {
+      # Use allocated quantity for multi-group scenarios
+      shares <- stock_member$allocated_quantity[1]
+      log_info("Income Projection: Using allocated quantity {shares} shares for group {group_id}")
+    } else {
+      # Use full position quantity
+      shares <- stock_position$open_quantity[1]
+    }
+
     stock_price <- stock_position$average_entry_price[1]
 
     # Get option position details (if exists)

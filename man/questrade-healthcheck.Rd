@@ -4,6 +4,6 @@
 \alias{questrade-healthcheck}
 \title{Questrade API Health Check}
 \description{
-Minimal health check to keep Questrade refresh token alive.
-Automatically rotates tokens on every ping.
+Token management with persistent file-based storage and caching.
+Automatically rotates tokens when access tokens expire.
 }

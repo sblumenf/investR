@@ -143,3 +143,37 @@ format_with_commas <- function(value, digits = 0) {
 
   return(formatted)
 }
+
+#' Format timestamp as time ago
+#'
+#' Converts a timestamp to human-readable relative time (e.g., "5 mins ago")
+#'
+#' @param timestamp POSIXct timestamp
+#' @return Character string with relative time
+#' @export
+#' @examples
+#' \dontrun{
+#'   format_time_ago(Sys.time() - 60)           # "1 min ago"
+#'   format_time_ago(Sys.time() - 3600)         # "1 hour ago"
+#'   format_time_ago(Sys.time() - 86400)        # "1 day ago"
+#' }
+format_time_ago <- function(timestamp) {
+  if (is.null(timestamp) || is.na(timestamp)) {
+    return("Never")
+  }
+
+  diff_secs <- as.numeric(difftime(Sys.time(), timestamp, units = "secs"))
+
+  if (diff_secs < 60) {
+    return("Just now")
+  } else if (diff_secs < 3600) {
+    mins <- round(diff_secs / 60)
+    return(sprintf("%d min%s ago", mins, if (mins > 1) "s" else ""))
+  } else if (diff_secs < 86400) {
+    hours <- round(diff_secs / 3600)
+    return(sprintf("%d hour%s ago", hours, if (hours > 1) "s" else ""))
+  } else {
+    days <- round(diff_secs / 86400)
+    return(sprintf("%d day%s ago", days, if (days > 1) "s" else ""))
+  }
+}

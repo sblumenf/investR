@@ -110,7 +110,7 @@ validate_selection_for_grouping <- function(selected_positions) {
     if (is_option_symbol(sym)) {
       parse_option_symbol(sym)
     } else {
-      sym
+      stringr::str_trim(sym)
     }
   })
 
@@ -154,11 +154,12 @@ assign_roles_from_positions <- function(selected_positions) {
 #'
 #' Looks up if a position belongs to any group
 #'
+#' NOTE: This function is inefficient when called repeatedly.
+#' Use build_group_name_lookup() for batch operations instead.
+#'
 #' @param symbol Position symbol
 #' @param account_number Account number
 #' @return Character group name or NULL if not in any group
-#' @deprecated Use build_group_name_lookup() for batch operations.
-#'             This function is inefficient when called repeatedly.
 #' @noRd
 get_position_group_name <- function(symbol, account_number) {
   # Get all groups for this account
@@ -198,7 +199,8 @@ build_group_name_lookup <- function() {
     return(tibble(
       account_number = character(),
       symbol = character(),
-      group_name = character()
+      group_name = character(),
+      group_id = character()
     ))
   }
 
@@ -215,7 +217,8 @@ build_group_name_lookup <- function() {
     return(tibble(
       account_number = character(),
       symbol = character(),
-      group_name = character()
+      group_name = character(),
+      group_id = character()
     ))
   }
 
@@ -225,7 +228,7 @@ build_group_name_lookup <- function() {
       all_groups %>% select(group_id, group_name, account_number),
       by = "group_id"
     ) %>%
-    select(account_number = account_number.y, symbol, group_name)
+    select(account_number = account_number.y, symbol, group_name, group_id)
 
   return(lookup)
 }
@@ -364,4 +367,194 @@ get_missing_members <- function(group_members, current_positions) {
     pull(symbol)
 
   return(missing)
+}
+
+#' Auto-close stale position groups
+#'
+#' Detects groups where members are no longer in the positions table and
+#' automatically closes them. Before closing, attempts to link any unlinked
+#' trade activities for those tickers to capture final transactions.
+#'
+#' @param current_positions Tibble with current position data
+#' @return Integer count of groups auto-closed
+#' @noRd
+auto_close_stale_groups <- function(current_positions) {
+  # Get all open groups
+  all_groups <- get_all_groups() %>%
+    filter(status == "open")
+
+  if (nrow(all_groups) == 0) {
+    log_debug("Auto-Close: No open groups found")
+    return(0)
+  }
+
+  closed_count <- 0
+
+  for (i in seq_len(nrow(all_groups))) {
+    group <- all_groups[i, ]
+    group_id <- group$group_id
+
+    # Get group members
+    members <- get_group_members(group_id)
+
+    if (nrow(members) == 0) {
+      log_warn("Auto-Close: Group {group_id} has no members, skipping")
+      next
+    }
+
+    # Check for missing members
+    missing <- get_missing_members(members, current_positions)
+
+    if (length(missing) > 0) {
+      log_info("Auto-Close: Group {group_id} has missing members: {paste(missing, collapse = ', ')}")
+
+      # Auto-link unlinked activities before closing
+      # Get unique tickers from members (underlying stock ticker)
+      tickers <- members %>%
+        mutate(ticker = if_else(
+          is_option_symbol(symbol),
+          parse_option_symbol(symbol),
+          symbol
+        )) %>%
+        pull(ticker) %>%
+        unique() %>%
+        na.omit()
+
+      account_number <- members$account_number[1]
+
+      # Link unlinked activities for each ticker
+      for (ticker in tickers) {
+        unlinked <- get_unlinked_activities_for_ticker(ticker, account_number)
+
+        if (nrow(unlinked) > 0) {
+          log_info("Auto-Close: Linking {nrow(unlinked)} unlinked activities for {ticker} to group {group_id}")
+
+          for (j in seq_len(nrow(unlinked))) {
+            link_activity_to_group(unlinked$activity_id[j], group_id)
+          }
+        }
+      }
+
+      # Auto-close the group
+      auto_close_group(group_id)
+      closed_count <- closed_count + 1
+    }
+  }
+
+  if (closed_count > 0) {
+    log_info("Auto-Close: Closed {closed_count} stale group{if (closed_count > 1) 's' else ''}")
+  }
+
+  return(closed_count)
+}
+
+#' Detect multi-group scenario from selected positions
+#'
+#' Analyzes selected positions to determine if multiple groups should be created
+#' (e.g., one stock position with multiple option contracts having different expiries).
+#' Returns suggested group structure with auto-calculated share allocation.
+#'
+#' @param selected_positions Tibble with position data
+#' @return List with is_multi_group (logical) and suggested_groups (list of group specs)
+#' @noRd
+detect_multi_group_scenario <- function(selected_positions) {
+  # Default: single group
+  result <- list(
+    is_multi_group = FALSE,
+    suggested_groups = list()
+  )
+
+  if (nrow(selected_positions) == 0) {
+    return(result)
+  }
+
+  # Check basic validation first
+  validation <- validate_selection_for_grouping(selected_positions)
+  if (!validation$valid) {
+    return(result)
+  }
+
+  # Separate stock and options
+  stock_positions <- selected_positions %>%
+    filter(!is_option_symbol(symbol))
+
+  option_positions <- selected_positions %>%
+    filter(is_option_symbol(symbol))
+
+  # Must have exactly 1 stock and at least 2 options for multi-group
+  if (nrow(stock_positions) != 1 || nrow(option_positions) < 2) {
+    return(result)
+  }
+
+  # Extract expiry dates AND strike prices from option symbols
+  option_positions <- option_positions %>%
+    mutate(
+      expiry_date = map_chr(symbol, function(sym) {
+        parsed <- parse_option_details(sym)
+        if (!is.null(parsed$expiry)) {
+          as.character(parsed$expiry)
+        } else {
+          NA_character_
+        }
+      }),
+      strike_price = map_dbl(symbol, function(sym) {
+        parsed <- parse_option_details(sym)
+        if (!is.null(parsed$strike)) {
+          parsed$strike
+        } else {
+          NA_real_
+        }
+      })
+    ) %>%
+    filter(!is.na(expiry_date) & !is.na(strike_price)) %>%
+    mutate(expiry_strike_combo = paste(expiry_date, strike_price, sep = "_"))
+
+  # If all options have same expiry+strike combo, it's single group
+  unique_combos <- unique(option_positions$expiry_strike_combo)
+  if (length(unique_combos) <= 1) {
+    return(result)
+  }
+
+  # Multi-group detected! Create suggested groups
+  ticker <- validation$ticker
+  stock_qty <- stock_positions$open_quantity[1]
+
+  suggested_groups <- map(unique_combos, function(combo) {
+    # Get options for this expiry+strike combination
+    combo_options <- option_positions %>%
+      filter(expiry_strike_combo == combo)
+
+    # Calculate allocated shares (each option = 100 shares)
+    allocated_shares <- abs(sum(combo_options$open_quantity)) * 100
+
+    # Generate group name with strike price
+    expiry_date <- combo_options$expiry_date[1]
+    strike <- combo_options$strike_price[1]
+    expiry_formatted <- format(as.Date(expiry_date), "%b %Y")
+    group_name <- sprintf("%s - %s @ $%.0f", ticker, expiry_formatted, strike)
+
+    list(
+      group_name = group_name,
+      expiry_date = expiry_date,
+      strike_price = strike,
+      allocated_shares = allocated_shares,
+      stock_symbol = stock_positions$symbol[1],
+      option_symbols = combo_options$symbol
+    )
+  })
+
+  # Validate total allocation doesn't exceed stock quantity
+  total_allocated <- sum(map_dbl(suggested_groups, ~ .$allocated_shares))
+  if (total_allocated > stock_qty) {
+    log_warn("Multi-group detection: Allocated shares ({total_allocated}) exceed stock quantity ({stock_qty})")
+    return(result)  # Return single group if allocation is invalid
+  }
+
+  result$is_multi_group <- TRUE
+  result$suggested_groups <- suggested_groups
+  result$stock_quantity <- stock_qty
+
+  log_info("Multi-group detected: {length(suggested_groups)} groups for {ticker}")
+
+  return(result)
 }

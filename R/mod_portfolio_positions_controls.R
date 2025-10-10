@@ -23,6 +23,26 @@ mod_portfolio_positions_controls_ui <- function(id){
       ),
 
       br(),
+
+      # Fetch activities button
+      actionButton(
+        ns("fetch_activities"),
+        "Fetch Activities",
+        class = "btn-info btn-lg btn-block",
+        icon = icon("download")
+      ),
+
+      br(),
+
+      # Run pattern matching button
+      actionButton(
+        ns("run_pattern_matching"),
+        "Run Pattern Matching",
+        class = "btn-secondary btn-lg btn-block",
+        icon = icon("search")
+      ),
+
+      br(),
       br(),
 
       # Create group button
@@ -66,6 +86,7 @@ mod_portfolio_positions_controls_server <- function(id, has_selection = reactive
 
     # Reactive value to store last update timestamp
     last_updated_time <- reactiveVal(NULL)
+    last_activities_time <- reactiveVal(NULL)
 
     # Reactive value to store save status for custom messaging
     save_status <- reactiveVal(NULL)
@@ -83,6 +104,11 @@ mod_portfolio_positions_controls_server <- function(id, has_selection = reactive
       # Save to database with current timestamp
       snapshot_timestamp <- Sys.time()
       status <- save_positions_snapshot(positions, snapshot_timestamp)
+
+      # Auto-close stale groups (groups with missing positions)
+      if (status %in% c("saved", "unchanged")) {
+        auto_close_stale_groups(positions)
+      }
 
       # Store status for custom messaging
       save_status(status)
@@ -164,23 +190,35 @@ mod_portfolio_positions_controls_server <- function(id, has_selection = reactive
 
     # Render last updated timestamp
     output$last_updated <- renderUI({
-      timestamp <- last_updated_time()
+      pos_timestamp <- last_updated_time()
+      act_timestamp <- last_activities_time()
 
-      if (is.null(timestamp)) {
-        tags$p(
-          class = "text-muted",
-          tags$small("Not yet updated")
+      tags$div(
+        class = "text-muted",
+        tags$small(
+          tags$strong("Last updated:"),
+          br(),
+          # Positions timestamp
+          if (!is.null(pos_timestamp)) {
+            tags$span(
+              title = format(pos_timestamp, "%Y-%m-%d %H:%M:%S"),
+              sprintf("Positions: %s", format_time_ago(pos_timestamp))
+            )
+          } else {
+            "Positions: Never"
+          },
+          br(),
+          # Activities timestamp
+          if (!is.null(act_timestamp)) {
+            tags$span(
+              title = format(act_timestamp, "%Y-%m-%d %H:%M:%S"),
+              sprintf("Activities: %s", format_time_ago(act_timestamp))
+            )
+          } else {
+            "Activities: Never"
+          }
         )
-      } else {
-        tags$p(
-          class = "text-muted",
-          tags$small(
-            tags$strong("Last updated:"),
-            br(),
-            format(timestamp, "%Y-%m-%d %H:%M:%S")
-          )
-        )
-      }
+      )
     })
 
     # Return controls with custom status UI
@@ -188,7 +226,10 @@ mod_portfolio_positions_controls_server <- function(id, has_selection = reactive
       results_data = controls$results_data,
       status_ui = custom_status_ui,
       last_updated_time = last_updated_time,
-      create_group_trigger = reactive(input$create_group)
+      last_activities_time = last_activities_time,
+      create_group_trigger = reactive(input$create_group),
+      fetch_activities_trigger = reactive(input$fetch_activities),
+      run_pattern_matching_trigger = reactive(input$run_pattern_matching)
     )
   })
 }

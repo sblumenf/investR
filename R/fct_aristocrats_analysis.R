@@ -585,22 +585,55 @@ setup_parallel_processing <- function(max_workers) {
 
 #' Finalize analysis results
 #'
-#' Combines parallel results, removes NULLs, and sorts by annualized return
+#' Combines parallel results, removes NULLs, and sorts by annualized return.
+#' Returns properly structured empty tibble with expected schema when no results.
 #'
 #' @param results List of results from parallel processing
-#' @return Tibble with sorted results
+#' @return Tibble with sorted results (or empty tibble with correct schema)
 #' @noRd
 #' @importFrom purrr compact
 #' @importFrom dplyr bind_rows arrange desc
+#' @importFrom tibble tibble
 finalize_results <- function(results) {
   results_df <- results %>%
     compact() %>%
     bind_rows()
 
-  if (nrow(results_df) > 0) {
-    results_df <- results_df %>%
-      arrange(desc(annualized_return))
+  # If no results, return properly structured empty tibble with expected schema
+  # This ensures UI filtering code doesn't crash when accessing columns like 'expiration'
+  if (nrow(results_df) == 0) {
+    return(tibble(
+      ticker = character(),
+      company_name = character(),
+      current_price = numeric(),
+      strike = numeric(),
+      expiration = character(),
+      days_to_expiry = numeric(),
+      bid_price = numeric(),
+      open_interest = numeric(),
+      investment = numeric(),
+      premium_received = numeric(),
+      dividend_income = numeric(),
+      reinvestment_income = numeric(),
+      exercise_proceeds = numeric(),
+      net_profit = numeric(),
+      net_outlay = numeric(),
+      total_return = numeric(),
+      annualized_return = numeric(),
+      max_drawdown = numeric(),
+      current_yield = numeric(),
+      breakeven_price = numeric(),
+      downside_protection_pct = numeric(),
+      intrinsic_value = numeric(),
+      extrinsic_value = numeric(),
+      annual_dividend = numeric(),
+      warning_flag = logical()
+    ))
   }
+
+  # Sort by annualized return (descending)
+  results_df <- results_df %>%
+    arrange(desc(annualized_return))
 
   return(results_df)
 }

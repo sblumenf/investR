@@ -68,17 +68,9 @@ run_app <- function(
   validate_dynamic_config()  # Dynamic Covered Calls
   validate_collar_config()  # Collar Strategy
 
-  # Questrade API health check - keeps refresh token alive
-  tryCatch({
-    # Immediate ping on startup
-    ping_questrade()
-
-    # Start background ping (runs every 24 hours while app is running)
-    start_questrade_background_ping()
-  }, error = function(e) {
-    # Silent failure - app continues even if Questrade is unreachable
-    NULL
-  })
+  # Questrade API now uses lazy refresh - no background ping needed
+  # Tokens are cached in ~/.investr_questrade_tokens.json and automatically
+  # refreshed when expired. Access tokens are reused for up to 30 minutes.
 
   with_golem_options(
     app = brochureApp(

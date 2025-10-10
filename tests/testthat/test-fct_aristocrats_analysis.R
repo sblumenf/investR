@@ -210,3 +210,107 @@ test_that("calculate_metrics orchestrates all calculations correctly", {
   expect_gt(result$downside_protection_pct, 0)
   expect_lt(result$downside_protection_pct, 1)
 })
+
+test_that("finalize_results returns properly structured empty tibble when no results", {
+  # Test with empty list
+  result <- finalize_results(list())
+
+  expect_s3_class(result, "tbl_df")
+  expect_equal(nrow(result), 0)
+
+  # Verify all expected columns are present
+  expected_columns <- c(
+    "ticker", "company_name", "current_price", "strike", "expiration",
+    "days_to_expiry", "bid_price", "open_interest", "investment",
+    "premium_received", "dividend_income", "reinvestment_income",
+    "exercise_proceeds", "net_profit", "net_outlay", "total_return",
+    "annualized_return", "max_drawdown", "current_yield", "breakeven_price",
+    "downside_protection_pct", "intrinsic_value", "extrinsic_value",
+    "annual_dividend", "warning_flag"
+  )
+
+  expect_true(all(expected_columns %in% names(result)))
+
+  # Verify column types
+  expect_type(result$ticker, "character")
+  expect_type(result$company_name, "character")
+  expect_type(result$expiration, "character")
+  expect_type(result$current_price, "double")
+  expect_type(result$strike, "double")
+  expect_type(result$warning_flag, "logical")
+})
+
+test_that("finalize_results returns properly structured empty tibble when all NULLs", {
+  # Test with list of NULLs (simulating all stock analyses returning NULL)
+  result <- finalize_results(list(NULL, NULL, NULL))
+
+  expect_s3_class(result, "tbl_df")
+  expect_equal(nrow(result), 0)
+  expect_true("expiration" %in% names(result))
+})
+
+test_that("finalize_results sorts non-empty results by annualized return", {
+  # Create mock results
+  result1 <- tibble::tibble(
+    ticker = "AAPL",
+    annualized_return = 0.15,
+    company_name = "Apple Inc",
+    current_price = 100,
+    strike = 90,
+    expiration = "2025-12-31",
+    days_to_expiry = 365,
+    bid_price = 12,
+    open_interest = 1000,
+    investment = 10000,
+    premium_received = 1200,
+    dividend_income = 100,
+    reinvestment_income = 5,
+    exercise_proceeds = 9000,
+    net_profit = 305,
+    net_outlay = 8800,
+    total_return = 0.035,
+    max_drawdown = -0.2,
+    current_yield = 0.02,
+    breakeven_price = 88,
+    downside_protection_pct = 0.12,
+    intrinsic_value = 10,
+    extrinsic_value = 2,
+    annual_dividend = 4,
+    warning_flag = FALSE
+  )
+
+  result2 <- tibble::tibble(
+    ticker = "MSFT",
+    annualized_return = 0.25,  # Higher return
+    company_name = "Microsoft",
+    current_price = 200,
+    strike = 180,
+    expiration = "2025-12-31",
+    days_to_expiry = 365,
+    bid_price = 24,
+    open_interest = 2000,
+    investment = 20000,
+    premium_received = 2400,
+    dividend_income = 200,
+    reinvestment_income = 10,
+    exercise_proceeds = 18000,
+    net_profit = 610,
+    net_outlay = 17600,
+    total_return = 0.035,
+    max_drawdown = -0.15,
+    current_yield = 0.015,
+    breakeven_price = 176,
+    downside_protection_pct = 0.12,
+    intrinsic_value = 20,
+    extrinsic_value = 4,
+    annual_dividend = 8,
+    warning_flag = FALSE
+  )
+
+  results <- finalize_results(list(result1, result2))
+
+  expect_equal(nrow(results), 2)
+  # Should be sorted by annualized_return descending, so MSFT first
+  expect_equal(results$ticker[1], "MSFT")
+  expect_equal(results$ticker[2], "AAPL")
+})

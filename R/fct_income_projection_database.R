@@ -250,14 +250,36 @@ get_group_cash_flows <- function(group_id) {
 
     if (nrow(result) == 0) {
       log_debug("Income Projection DB: No cash flows found for group {group_id}")
-      return(tibble::tibble())
+      # Return empty tibble with correct schema (tidyverse best practice)
+      return(tibble::tibble(
+        event_id = character(),
+        group_id = character(),
+        event_date = as.Date(character()),
+        event_type = character(),
+        amount = numeric(),
+        status = character(),
+        confidence = character(),
+        created_at = as.POSIXct(character()),
+        updated_at = as.POSIXct(character())
+      ))
     }
 
     log_debug("Income Projection DB: Retrieved {nrow(result)} cash flows for group {group_id}")
     return(tibble::as_tibble(result))
   }, error = function(e) {
     log_error("Income Projection DB: Failed to get cash flows for {group_id} - {e$message}")
-    return(tibble::tibble())
+    # Return empty tibble with correct schema even on error
+    return(tibble::tibble(
+      event_id = character(),
+      group_id = character(),
+      event_date = as.Date(character()),
+      event_type = character(),
+      amount = numeric(),
+      status = character(),
+      confidence = character(),
+      created_at = as.POSIXct(character()),
+      updated_at = as.POSIXct(character())
+    ))
   })
 }
 
