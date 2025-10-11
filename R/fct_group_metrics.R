@@ -102,7 +102,7 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
     as.Date()
 
   # For covered call strategies (non-"Other"), use expected hold period until option expiration
-  # For "Other" strategies, use actual days held so far
+  # For "Other" strategies, no projected returns (no expected close date)
   if (strategy_type != "Other" && nrow(projected_cash_flows) > 0) {
     # Use last projected event date as end date (option expiration)
     last_event_date <- projected_cash_flows %>%
@@ -113,10 +113,13 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
 
     days_held <- as.numeric(last_event_date - first_trade_date)
     log_info("GROUP_METRICS_CALC: Using last_event_date - first={first_trade_date}, last={last_event_date}, days={days_held}")
-  } else {
-    # For "Other" strategy, use days held so far
+  } else if (strategy_type == "Other") {
+    # For "Other" strategy, use days held so far but don't calculate projected returns
     days_held <- as.numeric(Sys.Date() - first_trade_date)
-    log_debug("Group Metrics: Using Sys.Date logic - first_trade: {first_trade_date}, today: {Sys.Date()}, days_held: {days_held}")
+    log_debug("Group Metrics: Other strategy - first_trade: {first_trade_date}, today: {Sys.Date()}, days_held: {days_held}")
+  } else {
+    # Fallback for strategies with no projected cash flows
+    days_held <- as.numeric(Sys.Date() - first_trade_date)
   }
 
   days_held <- if (length(days_held) == 0 || is.na(days_held) || days_held == 0) 1 else days_held
@@ -124,7 +127,10 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
   # Calculate projected annualized return
   # Formula: ((1 + return_ratio)^(365/days_held) - 1) * 100
   # return_ratio = projected_income / cost_basis (the gain as a percentage)
-  projected_annualized_return_pct <- if (cost_basis > 0 && days_held > 0) {
+  # Note: "Other" strategy does NOT calculate projected returns (no expected close date)
+  projected_annualized_return_pct <- if (strategy_type == "Other") {
+    NA_real_  # No projected return for "Other" strategy
+  } else if (cost_basis > 0 && days_held > 0) {
     return_ratio <- projected_income / cost_basis
     annualization_factor <- 365 / days_held
     result <- ((1 + return_ratio) ^ annualization_factor - 1) * 100
