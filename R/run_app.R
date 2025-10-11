@@ -86,7 +86,6 @@ run_app <- function(
       page_dividend_capture_weekly(),
       page_dividend_capture_monthly(),
       page_dividend_capture_russell_2000(),
-      page_portfolio_positions(),
       page_about(),
 
       # Brochure configuration

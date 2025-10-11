@@ -13,55 +13,38 @@ NULL
 # This CONFIG object contains only collar-specific parameters and provides
 # a convenient interface for accessing both local and golem config values.
 
-#' Get value from golem config with fallback (Collar)
-#'
-#' @param section Section name (e.g., "shared", "collar")
-#' @param key Key name within section
-#' @param fallback Fallback value if not found
-#' @return Config value or fallback
-#' @noRd
-get_golem_config_value_collar <- function(section, key, fallback = NULL) {
-  tryCatch({
-    golem_config <- golem::get_golem_config()
-    value <- golem_config[[section]][[key]]
-    if (is.null(value)) fallback else value
-  }, error = function(e) {
-    fallback
-  })
-}
-
 COLLAR_CONFIG <- list(
   # ETF Universe Filters (from golem-config.yml)
-  min_market_cap = get_golem_config_value_collar("collar", "min_market_cap", 1e9),  # $1 billion
-  min_avg_volume = get_golem_config_value_collar("collar", "min_avg_volume", 1e6),  # 1 million shares
+  min_market_cap = get_golem_config_value("collar", "min_market_cap", 1e9),  # $1 billion
+  min_avg_volume = get_golem_config_value("collar", "min_avg_volume", 1e6),  # 1 million shares
 
   # Parallel Processing (from golem-config.yml)
-  max_workers = get_golem_config_value_collar("collar", "max_workers", 10),
+  max_workers = get_golem_config_value("collar", "max_workers", 10),
 
   # Data Validation (from golem-config.yml)
-  min_net_credit = get_golem_config_value_collar("collar", "min_net_credit", 0.01),  # Must receive net credit
-  min_open_interest = get_golem_config_value_collar("collar", "min_open_interest", 10),
-  max_stock_price = get_golem_config_value_collar("collar", "max_stock_price", 1000),
+  min_net_credit = get_golem_config_value("collar", "min_net_credit", 0.01),  # Must receive net credit
+  min_open_interest = get_golem_config_value("collar", "min_open_interest", 10),
+  max_stock_price = get_golem_config_value("collar", "max_stock_price", 1000),
 
   # Financial Constants (from golem-config.yml)
-  shares_per_contract = get_golem_config_value_collar("collar", "shares_per_contract", 100),
-  days_per_year = get_golem_config_value_collar("shared", "days_per_year", 365),
+  shares_per_contract = get_golem_config_value("collar", "shares_per_contract", 100),
+  days_per_year = get_golem_config_value("shared", "days_per_year", 365),
 
   # Date Ranges (from golem-config.yml)
-  history_years = get_golem_config_value_collar("collar", "history_years", 5),
-  cache_ttl_days = get_golem_config_value_collar("collar", "cache_ttl_days", 30),
+  history_years = get_golem_config_value("collar", "history_years", 5),
+  cache_ttl_days = get_golem_config_value("collar", "cache_ttl_days", 30),
 
   # Reinvestment (from golem-config.yml)
-  sgov_yield_default = get_golem_config_value_collar("collar", "sgov_yield_default", 0.0414),  # 4.14%
-  max_sgov_yield_sanity = get_golem_config_value_collar("collar", "max_sgov_yield_sanity", 0.15),  # 15% max
+  sgov_yield_default = get_golem_config_value("collar", "sgov_yield_default", 0.0414),  # 4.14%
+  max_sgov_yield_sanity = get_golem_config_value("collar", "max_sgov_yield_sanity", 0.15),  # 15% max
 
   # Thresholds and Limits (from golem-config.yml)
-  negative_return_threshold = get_golem_config_value_collar("collar", "negative_return_threshold", 0),
-  error_truncate_length = get_golem_config_value_collar("collar", "error_truncate_length", 50),
+  negative_return_threshold = get_golem_config_value("collar", "negative_return_threshold", 0),
+  error_truncate_length = get_golem_config_value("collar", "error_truncate_length", 50),
 
   # Output (from golem-config.yml)
-  default_top_n = get_golem_config_value_collar("collar", "default_top_n", 50),
-  output_dir = get_golem_config_value_collar("collar", "output_dir", "strategies")
+  default_top_n = get_golem_config_value("collar", "default_top_n", 50),
+  output_dir = get_golem_config_value("collar", "output_dir", "strategies")
 )
 
 #' Validate Collar Strategy Configuration

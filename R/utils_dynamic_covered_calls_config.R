@@ -13,68 +13,51 @@ NULL
 # NOTE: Configuration values are loaded from inst/golem-config.yml for centralized management.
 # This CONFIG object provides a convenient interface for accessing golem config values.
 
-#' Get value from golem config with fallback
-#'
-#' @param section Section name (e.g., "shared", "dynamic_covered_calls")
-#' @param key Key name within section
-#' @param fallback Fallback value if not found
-#' @return Config value or fallback
-#' @noRd
-get_golem_config_value_dynamic <- function(section, key, fallback = NULL) {
-  tryCatch({
-    golem_config <- golem::get_golem_config()
-    value <- golem_config[[section]][[key]]
-    if (is.null(value)) fallback else value
-  }, error = function(e) {
-    fallback
-  })
-}
-
 DYNAMIC_CONFIG <- list(
   # Parallel Processing (from golem-config.yml)
-  max_workers = get_golem_config_value_dynamic("dynamic_covered_calls", "max_workers", 4),
+  max_workers = get_golem_config_value("dynamic_covered_calls", "max_workers", 4),
 
   # Price Filtering (from golem-config.yml)
-  default_max_price = get_golem_config_value_dynamic("dynamic_covered_calls", "default_max_price", 250),
+  default_max_price = get_golem_config_value("dynamic_covered_calls", "default_max_price", 250),
 
   # Lookback Period (from golem-config.yml)
-  default_lookback_years = get_golem_config_value_dynamic("dynamic_covered_calls", "default_lookback_years", 5),
+  default_lookback_years = get_golem_config_value("dynamic_covered_calls", "default_lookback_years", 5),
 
   # Strike Bounds (from golem-config.yml)
-  default_min_strike_pct = get_golem_config_value_dynamic("dynamic_covered_calls", "default_min_strike_pct", 0.50),
-  default_max_strike_pct = get_golem_config_value_dynamic("dynamic_covered_calls", "default_max_strike_pct", 0.95),
+  default_min_strike_pct = get_golem_config_value("dynamic_covered_calls", "default_min_strike_pct", 0.50),
+  default_max_strike_pct = get_golem_config_value("dynamic_covered_calls", "default_max_strike_pct", 0.95),
 
   # Target Days Bounds (from golem-config.yml)
-  min_target_days = get_golem_config_value_dynamic("dynamic_covered_calls", "min_target_days", 30),
-  max_target_days = get_golem_config_value_dynamic("dynamic_covered_calls", "max_target_days", 730),
+  min_target_days = get_golem_config_value("dynamic_covered_calls", "min_target_days", 30),
+  max_target_days = get_golem_config_value("dynamic_covered_calls", "max_target_days", 730),
 
   # Expiration Filtering (from golem-config.yml)
-  expiration_filter_tolerance = get_golem_config_value_dynamic("dynamic_covered_calls", "expiration_filter_tolerance", 0.50),
-  rate_limit_seconds = get_golem_config_value_dynamic("dynamic_covered_calls", "rate_limit_seconds", 0.5),
+  expiration_filter_tolerance = get_golem_config_value("dynamic_covered_calls", "expiration_filter_tolerance", 0.50),
+  rate_limit_seconds = get_golem_config_value("dynamic_covered_calls", "rate_limit_seconds", 0.5),
 
   # Option Selection (from golem-config.yml)
-  min_option_bid = get_golem_config_value_dynamic("dynamic_covered_calls", "min_option_bid", 0.01),
-  min_open_interest = get_golem_config_value_dynamic("dynamic_covered_calls", "min_open_interest", 0),
-  min_option_volume = get_golem_config_value_dynamic("dynamic_covered_calls", "min_option_volume", 10),
+  min_option_bid = get_golem_config_value("dynamic_covered_calls", "min_option_bid", 0.01),
+  min_open_interest = get_golem_config_value("dynamic_covered_calls", "min_open_interest", 0),
+  min_option_volume = get_golem_config_value("dynamic_covered_calls", "min_option_volume", 10),
 
   # Financial Constants (from golem-config.yml)
-  shares_per_contract = get_golem_config_value_dynamic("dynamic_covered_calls", "shares_per_contract", 100),
-  days_per_year = get_golem_config_value_dynamic("shared", "days_per_year", 365),
+  shares_per_contract = get_golem_config_value("dynamic_covered_calls", "shares_per_contract", 100),
+  days_per_year = get_golem_config_value("shared", "days_per_year", 365),
 
   # Thresholds and Limits (from golem-config.yml)
-  negative_return_threshold = get_golem_config_value_dynamic("dynamic_covered_calls", "negative_return_threshold", 0),
-  error_truncate_length = get_golem_config_value_dynamic("dynamic_covered_calls", "error_truncate_length", 50),
+  negative_return_threshold = get_golem_config_value("dynamic_covered_calls", "negative_return_threshold", 0),
+  error_truncate_length = get_golem_config_value("dynamic_covered_calls", "error_truncate_length", 50),
 
   # Caching (from golem-config.yml)
-  cache_enabled = get_golem_config_value_dynamic("dynamic_covered_calls", "cache_enabled", TRUE),
-  cache_ttl_hours = get_golem_config_value_dynamic("dynamic_covered_calls", "cache_ttl_hours", 8),
+  cache_enabled = get_golem_config_value("dynamic_covered_calls", "cache_enabled", TRUE),
+  cache_ttl_hours = get_golem_config_value("dynamic_covered_calls", "cache_ttl_hours", 8),
 
   # Async Processing (from golem-config.yml)
-  enable_async = get_golem_config_value_dynamic("dynamic_covered_calls", "enable_async", TRUE),
+  enable_async = get_golem_config_value("dynamic_covered_calls", "enable_async", TRUE),
 
   # Output (from golem-config.yml)
-  default_top_n = get_golem_config_value_dynamic("dynamic_covered_calls", "default_top_n", 10),
-  output_dir = get_golem_config_value_dynamic("dynamic_covered_calls", "output_dir", "strategies")
+  default_top_n = get_golem_config_value("dynamic_covered_calls", "default_top_n", 10),
+  output_dir = get_golem_config_value("dynamic_covered_calls", "output_dir", "strategies")
 )
 
 #' Validate Dynamic Strategy Configuration

@@ -113,42 +113,25 @@ MONTHLY_ETFS <- tribble(
 #' @noRd
 NULL
 
-#' Get value from golem config with fallback
-#'
-#' @param section Section name (e.g., "shared", "monthly_capture")
-#' @param key Key name within section
-#' @param fallback Fallback value if not found
-#' @return Config value or fallback
-#' @noRd
-get_golem_config_value_monthly <- function(section, key, fallback = NULL) {
-  tryCatch({
-    golem_config <- golem::get_golem_config()
-    value <- golem_config[[section]][[key]]
-    if (is.null(value)) fallback else value
-  }, error = function(e) {
-    fallback
-  })
-}
-
 DIVIDEND_CAPTURE_MONTHLY_CONFIG <- list(
   # Time Constants (from golem-config.yml)
-  trading_days_per_year = get_golem_config_value_monthly("shared", "trading_days_per_year", 252),
-  months_per_year = get_golem_config_value_monthly("monthly_capture", "months_per_year", 12),
-  days_per_year = get_golem_config_value_monthly("shared", "days_per_year", 365),
+  trading_days_per_year = get_golem_config_value("shared", "trading_days_per_year", 252),
+  months_per_year = get_golem_config_value("monthly_capture", "months_per_year", 12),
+  days_per_year = get_golem_config_value("shared", "days_per_year", 365),
 
   # Investment Parameters (from golem-config.yml)
-  investment_amount = get_golem_config_value_monthly("monthly_capture", "investment_amount", 10000),
+  investment_amount = get_golem_config_value("monthly_capture", "investment_amount", 10000),
 
   # Data Validation (from golem-config.yml)
-  min_dividend_events = get_golem_config_value_monthly("monthly_capture", "min_dividend_events", 5),
+  min_dividend_events = get_golem_config_value("monthly_capture", "min_dividend_events", 5),
 
   # Rate Limiting (from golem-config.yml)
-  rate_limit_seconds = get_golem_config_value_monthly("monthly_capture", "rate_limit_seconds", 2),
+  rate_limit_seconds = get_golem_config_value("monthly_capture", "rate_limit_seconds", 2),
 
   # Parallel Processing (from golem-config.yml)
-  max_workers = get_golem_config_value_monthly("monthly_capture", "max_workers", 4),
-  min_workers = get_golem_config_value_monthly("shared", "min_workers", 1),
-  max_workers_limit = get_golem_config_value_monthly("shared", "max_workers_limit", 10),
+  max_workers = get_golem_config_value("monthly_capture", "max_workers", 4),
+  min_workers = get_golem_config_value("shared", "min_workers", 1),
+  max_workers_limit = get_golem_config_value("shared", "max_workers_limit", 10),
 
   # Schedule Type Groupings (strategy-specific, kept local)
   schedule_types = c(

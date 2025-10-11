@@ -79,17 +79,7 @@ page_home <- function() {
         button_text = "Analyze Russell 2000"
       )
     ),
-    portfolio_management = list(
-      list(
-        title = "Portfolio Positions",
-        description = c(
-          "View current holdings across all your Questrade accounts (RRSP, SRRSP, LIRA).",
-          "Track quantities, costs, current values, and unrealized P/L for all positions."
-        ),
-        href = "/portfolio/positions",
-        button_text = "View Positions"
-      )
-    )
+    portfolio_management = list()
   )
 
   brochure::page(
