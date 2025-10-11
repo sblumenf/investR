@@ -341,63 +341,81 @@ update_position_group <- function(group_id, group_name = NULL,
   })
 }
 
-#' Delete a position group
+#' Close a position group (soft delete)
 #'
-#' Deletes a group and all its members (cascade).
+#' Marks a group as closed without deleting any historical data.
+#' Preserves all members, cash flows, and recalculation logs for audit purposes.
 #'
 #' @param group_id Group identifier
 #' @return Logical TRUE if successful
 #' @noRd
-delete_position_group <- function(group_id) {
+close_position_group <- function(group_id) {
   conn <- get_portfolio_db_connection()
   on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
 
   tryCatch({
-    # Begin transaction
-    dbExecute(conn, "BEGIN TRANSACTION")
-
-    # Delete cash flows (manual cascade) - use IF EXISTS for robustness
-    tryCatch({
-      dbExecute(conn, "DELETE FROM position_group_cash_flows WHERE group_id = ?",
-                params = list(group_id))
-    }, error = function(e) {
-      # Table might not exist yet, that's OK
-      log_debug("Portfolio Groups DB: Cash flows table not found (OK if not using income projections)")
-    })
-
-    # Delete recalculation logs (manual cascade) - use IF EXISTS for robustness
-    tryCatch({
-      dbExecute(conn, "DELETE FROM projection_recalculations WHERE group_id = ?",
-                params = list(group_id))
-    }, error = function(e) {
-      # Table might not exist yet, that's OK
-      log_debug("Portfolio Groups DB: Recalculations table not found (OK if not using income projections)")
-    })
-
-    # Delete members (manual cascade)
-    dbExecute(conn, "DELETE FROM position_group_members WHERE group_id = ?",
-              params = list(group_id))
-
-    # Delete group
-    rows_affected <- dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?",
-                               params = list(group_id))
-
-    # Commit transaction
-    dbExecute(conn, "COMMIT")
+    # Update status to closed
+    rows_affected <- dbExecute(conn,
+      "UPDATE position_groups SET status = 'closed', updated_at = ? WHERE group_id = ?",
+      params = list(Sys.time(), group_id)
+    )
 
     if (rows_affected > 0) {
-      log_info("Portfolio Groups DB: Deleted group {group_id}")
+      log_info("Portfolio Groups DB: Closed group {group_id}")
       return(TRUE)
     } else {
       log_warn("Portfolio Groups DB: Group {group_id} not found")
       return(FALSE)
     }
   }, error = function(e) {
-    # Rollback on error
-    tryCatch(dbExecute(conn, "ROLLBACK"), error = function(e2) NULL)
-    log_error("Portfolio Groups DB: Failed to delete group {group_id} - {e$message}")
+    log_error("Portfolio Groups DB: Failed to close group {group_id} - {e$message}")
     return(FALSE)
   })
+}
+
+#' Reopen a closed position group
+#'
+#' Changes a closed group back to open status.
+#'
+#' @param group_id Group identifier
+#' @return Logical TRUE if successful
+#' @noRd
+reopen_position_group <- function(group_id) {
+  conn <- get_portfolio_db_connection()
+  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+
+  tryCatch({
+    # Update status to open
+    rows_affected <- dbExecute(conn,
+      "UPDATE position_groups SET status = 'open', updated_at = ? WHERE group_id = ?",
+      params = list(Sys.time(), group_id)
+    )
+
+    if (rows_affected > 0) {
+      log_info("Portfolio Groups DB: Reopened group {group_id}")
+      return(TRUE)
+    } else {
+      log_warn("Portfolio Groups DB: Group {group_id} not found")
+      return(FALSE)
+    }
+  }, error = function(e) {
+    log_error("Portfolio Groups DB: Failed to reopen group {group_id} - {e$message}")
+    return(FALSE)
+  })
+}
+
+#' DEPRECATED: Delete a position group - DO NOT USE
+#'
+#' This function is deprecated and should not be used. Groups should be closed
+#' using close_position_group() to preserve historical data.
+#' This function only exists for backwards compatibility with old tests.
+#'
+#' @param group_id Group identifier
+#' @return Logical FALSE with error message
+#' @noRd
+delete_position_group <- function(group_id) {
+  log_error("Portfolio Groups DB: delete_position_group() is DEPRECATED - use close_position_group() instead")
+  stop("delete_position_group() is deprecated. Use close_position_group() to soft-delete groups and preserve historical data.")
 }
 
 ################################################################################
@@ -406,11 +424,13 @@ delete_position_group <- function(group_id) {
 
 #' Get all position groups
 #'
-#' Retrieves all groups.
+#' Retrieves groups. By default, only returns open groups.
+#' Set include_closed = TRUE to retrieve all groups including closed ones.
 #'
+#' @param include_closed Logical, if TRUE includes closed groups (default: FALSE)
 #' @return Tibble with group data
 #' @noRd
-get_all_groups <- function() {
+get_all_groups <- function(include_closed = FALSE) {
   conn <- get_portfolio_db_connection()
   on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
 
@@ -418,18 +438,43 @@ get_all_groups <- function() {
     # Ensure schema exists
     initialize_groups_schema(conn)
 
-    result <- dbGetQuery(conn, "
-      SELECT
-        g.group_id,
-        g.group_name,
-        g.strategy_type,
-        g.account_number,
-        g.status,
-        g.created_at,
-        g.updated_at
-      FROM position_groups g
-      ORDER BY g.updated_at DESC
-    ")
+    # Build query with optional status filter
+    if (include_closed) {
+      sql <- "
+        SELECT
+          g.group_id,
+          g.group_name,
+          g.strategy_type,
+          g.account_number,
+          g.status,
+          g.total_return_pct,
+          g.total_return_amount,
+          g.annualized_return_pct,
+          g.created_at,
+          g.updated_at
+        FROM position_groups g
+        ORDER BY g.updated_at DESC
+      "
+    } else {
+      sql <- "
+        SELECT
+          g.group_id,
+          g.group_name,
+          g.strategy_type,
+          g.account_number,
+          g.status,
+          g.total_return_pct,
+          g.total_return_amount,
+          g.annualized_return_pct,
+          g.created_at,
+          g.updated_at
+        FROM position_groups g
+        WHERE g.status = 'open'
+        ORDER BY g.updated_at DESC
+      "
+    }
+
+    result <- dbGetQuery(conn, sql)
 
     if (nrow(result) == 0) {
       log_debug("Portfolio Groups DB: No groups found")
@@ -494,6 +539,47 @@ get_group_members <- function(group_id) {
     return(tibble::as_tibble(result))
   }, error = function(e) {
     log_error("Portfolio Groups DB: Failed to get members for {group_id} - {e$message}")
+    return(tibble::tibble())
+  })
+}
+
+#' Get members for multiple groups (batch operation)
+#'
+#' Retrieves all members for multiple position groups in a single query.
+#' More efficient than calling get_group_members() multiple times.
+#'
+#' @param group_ids Vector of group identifiers
+#' @return Tibble with member data including group_id column
+#' @noRd
+get_members_for_groups <- function(group_ids) {
+  if (length(group_ids) == 0) {
+    return(tibble::tibble())
+  }
+
+  conn <- get_portfolio_db_connection()
+  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+
+  tryCatch({
+    # Build IN clause for SQL
+    placeholders <- paste(rep("?", length(group_ids)), collapse = ", ")
+    sql <- sprintf("
+      SELECT * FROM position_group_members
+      WHERE group_id IN (%s)
+      ORDER BY group_id, added_at
+    ", placeholders)
+
+    result <- dbGetQuery(conn, sql, params = as.list(group_ids))
+
+    if (nrow(result) == 0) {
+      log_debug("Portfolio Groups DB: No members found for {length(group_ids)} groups")
+      return(tibble::tibble())
+    }
+
+    log_debug("Portfolio Groups DB: Retrieved {nrow(result)} members for {length(group_ids)} groups")
+    return(tibble::as_tibble(result))
+
+  }, error = function(e) {
+    log_error("Portfolio Groups DB: Failed to get members for groups - {e$message}")
     return(tibble::tibble())
   })
 }

@@ -283,6 +283,87 @@ get_group_cash_flows <- function(group_id) {
   })
 }
 
+#' Get cash flows for multiple groups (batch operation)
+#'
+#' Retrieves all cash flow events for multiple position groups in a single query.
+#' More efficient than calling get_group_cash_flows() multiple times.
+#'
+#' @param group_ids Vector of group identifiers
+#' @return Tibble with cash flow data including group_id column
+#' @noRd
+get_cash_flows_for_groups <- function(group_ids) {
+  if (length(group_ids) == 0) {
+    return(tibble::tibble(
+      event_id = character(),
+      group_id = character(),
+      event_date = as.Date(character()),
+      event_type = character(),
+      amount = numeric(),
+      status = character(),
+      confidence = character(),
+      created_at = as.POSIXct(character()),
+      updated_at = as.POSIXct(character())
+    ))
+  }
+
+  conn <- get_portfolio_db_connection()
+  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+
+  tryCatch({
+    # Build IN clause for SQL
+    placeholders <- paste(rep("?", length(group_ids)), collapse = ", ")
+    sql <- sprintf("
+      SELECT
+        event_id,
+        group_id,
+        event_date,
+        event_type,
+        amount,
+        status,
+        confidence,
+        created_at,
+        updated_at
+      FROM position_group_cash_flows
+      WHERE group_id IN (%s)
+      ORDER BY group_id, event_date ASC
+    ", placeholders)
+
+    result <- dbGetQuery(conn, sql, params = as.list(group_ids))
+
+    if (nrow(result) == 0) {
+      log_debug("Income Projection DB: No cash flows found for {length(group_ids)} groups")
+      return(tibble::tibble(
+        event_id = character(),
+        group_id = character(),
+        event_date = as.Date(character()),
+        event_type = character(),
+        amount = numeric(),
+        status = character(),
+        confidence = character(),
+        created_at = as.POSIXct(character()),
+        updated_at = as.POSIXct(character())
+      ))
+    }
+
+    log_debug("Income Projection DB: Retrieved {nrow(result)} cash flows for {length(group_ids)} groups")
+    return(tibble::as_tibble(result))
+
+  }, error = function(e) {
+    log_error("Income Projection DB: Failed to get cash flows for groups - {e$message}")
+    return(tibble::tibble(
+      event_id = character(),
+      group_id = character(),
+      event_date = as.Date(character()),
+      event_type = character(),
+      amount = numeric(),
+      status = character(),
+      confidence = character(),
+      created_at = as.POSIXct(character()),
+      updated_at = as.POSIXct(character())
+    ))
+  })
+}
+
 #' Get projected income summary for a group
 #'
 #' Calculates total projected income by type.

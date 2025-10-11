@@ -266,6 +266,48 @@ get_activities_by_group <- function(group_id) {
   })
 }
 
+#' Get activities for multiple groups (batch operation)
+#'
+#' Retrieves all activities for multiple position groups in a single query.
+#' More efficient than calling get_activities_by_group() multiple times.
+#'
+#' @param group_ids Vector of group identifiers
+#' @return Tibble with activity data including group_id column
+#' @noRd
+get_activities_for_groups <- function(group_ids) {
+  if (length(group_ids) == 0) {
+    return(tibble::tibble())
+  }
+
+  conn <- get_portfolio_db_connection()
+  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+
+  tryCatch({
+    # Build IN clause for SQL
+    placeholders <- paste(rep("?", length(group_ids)), collapse = ", ")
+    sql <- sprintf("
+      SELECT *
+      FROM account_activities
+      WHERE group_id IN (%s)
+      ORDER BY group_id, trade_date ASC
+    ", placeholders)
+
+    result <- dbGetQuery(conn, sql, params = as.list(group_ids))
+
+    if (nrow(result) == 0) {
+      log_debug("Activities DB: No activities found for {length(group_ids)} groups")
+      return(tibble::tibble())
+    }
+
+    log_debug("Activities DB: Retrieved {nrow(result)} activities for {length(group_ids)} groups")
+    return(tibble::as_tibble(result))
+
+  }, error = function(e) {
+    log_error("Activities DB: Failed to get activities for groups - {e$message}")
+    return(tibble::tibble())
+  })
+}
+
 #' Get unlinked trade activities for a ticker and account
 #'
 #' Finds buy/sell trade activities that haven't been linked to any group yet

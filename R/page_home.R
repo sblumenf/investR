@@ -79,7 +79,17 @@ page_home <- function() {
         button_text = "Analyze Russell 2000"
       )
     ),
-    portfolio_management = list()
+    portfolio_management = list(
+      list(
+        title = "Position Groups",
+        description = c(
+          "View and manage your position groups with comprehensive tracking and reporting.",
+          "Track open positions with projected returns and cash flows. Review closed positions with realized P&L and performance metrics."
+        ),
+        href = "/portfolio/groups",
+        button_text = "View Groups"
+      )
+    )
   )
 
   brochure::page(
