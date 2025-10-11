@@ -12,6 +12,142 @@
 NULL
 
 ################################################################################
+# SHARED METRICS CALCULATION LOGIC
+################################################################################
+
+#' Calculate metrics from activities and cash flows (DRY helper)
+#'
+#' Shared calculation logic used by multiple functions to avoid duplication.
+#' Computes cost basis, projected income, hold period, and annualized returns.
+#'
+#' @param activities Tibble of account_activities for the group
+#' @param cash_flows Tibble of position_group_cash_flows for the group
+#' @param strategy_type String: strategy type from position_groups
+#' @param group_id String: group identifier (for logging)
+#' @return Tibble with calculated metrics
+#' @noRd
+calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_id = NULL) {
+  # If no activities, return empty metrics
+  if (nrow(activities) == 0) {
+    return(tibble::tibble(
+      cost_basis = 0,
+      cash_collected = 0,
+      projected_income = 0,
+      target_total_return = 0,
+      pct_recovered = 0,
+      days_held = 1,
+      projected_annualized_return_pct = 0,
+      first_trade_date = as.character(NA)
+    ))
+  }
+
+  # Calculate stock purchases (excluding commissions for gross amount)
+  stock_purchases <- activities %>%
+    filter(type == "Trades", action == "Buy", !purrr::map_lgl(symbol, is_option_symbol)) %>%
+    summarise(total = sum(abs(gross_amount), na.rm = TRUE)) %>%
+    pull(total)
+  stock_purchases <- if (length(stock_purchases) == 0) 0 else stock_purchases
+
+  # Calculate total commissions
+  total_commissions <- activities %>%
+    summarise(total = sum(abs(commission), na.rm = TRUE)) %>%
+    pull(total)
+  total_commissions <- if (length(total_commissions) == 0) 0 else total_commissions
+
+  # Calculate option premiums (excluding commissions for gross amount)
+  option_premiums <- activities %>%
+    filter(type == "Trades", action == "Sell", purrr::map_lgl(symbol, is_option_symbol)) %>%
+    summarise(total = sum(abs(gross_amount), na.rm = TRUE)) %>%
+    pull(total)
+  option_premiums <- if (length(option_premiums) == 0) 0 else option_premiums
+
+  # Calculate dividends received
+  total_dividends <- activities %>%
+    filter(type == "Dividends") %>%
+    summarise(total = sum(abs(net_amount), na.rm = TRUE)) %>%
+    pull(total)
+  total_dividends <- if (length(total_dividends) == 0) 0 else total_dividends
+
+  # Apply strategy-specific accounting
+  # For covered call strategies (non-"Other"): premiums reduce cost basis
+  # For "Other" strategy: premiums are income (legacy behavior)
+  if (strategy_type != "Other") {
+    cost_basis <- stock_purchases + total_commissions - option_premiums
+    cash_collected <- total_dividends
+  } else {
+    cost_basis <- stock_purchases + total_commissions
+    cash_collected <- option_premiums + total_dividends
+  }
+
+  # Calculate projected income (future cash flows)
+  projected_cash_flows <- cash_flows %>%
+    filter(status == "projected")
+
+  projected_income <- if (nrow(projected_cash_flows) > 0) {
+    sum(projected_cash_flows$amount, na.rm = TRUE)
+  } else {
+    0
+  }
+
+  # Calculate derived metrics
+  target_total_return <- cash_collected + projected_income
+  pct_recovered <- if (cost_basis > 0) (cash_collected / cost_basis) * 100 else 0
+
+  # Calculate hold period in days
+  first_trade_date <- activities %>%
+    filter(!is.na(trade_date)) %>%
+    arrange(trade_date) %>%
+    slice(1) %>%
+    pull(trade_date) %>%
+    as.Date()
+
+  # For covered call strategies (non-"Other"), use expected hold period until option expiration
+  # For "Other" strategies, use actual days held so far
+  if (strategy_type != "Other" && nrow(projected_cash_flows) > 0) {
+    # Use last projected event date as end date (option expiration)
+    last_event_date <- projected_cash_flows %>%
+      arrange(desc(event_date)) %>%
+      slice(1) %>%
+      pull(event_date) %>%
+      as.Date()
+
+    days_held <- as.numeric(last_event_date - first_trade_date)
+    log_info("GROUP_METRICS_CALC: Using last_event_date - first={first_trade_date}, last={last_event_date}, days={days_held}")
+  } else {
+    # For "Other" strategy, use days held so far
+    days_held <- as.numeric(Sys.Date() - first_trade_date)
+    log_debug("Group Metrics: Using Sys.Date logic - first_trade: {first_trade_date}, today: {Sys.Date()}, days_held: {days_held}")
+  }
+
+  days_held <- if (length(days_held) == 0 || is.na(days_held) || days_held == 0) 1 else days_held
+
+  # Calculate projected annualized return
+  # Formula: ((1 + return_ratio)^(365/days_held) - 1) * 100
+  # return_ratio = projected_income / cost_basis (the gain as a percentage)
+  projected_annualized_return_pct <- if (cost_basis > 0 && days_held > 0) {
+    return_ratio <- projected_income / cost_basis
+    annualization_factor <- 365 / days_held
+    result <- ((1 + return_ratio) ^ annualization_factor - 1) * 100
+    log_info("GROUP_METRICS_CALC: proj_inc={projected_income}, cost={cost_basis}, days={days_held}, result={result}%")
+    result
+  } else {
+    0
+  }
+
+  # Return metrics tibble
+  tibble::tibble(
+    cost_basis = cost_basis,
+    cash_collected = cash_collected,
+    projected_income = projected_income,
+    target_total_return = target_total_return,
+    pct_recovered = pct_recovered,
+    days_held = days_held,
+    projected_annualized_return_pct = projected_annualized_return_pct,
+    first_trade_date = as.character(first_trade_date)
+  )
+}
+
+################################################################################
 # OPEN GROUP METRICS
 ################################################################################
 
@@ -42,88 +178,26 @@ calculate_open_group_metrics <- function(group_id) {
       return(tibble::tibble())
     }
 
-    # Calculate cost basis (money out)
-    stock_purchases <- activities %>%
-      filter(type == "Trades", action == "Buy", !purrr::map_lgl(symbol, is_option_symbol)) %>%
-      summarise(total = sum(abs(gross_amount), na.rm = TRUE)) %>%
-      pull(total)
+    # Get group info for strategy type
+    group_info <- get_group_by_id(group_id)
 
-    stock_purchases <- if (length(stock_purchases) == 0) 0 else stock_purchases
-
-    total_commissions <- activities %>%
-      summarise(total = sum(abs(commission), na.rm = TRUE)) %>%
-      pull(total)
-
-    total_commissions <- if (length(total_commissions) == 0) 0 else total_commissions
-
-    cost_basis <- stock_purchases + total_commissions
-
-    # Calculate cash collected to date (money in, realized)
-    option_premiums <- activities %>%
-      filter(type == "Trades", action == "Sell", purrr::map_lgl(symbol, is_option_symbol)) %>%
-      summarise(total = sum(abs(gross_amount), na.rm = TRUE)) %>%
-      pull(total)
-
-    option_premiums <- if (length(option_premiums) == 0) 0 else option_premiums
-
-    actual_dividends <- activities %>%
-      filter(type == "Dividends") %>%
-      summarise(total = sum(abs(net_amount), na.rm = TRUE)) %>%
-      pull(total)
-
-    actual_dividends <- if (length(actual_dividends) == 0) 0 else actual_dividends
-
-    cash_collected <- option_premiums + actual_dividends
-
-    # Calculate projected income (future cash flows)
-    projected_cash_flows <- get_group_cash_flows(group_id) %>%
-      filter(status == "projected")
-
-    projected_income <- if (nrow(projected_cash_flows) > 0) {
-      sum(projected_cash_flows$amount, na.rm = TRUE)
-    } else {
-      0
+    if (nrow(group_info) == 0) {
+      log_warn("Group Metrics: Group {group_id} not found")
+      return(tibble::tibble())
     }
 
-    # Calculate derived metrics
-    target_total_return <- cash_collected + projected_income
-    pct_recovered <- if (cost_basis > 0) (cash_collected / cost_basis) * 100 else 0
+    strategy_type <- group_info$strategy_type[1]
+    cash_flows <- get_group_cash_flows(group_id)
 
-    # Calculate hold period in days
-    first_trade_date <- activities %>%
-      filter(!is.na(trade_date)) %>%
-      arrange(trade_date) %>%
-      slice(1) %>%
-      pull(trade_date) %>%
-      as.Date()
+    # Use shared calculation logic (DRY)
+    metrics <- calculate_metrics_core(activities, cash_flows, strategy_type, group_id)
 
-    days_held <- as.numeric(Sys.Date() - first_trade_date)
-    days_held <- if (length(days_held) == 0 || is.na(days_held) || days_held == 0) 1 else days_held
+    # Add group_id to result
+    metrics <- metrics %>%
+      mutate(group_id = group_id) %>%
+      select(group_id, everything())
 
-    # Calculate projected annualized return
-    # Formula: ((1 + total_return_ratio)^(365/days_held) - 1) * 100
-    projected_annualized_return_pct <- if (cost_basis > 0 && days_held > 0) {
-      total_return_ratio <- 1 + (target_total_return / cost_basis)
-      annualization_factor <- 365 / days_held
-      ((total_return_ratio ^ annualization_factor) - 1) * 100
-    } else {
-      0
-    }
-
-    # Return metrics
-    metrics <- tibble::tibble(
-      group_id = group_id,
-      cost_basis = cost_basis,
-      cash_collected = cash_collected,
-      projected_income = projected_income,
-      target_total_return = target_total_return,
-      pct_recovered = pct_recovered,
-      days_held = days_held,
-      projected_annualized_return_pct = projected_annualized_return_pct,
-      first_trade_date = as.character(first_trade_date)
-    )
-
-    log_debug("Group Metrics: Calculated metrics for group {group_id} - Cost: ${round(cost_basis, 2)}, Collected: ${round(cash_collected, 2)}, Projected: ${round(projected_income, 2)}")
+    log_debug("Group Metrics: Calculated metrics for group {group_id} - Cost: ${round(metrics$cost_basis, 2)}, Collected: ${round(metrics$cash_collected, 2)}, Projected: ${round(metrics$projected_income, 2)}")
 
     return(metrics)
 
@@ -236,86 +310,15 @@ calculate_dashboard_metrics <- function(status_filter = NULL) {
       # Keep group metadata (group_id, strategy_type, etc.) for later reuse
       metrics_df <- open_groups %>%
         mutate(
-          metrics = purrr::map(group_id, function(gid) {
+          metrics = purrr::map2(group_id, strategy_type, function(gid, strat_type) {
             # Filter activities for this group
             group_activities <- all_activities %>% filter(group_id == gid)
 
             # Filter cash flows for this group
             group_cash_flows <- all_cash_flows %>% filter(group_id == gid)
 
-            # Calculate metrics inline
-            if (nrow(group_activities) == 0) {
-              return(tibble::tibble(
-                cost_basis = 0, cash_collected = 0, projected_income = 0,
-                pct_recovered = 0, projected_annualized_return_pct = 0
-              ))
-            }
-
-            # Cost basis
-            stock_purchases <- group_activities %>%
-              filter(type == "Trades", action == "Buy", !purrr::map_lgl(symbol, is_option_symbol)) %>%
-              summarise(total = sum(abs(gross_amount), na.rm = TRUE)) %>%
-              pull(total)
-            stock_purchases <- if (length(stock_purchases) == 0) 0 else stock_purchases
-
-            commissions <- group_activities %>%
-              summarise(total = sum(abs(commission), na.rm = TRUE)) %>%
-              pull(total)
-            commissions <- if (length(commissions) == 0) 0 else commissions
-
-            cost_basis <- stock_purchases + commissions
-
-            # Cash collected
-            premiums <- group_activities %>%
-              filter(type == "Trades", action == "Sell", purrr::map_lgl(symbol, is_option_symbol)) %>%
-              summarise(total = sum(abs(gross_amount), na.rm = TRUE)) %>%
-              pull(total)
-            premiums <- if (length(premiums) == 0) 0 else premiums
-
-            dividends <- group_activities %>%
-              filter(type == "Dividends") %>%
-              summarise(total = sum(abs(net_amount), na.rm = TRUE)) %>%
-              pull(total)
-            dividends <- if (length(dividends) == 0) 0 else dividends
-
-            cash_collected <- premiums + dividends
-
-            # Projected income
-            projected_income <- group_cash_flows %>%
-              filter(status == "projected") %>%
-              summarise(total = sum(amount, na.rm = TRUE)) %>%
-              pull(total)
-            projected_income <- if (length(projected_income) == 0) 0 else projected_income
-
-            # Calculated metrics
-            pct_recovered <- if (cost_basis > 0) (cash_collected / cost_basis) * 100 else 0
-
-            first_date <- group_activities %>%
-              filter(!is.na(trade_date)) %>%
-              arrange(trade_date) %>%
-              slice(1) %>%
-              pull(trade_date) %>%
-              as.Date()
-            days_held <- as.numeric(Sys.Date() - first_date)
-            days_held <- if (length(days_held) == 0 || is.na(days_held) || days_held == 0) 1 else days_held
-
-            target_return <- cash_collected + projected_income
-            projected_ann_return <- if (cost_basis > 0 && days_held > 0) {
-              ((1 + (target_return / cost_basis)) ^ (365 / days_held) - 1) * 100
-            } else {
-              0
-            }
-
-            tibble::tibble(
-              cost_basis = cost_basis,
-              cash_collected = cash_collected,
-              projected_income = projected_income,
-              target_total_return = target_return,
-              pct_recovered = pct_recovered,
-              days_held = days_held,
-              projected_annualized_return_pct = projected_ann_return,
-              first_trade_date = as.character(first_date)
-            )
+            # Use shared calculation logic (DRY)
+            calculate_metrics_core(group_activities, group_cash_flows, strat_type, gid)
           })
         ) %>%
         tidyr::unnest(metrics)
