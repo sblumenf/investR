@@ -58,6 +58,7 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
       all_members <- get_members_for_groups(group_ids)
       all_activities <- get_activities_for_groups(group_ids)
       all_cash_flows <- get_cash_flows_for_groups(group_ids)
+      latest_positions <- get_latest_positions()  # Fetch once for market data enrichment
 
       # Get pre-calculated metrics if available (DRY principle)
       metrics_lookup <- if (!is.null(metrics)) {
@@ -95,7 +96,8 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
           members = group_members,
           activities = group_activities,
           cash_flows = group_cash_flows,
-          metrics = group_metrics
+          metrics = group_metrics,
+          latest_positions = latest_positions
         )
       })
 

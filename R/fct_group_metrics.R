@@ -382,7 +382,8 @@ calculate_dashboard_metrics <- function(status_filter = NULL) {
             avg_total_return_pct = mean(total_return_pct, na.rm = TRUE),
             avg_annualized_return_pct = mean(annualized_return_pct, na.rm = TRUE)
           ),
-        detail = closed_groups
+        detail = closed_groups %>%
+          arrange(desc(annualized_return_pct))
       )
     } else {
       list(
@@ -466,5 +467,112 @@ get_strategy_breakdown <- function(open_groups_detail = NULL, closed_groups_deta
   }, error = function(e) {
     log_error("Strategy Breakdown: Failed to calculate - {e$message}")
     return(tibble::tibble())
+  })
+}
+
+################################################################################
+# MARKET DATA ENRICHMENT
+################################################################################
+
+#' Enrich group with current market data
+#'
+#' Fetches current stock prices and calculates market-based metrics for display.
+#' Returns current price, days to expiration, strike price, and ITM/OTM status.
+#'
+#' @param group_id Group identifier
+#' @param members Tibble from get_group_members()
+#' @param activities Tibble from get_activities_by_group()
+#' @param latest_positions Tibble from get_latest_positions() (optional, will fetch if NULL)
+#' @return List with market data metrics or NULL values if unavailable
+#' @noRd
+enrich_group_with_market_data <- function(group_id, members, activities, latest_positions = NULL) {
+  tryCatch({
+    # Initialize result with NULL values (fallback)
+    result <- list(
+      current_stock_price = NULL,
+      days_to_expiration = NULL,
+      strike_price = NULL,
+      expiration_date = NULL,
+      itm_otm_amount = NULL
+    )
+
+    # Find the underlying stock member
+    stock_member <- members %>%
+      filter(role == "underlying_stock") %>%
+      slice(1)
+
+    if (nrow(stock_member) == 0) {
+      log_debug("Market Data: No underlying stock found for group {group_id}")
+      return(result)
+    }
+
+    stock_symbol <- stock_member$symbol
+
+    # Get current price from latest positions (fetch if not provided)
+    if (is.null(latest_positions)) {
+      latest_positions <- get_latest_positions()
+    }
+
+    if (nrow(latest_positions) == 0) {
+      log_debug("Market Data: No positions data available")
+      return(result)
+    }
+
+    stock_position <- latest_positions %>%
+      filter(symbol == stock_symbol) %>%
+      slice(1)
+
+    if (nrow(stock_position) == 0) {
+      log_debug("Market Data: Stock {stock_symbol} not found in current positions")
+      return(result)
+    }
+
+    current_price <- stock_position$current_price
+
+    if (is.null(current_price) || is.na(current_price)) {
+      log_debug("Market Data: Current price not available for {stock_symbol}")
+      return(result)
+    }
+
+    result$current_stock_price <- current_price
+
+    # Parse option information (if strategy involves options)
+    option_members <- members %>%
+      filter(role %in% c("short_call", "long_put", "short_put"))
+
+    if (nrow(option_members) > 0) {
+      # Parse first option for expiration and strike
+      option_symbol <- option_members$symbol[1]
+      option_details <- parse_option_details(option_symbol)
+
+      if (!is.null(option_details$expiry)) {
+        result$expiration_date <- option_details$expiry
+        result$days_to_expiration <- as.numeric(option_details$expiry - Sys.Date())
+      }
+
+      if (!is.null(option_details$strike)) {
+        result$strike_price <- option_details$strike
+
+        # Calculate ITM/OTM amount (for short calls)
+        if (!is.null(current_price)) {
+          result$itm_otm_amount <- current_price - option_details$strike
+        }
+      }
+    }
+
+    log_debug("Market Data: Enriched group {group_id} - Price: ${current_price}, Days to exp: {result$days_to_expiration}")
+
+    return(result)
+
+  }, error = function(e) {
+    log_error("Market Data: Failed to enrich group {group_id} - {e$message}")
+    # Return empty result on error (graceful degradation)
+    return(list(
+      current_stock_price = NULL,
+      days_to_expiration = NULL,
+      strike_price = NULL,
+      expiration_date = NULL,
+      itm_otm_amount = NULL
+    ))
   })
 }
