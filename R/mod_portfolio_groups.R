@@ -312,16 +312,35 @@ mod_portfolio_groups_server <- function(id){
       # Get current refresh status
       status <- get_refresh_status()
 
-      # Show last successful refresh time if available
+      # Show last successful refresh time only if it's more recent than any errors
       if (!is.null(status$positions$last_success)) {
-        time_ago <- format_time_ago(status$positions$last_success)
+        show_success <- TRUE
 
-        tags$div(
-          style = "text-align: left; color: #6c757d; font-size: 12px; margin-top: -10px; margin-bottom: 5px;",
-          icon("check-circle", style = "color: #28a745;"),
-          " Last refreshed: ",
-          time_ago
-        )
+        # Hide success indicator if there's a more recent error
+        if (!is.null(status$positions$last_error)) {
+          if (status$positions$last_error$timestamp > status$positions$last_success) {
+            show_success <- FALSE
+          }
+        }
+        # Also check activities errors (they affect overall data freshness)
+        if (!is.null(status$activities$last_error)) {
+          if (status$activities$last_error$timestamp > status$positions$last_success) {
+            show_success <- FALSE
+          }
+        }
+
+        if (show_success) {
+          time_ago <- format_time_ago(status$positions$last_success)
+
+          tags$div(
+            style = "text-align: left; color: #6c757d; font-size: 12px; margin-top: -10px; margin-bottom: 5px;",
+            icon("check-circle", style = "color: #28a745;"),
+            " Last refreshed: ",
+            time_ago
+          )
+        } else {
+          NULL
+        }
       } else {
         NULL
       }

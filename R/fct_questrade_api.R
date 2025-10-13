@@ -22,9 +22,10 @@ NULL
 #' - Only exchanges refresh token when access token is expired
 #' - Persists tokens across R sessions in JSON file
 #'
+#' @param override_refresh_token Optional refresh token to use instead of cached/file token
 #' @return List with access_token and api_server, or NULL on failure
 #' @noRd
-get_questrade_auth <- function() {
+get_questrade_auth <- function(override_refresh_token = NULL) {
   # Step 1: Try to read cached token from file
   cached_token <- read_token_file()
 
@@ -34,6 +35,8 @@ get_questrade_auth <- function() {
 
     if (time_until_expiry > 60) {
       log_info("Questrade API: Using cached access token (expires in {round(time_until_expiry)} seconds)")
+      log_debug("Questrade API: Access token starts with: {substring(cached_token$access_token, 1, 10)}...")
+      log_debug("Questrade API: Refresh token starts with: {substring(cached_token$refresh_token, 1, 10)}...")
       return(list(
         access_token = cached_token$access_token,
         api_server = cached_token$api_server
@@ -43,8 +46,12 @@ get_questrade_auth <- function() {
     }
   }
 
-  # Step 3: Need to refresh - get refresh token from cache or .Renviron
-  refresh_token <- if (!is.null(cached_token)) {
+  # Step 3: Need to refresh - get refresh token from override, cache, or .Renviron
+  refresh_token <- if (!is.null(override_refresh_token)) {
+    # Use the override token if provided (e.g., from 401 recovery)
+    log_info("Questrade API: Using override refresh token for authentication")
+    override_refresh_token
+  } else if (!is.null(cached_token)) {
     cached_token$refresh_token
   } else {
     get_initial_refresh_token()
@@ -131,6 +138,7 @@ fetch_questrade_accounts <- function(auth, retry_on_401 = TRUE) {
 
   tryCatch({
     url <- paste0(auth$api_server, "v1/accounts")
+    log_debug("Questrade API: Sending Authorization header with token starting: {substring(auth$access_token, 1, 10)}...")
     response <- GET(
       url,
       add_headers(Authorization = paste("Bearer", auth$access_token))
@@ -139,13 +147,26 @@ fetch_questrade_accounts <- function(auth, retry_on_401 = TRUE) {
     # Handle 401 Unauthorized - token is invalid despite expiry check
     if (status_code(response) == 401 && retry_on_401) {
       log_warn("Questrade API: Received 401 Unauthorized, cached token is invalid")
-      log_info("Questrade API: Deleting stale token and forcing refresh...")
+      log_info("Questrade API: Preserving refresh token and forcing re-authentication...")
+
+      # CRITICAL FIX: Read and preserve refresh_token BEFORE deleting cache
+      cached_token <- read_token_file()
+      preserved_refresh_token <- if (!is.null(cached_token)) {
+        cached_token$refresh_token
+      } else {
+        NULL
+      }
 
       # Delete the stale cached token
       delete_token_file()
 
-      # Get fresh authentication
-      fresh_auth <- get_questrade_auth()
+      # Get fresh authentication using preserved refresh token
+      # Pass the preserved token directly to get_questrade_auth()
+      if (!is.null(preserved_refresh_token)) {
+        log_info("Questrade API: Using preserved refresh token (starts with {substring(preserved_refresh_token, 1, 10)}...)")
+      }
+
+      fresh_auth <- get_questrade_auth(override_refresh_token = preserved_refresh_token)
 
       if (is.null(fresh_auth)) {
         log_error("Questrade API: Failed to refresh authentication after 401")
@@ -317,9 +338,10 @@ fetch_all_positions_sequential <- function() {
 #' @param auth List with access_token and api_server
 #' @param start_time Start date in ISO 8601 format (e.g., "2024-01-01T00:00:00-05:00")
 #' @param end_time End date in ISO 8601 format (e.g., "2024-01-31T23:59:59-05:00")
+#' @param retry_on_401 Logical, whether to retry once on 401 error (default TRUE)
 #' @return Tibble with activity data or empty tibble on failure
 #' @noRd
-fetch_questrade_activities <- function(account_id, auth, start_time, end_time) {
+fetch_questrade_activities <- function(account_id, auth, start_time, end_time, retry_on_401 = TRUE) {
   if (is.null(auth)) {
     log_error("Questrade API: No authentication provided")
     return(tibble())
@@ -332,6 +354,41 @@ fetch_questrade_activities <- function(account_id, auth, start_time, end_time) {
       query = list(startTime = start_time, endTime = end_time),
       add_headers(Authorization = paste("Bearer", auth$access_token))
     )
+
+    # Handle 401 Unauthorized - token is invalid despite expiry check
+    if (status_code(response) == 401 && retry_on_401) {
+      log_warn("Questrade API: Received 401 Unauthorized for activities, cached token is invalid")
+      log_info("Questrade API: Preserving refresh token and forcing re-authentication...")
+
+      # CRITICAL FIX: Read and preserve refresh_token BEFORE deleting cache
+      cached_token <- read_token_file()
+      preserved_refresh_token <- if (!is.null(cached_token)) {
+        cached_token$refresh_token
+      } else {
+        NULL
+      }
+
+      # Delete the stale cached token
+      delete_token_file()
+
+      # Get fresh authentication using preserved refresh token
+      # Pass the preserved token directly to get_questrade_auth()
+      if (!is.null(preserved_refresh_token)) {
+        log_info("Questrade API: Using preserved refresh token (starts with {substring(preserved_refresh_token, 1, 10)}...)")
+      }
+
+      fresh_auth <- get_questrade_auth(override_refresh_token = preserved_refresh_token)
+
+      if (is.null(fresh_auth)) {
+        log_error("Questrade API: Failed to refresh authentication after 401")
+        return(tibble())
+      }
+
+      log_info("Questrade API: Retrying activities fetch with fresh token for account {account_id}")
+
+      # Retry once with fresh token (retry_on_401 = FALSE prevents infinite loop)
+      return(fetch_questrade_activities(account_id, fresh_auth, start_time, end_time, retry_on_401 = FALSE))
+    }
 
     if (status_code(response) != 200) {
       log_error("Questrade API: Activities fetch failed for account {account_id} with status {status_code(response)}")
