@@ -110,34 +110,33 @@ get_liquid_etfs <- function(min_market_cap = COLLAR_CONFIG$min_market_cap,
   return(etfs)
 }
 
-#' Get specific ETF subsets
-#'
-#' Helper functions to get specific types of ETFs
-#'
-#' @name etf-subsets
+#' Get major index ETFs only
 #' @return Character vector of ETF tickers
-#' @export
-NULL
-
-#' @describeIn etf-subsets Get major index ETFs only
+#' @family etf-subset-helpers
 #' @export
 get_index_etfs <- function() {
   c("SPY", "QQQ", "IWM", "DIA", "VTI", "VOO")
 }
 
-#' @describeIn etf-subsets Get sector ETFs only
+#' Get sector ETFs only
+#' @return Character vector of ETF tickers
+#' @family etf-subset-helpers
 #' @export
 get_sector_etfs <- function() {
   c("XLF", "XLE", "XLK", "XLV", "XLI", "XLP", "XLY", "XLU", "XLB", "XLRE", "XLC")
 }
 
-#' @describeIn etf-subsets Get bond ETFs only
+#' Get bond ETFs only
+#' @return Character vector of ETF tickers
+#' @family etf-subset-helpers
 #' @export
 get_bond_etfs <- function() {
   c("TLT", "IEF", "LQD", "HYG", "AGG", "TIP")
 }
 
-#' @describeIn etf-subsets Get commodity ETFs only
+#' Get commodity ETFs only
+#' @return Character vector of ETF tickers
+#' @family etf-subset-helpers
 #' @export
 get_commodity_etfs <- function() {
   c("GLD", "SLV", "USO", "UNG")

@@ -18,14 +18,15 @@ NULL
 #' Returns a connection to the portfolio DuckDB database. Creates the database
 #' file if it doesn't exist. Connection should be closed when done.
 #'
+#' @param read_only Logical, if TRUE opens connection in read-only mode (default FALSE)
 #' @return DBI connection object
 #' @noRd
-get_portfolio_db_connection <- function() {
+get_portfolio_db_connection <- function(read_only = FALSE) {
   db_path <- get_portfolio_db_path()
 
   tryCatch({
-    conn <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
-    log_debug("Portfolio DB: Connected to {db_path}")
+    conn <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = read_only)
+    log_debug("Portfolio DB: Connected to {db_path} (read_only={read_only})")
     return(conn)
   }, error = function(e) {
     log_error("Portfolio DB: Failed to connect - {e$message}")

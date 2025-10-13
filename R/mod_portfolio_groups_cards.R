@@ -90,6 +90,7 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
         }
 
         # Pass all data to card creation
+        # Note: ns() must be passed for onclick JavaScript to set namespaced inputs
         create_group_card(
           group_id = gid,
           group_data = group,
@@ -97,7 +98,8 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
           activities = group_activities,
           cash_flows = group_cash_flows,
           metrics = group_metrics,
-          latest_positions = latest_positions
+          latest_positions = latest_positions,
+          ns = ns
         )
       })
 
@@ -110,141 +112,130 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
     })
 
     # Handle Close Group button clicks
-    # Use observeEvent with a pattern to catch all close buttons
-    observeEvent(input, {
-      # Get all input IDs that match close_group_*
-      input_ids <- names(input)
-      close_button_ids <- grep("^close_group_", input_ids, value = TRUE)
+    observeEvent(input$close_group_clicked, {
+      group_id <- input$close_group_clicked
 
-      for (button_id in close_button_ids) {
-        if (!is.null(input[[button_id]]) && input[[button_id]] > 0) {
-          # Extract group_id from button ID
-          group_id <- sub("^close_group_", "", button_id)
+      cat(sprintf("\n=== [TRACE] Close Group Button Clicked ===\n"))
+      cat(sprintf("Timestamp: %s\n", Sys.time()))
+      cat(sprintf("Group ID: %s\n", group_id))
+      cat(sprintf("Input value: %s\n", input$close_group_clicked))
+      cat(sprintf("==========================================\n\n"))
 
-          # Show confirmation modal
-          showModal(modalDialog(
-            title = "Close Position Group",
-            tags$div(
-              tags$p(sprintf("Are you sure you want to close group: %s?", group_id)),
-              tags$p("This will:"),
-              tags$ul(
-                tags$li("Calculate final P&L from all activities"),
-                tags$li("Mark the group as closed"),
-                tags$li("Remove projected cash flow events")
-              ),
-              tags$hr(),
-              # Show P&L preview
-              tags$div(
-                id = "pnl_preview",
-                tags$h5("P&L Preview:"),
-                renderPnLPreview(group_id)
-              )
-            ),
-            footer = tagList(
-              modalButton("Cancel"),
-              actionButton(
-                ns(sprintf("confirm_close_%s", group_id)),
-                "Confirm Close",
-                class = "btn-warning",
-                icon = icon("check")
-              )
-            ),
-            easyClose = TRUE
-          ))
-        }
-      }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+      log_info("Close Group clicked - group_id: {group_id}")
+
+      # Show confirmation modal
+      showModal(modalDialog(
+        title = "Close Position Group",
+        tags$div(
+          tags$p(sprintf("Are you sure you want to close group: %s?", group_id)),
+          tags$p("This will:"),
+          tags$ul(
+            tags$li("Calculate final P&L from all activities"),
+            tags$li("Mark the group as closed"),
+            tags$li("Remove projected cash flow events")
+          ),
+          tags$hr(),
+          # Show P&L preview
+          tags$div(
+            id = "pnl_preview",
+            tags$h5("P&L Preview:"),
+            renderPnLPreview(group_id)
+          )
+        ),
+        footer = tagList(
+          modalButton("Cancel"),
+          tags$button(
+            id = ns(sprintf("confirm_close_btn_%s", group_id)),
+            type = "button",
+            class = "btn btn-warning",
+            onclick = sprintf("console.log('Confirm close: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                              group_id, ns("close_group_confirmed"), group_id),
+            icon("check"),
+            " Confirm Close"
+          )
+        ),
+        easyClose = TRUE
+      ))
+    }, ignoreInit = TRUE)
 
     # Handle confirmation of close action
-    observeEvent(input, {
-      # Get all input IDs that match confirm_close_*
-      input_ids <- names(input)
-      confirm_ids <- grep("^confirm_close_", input_ids, value = TRUE)
+    observeEvent(input$close_group_confirmed, {
+      group_id <- input$close_group_confirmed
 
-      for (confirm_id in confirm_ids) {
-        if (!is.null(input[[confirm_id]]) && input[[confirm_id]] > 0) {
-          # Extract group_id
-          group_id <- sub("^confirm_close_", "", confirm_id)
+      cat(sprintf("\n=== [TRACE] Close Group Confirmed ===\n"))
+      cat(sprintf("Timestamp: %s\n", Sys.time()))
+      cat(sprintf("Group ID: %s\n", group_id))
+      cat(sprintf("======================================\n\n"))
 
-          # Close the group
-          result <- close_position_group(group_id)
+      log_info("Close Group confirmed - group_id: {group_id}")
 
-          if (nrow(result) > 0) {
-            # Success
-            showNotification(
-              sprintf("Group closed successfully. Net P&L: %s",
-                     format_currency(result$net_pnl)),
-              type = "message",
-              duration = 5
-            )
+      # Close the group
+      result <- close_position_group(group_id)
 
-            # Increment card version to force re-render
-            card_version(card_version() + 1)
-          } else {
-            # Failure
-            showNotification(
-              "Failed to close group. Please check logs.",
-              type = "error",
-              duration = 5
-            )
-          }
+      if (nrow(result) > 0) {
+        # Success
+        showNotification(
+          sprintf("Group closed successfully. Net P&L: %s",
+                 format_currency(result$net_pnl)),
+          type = "message",
+          duration = 5
+        )
 
-          # Remove modal
-          removeModal()
-        }
+        # Increment card version to force re-render
+        card_version(card_version() + 1)
+      } else {
+        # Failure
+        showNotification(
+          "Failed to close group. Please check logs.",
+          type = "error",
+          duration = 5
+        )
       }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+
+      # Remove modal
+      removeModal()
+    }, ignoreInit = TRUE)
 
     # Handle Reopen Group button clicks
-    observeEvent(input, {
-      input_ids <- names(input)
-      reopen_button_ids <- grep("^reopen_group_", input_ids, value = TRUE)
+    observeEvent(input$reopen_group_clicked, {
+      group_id <- input$reopen_group_clicked
 
-      for (button_id in reopen_button_ids) {
-        if (!is.null(input[[button_id]]) && input[[button_id]] > 0) {
-          group_id <- sub("^reopen_group_", "", button_id)
+      log_info("Reopen Group clicked - group_id: {group_id}")
 
-          # Reopen the group
-          result <- reopen_position_group(group_id)
+      # Reopen the group
+      result <- reopen_position_group(group_id)
 
-          if (result) {
-            showNotification(
-              sprintf("Group %s reopened successfully.", group_id),
-              type = "message",
-              duration = 5
-            )
+      if (result) {
+        showNotification(
+          sprintf("Group %s reopened successfully.", group_id),
+          type = "message",
+          duration = 5
+        )
 
-            # Force re-render
-            card_version(card_version() + 1)
-          } else {
-            showNotification(
-              "Failed to reopen group. Please check logs.",
-              type = "error",
-              duration = 5
-            )
-          }
-        }
+        # Force re-render
+        card_version(card_version() + 1)
+      } else {
+        showNotification(
+          "Failed to reopen group. Please check logs.",
+          type = "error",
+          duration = 5
+        )
       }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    }, ignoreInit = TRUE)
 
     # Handle Edit Members button clicks
-    observeEvent(input, {
-      input_ids <- names(input)
-      edit_button_ids <- grep("^edit_group_", input_ids, value = TRUE)
+    observeEvent(input$edit_group_clicked, {
+      group_id <- input$edit_group_clicked
 
-      for (button_id in edit_button_ids) {
-        if (!is.null(input[[button_id]]) && input[[button_id]] > 0) {
-          group_id <- sub("^edit_group_", "", button_id)
+      log_info("Edit Members clicked - group_id: {group_id}")
 
-          # Show info notification (feature not implemented yet)
-          showNotification(
-            "Edit Members feature coming soon!",
-            type = "message",
-            duration = 3
-          )
-        }
-      }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+      # Show info notification (feature not implemented yet)
+      showNotification(
+        "Edit Members feature coming soon!",
+        type = "message",
+        duration = 3
+      )
+    }, ignoreInit = TRUE)
   })
 }
 
@@ -277,11 +268,11 @@ renderPnLPreview <- function(group_id) {
       ),
       tags$tr(
         tags$td("Total Return"),
-        tags$td(format_percentage(pnl$total_return_pct), style = "text-align: right;")
+        tags$td(format_percentage(pnl$total_return_pct / 100), style = "text-align: right;")
       ),
       tags$tr(
         tags$td("Annualized Return"),
-        tags$td(format_percentage(pnl$annualized_return_pct), style = "text-align: right;")
+        tags$td(format_percentage(pnl$annualized_return_pct / 100), style = "text-align: right;")
       ),
       tags$tr(
         tags$td("Hold Period"),

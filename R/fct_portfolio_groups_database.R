@@ -209,16 +209,20 @@ migrate_members_schema_for_allocation <- function(conn) {
 #'
 #' Creates a group with metadata and associated member positions.
 #' Transactional - all or nothing.
+#' If auto_name = TRUE and group_name is NULL/empty, generates standard name
+#' from members and strategy type.
 #'
 #' @param group_id Unique group identifier
-#' @param group_name Human-readable group name
+#' @param group_name Human-readable group name (NULL = auto-generate if auto_name = TRUE)
 #' @param strategy_type Strategy name (e.g., "Dividend Aristocrats")
 #' @param account_number Questrade account number
 #' @param members Tibble with columns: symbol, role
+#' @param auto_name Logical, auto-generate name from members and strategy (default: TRUE)
 #' @return Logical TRUE if successful, FALSE otherwise
 #' @noRd
-create_position_group <- function(group_id, group_name, strategy_type,
-                                  account_number, members = NULL) {
+create_position_group <- function(group_id, group_name = NULL, strategy_type,
+                                  account_number, members = NULL,
+                                  auto_name = TRUE) {
 
   conn <- get_portfolio_db_connection()
   on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
@@ -226,6 +230,23 @@ create_position_group <- function(group_id, group_name, strategy_type,
   tryCatch({
     # Ensure schema exists
     initialize_groups_schema(conn)
+
+    # Auto-generate group name if not provided
+    if (auto_name && (is.null(group_name) || nchar(trimws(group_name)) == 0)) {
+      if (!is.null(members) && nrow(members) > 0) {
+        generated_name <- generate_standard_group_name(members, strategy_type)
+        if (!is.null(generated_name)) {
+          group_name <- generated_name
+          log_info("Portfolio Groups DB: Auto-generated group name: {group_name}")
+        }
+      }
+    }
+
+    # Validate that group_name is not empty
+    if (is.null(group_name) || nchar(trimws(group_name)) == 0) {
+      log_error("Portfolio Groups DB: Group name is required")
+      return(FALSE)
+    }
 
     # Begin transaction
     dbExecute(conn, "BEGIN TRANSACTION")
@@ -341,37 +362,9 @@ update_position_group <- function(group_id, group_name = NULL,
   })
 }
 
-#' Close a position group (soft delete)
-#'
-#' Marks a group as closed without deleting any historical data.
-#' Preserves all members, cash flows, and recalculation logs for audit purposes.
-#'
-#' @param group_id Group identifier
-#' @return Logical TRUE if successful
-#' @noRd
-close_position_group <- function(group_id) {
-  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
-
-  tryCatch({
-    # Update status to closed
-    rows_affected <- dbExecute(conn,
-      "UPDATE position_groups SET status = 'closed', updated_at = ? WHERE group_id = ?",
-      params = list(Sys.time(), group_id)
-    )
-
-    if (rows_affected > 0) {
-      log_info("Portfolio Groups DB: Closed group {group_id}")
-      return(TRUE)
-    } else {
-      log_warn("Portfolio Groups DB: Group {group_id} not found")
-      return(FALSE)
-    }
-  }, error = function(e) {
-    log_error("Portfolio Groups DB: Failed to close group {group_id} - {e$message}")
-    return(FALSE)
-  })
-}
+# NOTE: close_position_group() has been removed from this file.
+# The comprehensive version with P&L calculation is in fct_group_pnl.R.
+# Use that function instead - it handles status update + P&L calculation + cash flow cleanup.
 
 #' Reopen a closed position group
 #'

@@ -136,7 +136,7 @@ test_that("detect_variance identifies significant variance", {
   expect_equal(result$variance_pct, 0.10)
 
   # Clean up
-  delete_position_group(group_id)
+  close_position_group(group_id)
 })
 
 test_that("detect_variance ignores small variance", {
@@ -179,17 +179,17 @@ test_that("detect_variance ignores small variance", {
   expect_equal(result$variance_pct, 0.02)
 
   # Clean up
-  delete_position_group(group_id)
+  close_position_group(group_id)
 })
 
-test_that("cash flow events are cascade deleted with group", {
+test_that("cash flow events are preserved when group is closed", {
   skip_on_cran()
 
   # Create a test group
-  group_id <- "TEST_CASCADE_DELETE_GROUP"
+  group_id <- "TEST_CLOSE_PRESERVE_GROUP"
   create_position_group(
     group_id = group_id,
-    group_name = "Test Cascade Delete",
+    group_name = "Test Close Preserve",
     strategy_type = "Dividend Aristocrats",
     account_number = "99999",
     members = tibble::tibble(
@@ -221,10 +221,10 @@ test_that("cash flow events are cascade deleted with group", {
   cash_flows_before <- get_group_cash_flows(group_id)
   expect_equal(nrow(cash_flows_before), 2)
 
-  # Delete group
-  delete_position_group(group_id)
+  # Close group (soft delete)
+  close_position_group(group_id)
 
-  # Verify cash flows are deleted
+  # Verify cash flows are PRESERVED
   cash_flows_after <- get_group_cash_flows(group_id)
-  expect_equal(nrow(cash_flows_after), 0)
+  expect_equal(nrow(cash_flows_after), 2)
 })

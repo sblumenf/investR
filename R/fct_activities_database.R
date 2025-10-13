@@ -10,6 +10,7 @@
 #' @importFrom DBI dbExecute dbWriteTable dbGetQuery
 #' @importFrom logger log_info log_warn log_error log_debug
 #' @importFrom purrr map_chr
+#' @importFrom lubridate as_datetime
 NULL
 
 ################################################################################
@@ -52,9 +53,11 @@ initialize_activities_schema <- function(conn) {
     ")
 
     # Create unique constraint to prevent duplicates
+    # Uses trade_date (when trade occurred) instead of transaction_date (settlement timestamp)
+    # This prevents API timestamp inconsistencies from creating duplicate records
     dbExecute(conn, "
       CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_unique
-      ON account_activities(account_number, symbol, transaction_date, action, quantity, net_amount)
+      ON account_activities(account_number, symbol, trade_date, action, quantity, net_amount)
     ")
 
     # Create indexes for performance
@@ -108,59 +111,60 @@ save_activities_batch <- function(activities_df) {
   on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
 
   tryCatch({
-    # Ensure schema exists
     initialize_activities_schema(conn)
 
-    # Add required fields
-    fetched_at <- Sys.time()
-    activities_to_save <- activities_df %>%
+    # 1. Standardize incoming data: Parse character dates to POSIXct.
+    #    The API provides ISO 8601 format; lubridate::as_datetime is robust.
+    activities_to_save <- activities_df %>% 
       mutate(
-        activity_id = map_chr(seq_len(nrow(activities_df)), function(i) {
-          generate_activity_id(
-            account_number[i],
-            symbol[i],
-            transaction_date[i]
-          )
-        }),
-        # Add account_type if missing (for backward compatibility with tests)
+        transaction_date = lubridate::as_datetime(transaction_date),
+        trade_date = lubridate::as_datetime(trade_date),
+        settlement_date = lubridate::as_datetime(settlement_date)
+      )
+
+    # 2. Query existing keys using trade_date (business key, not settlement timestamp).
+    existing_keys <- dbGetQuery(conn, "
+      SELECT account_number, symbol, trade_date, action, quantity, net_amount
+      FROM account_activities
+    ") %>%
+      as_tibble()
+
+    # 3. Perform the anti_join on native data types for robust duplicate detection.
+    # Uses trade_date to match the unique constraint.
+    new_activities <- activities_to_save %>%
+      anti_join(
+        existing_keys,
+        by = c("account_number", "symbol", "trade_date", "action", "quantity", "net_amount")
+      )
+
+    if (nrow(new_activities) == 0) {
+      log_info("Activities DB: No new activities to save. Skipped {nrow(activities_to_save)} duplicates.")
+      return(list(inserted_count = 0, skipped_count = nrow(activities_to_save)))
+    }
+
+    # Add remaining metadata to new activities only
+    activities_to_insert <- new_activities %>%
+      mutate(
+        activity_id = map_chr(seq_len(nrow(.)), ~generate_activity_id(
+          account_number[.], symbol[.], transaction_date[.]
+        )),
         account_type = if ("account_type" %in% names(.)) account_type else "UNKNOWN",
         group_id = NA_character_,
         is_processed = FALSE,
-        fetched_at = fetched_at
+        fetched_at = Sys.time()
       )
 
-    # Query existing activity keys (for duplicate detection)
-    existing_keys <- dbGetQuery(conn, "
-      SELECT account_number, symbol, transaction_date, action, quantity, net_amount
-      FROM account_activities
-    ") %>%
-      as_tibble() %>%
-      mutate(transaction_date = as.character(transaction_date))
+    # Bulk insert all new activities
+    dbWriteTable(conn, "account_activities", activities_to_insert, append = TRUE)
 
-    # Find new activities using anti_join (tidyverse way to filter duplicates)
-    # Normalize transaction_date to character for type-safe comparison
-    new_activities <- activities_to_save %>%
-      mutate(transaction_date_char = as.character(transaction_date)) %>%
-      anti_join(
-        existing_keys,
-        by = c("account_number", "symbol", "transaction_date_char" = "transaction_date", "action", "quantity", "net_amount")
-      ) %>%
-      select(-transaction_date_char)
-
-    # Calculate counts
-    inserted_count <- nrow(new_activities)
+    inserted_count <- nrow(activities_to_insert)
     skipped_count <- nrow(activities_to_save) - inserted_count
-
-    # Bulk insert all new activities (one database operation)
-    if (inserted_count > 0) {
-      dbWriteTable(conn, "account_activities", new_activities, append = TRUE)
-    }
 
     log_info("Activities DB: Saved {inserted_count} activities, skipped {skipped_count} duplicates")
     return(list(inserted_count = inserted_count, skipped_count = skipped_count))
 
   }, error = function(e) {
-    log_error("Activities DB: Failed to save activities - {e$message}")
+    log_error("Activities DB: Failed to save activities - {conditionMessage(e)}")
     return(list(inserted_count = 0, skipped_count = 0))
   })
 }

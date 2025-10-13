@@ -86,7 +86,7 @@ test_that("update_position_group updates metadata", {
   expect_equal(group$group_name, "Updated Name")
 })
 
-test_that("delete_position_group removes group and members", {
+test_that("close_position_group marks group as closed without deleting data", {
   skip_on_cran()
 
   # Create a group
@@ -96,25 +96,77 @@ test_that("delete_position_group removes group and members", {
   )
 
   create_position_group(
-    group_id = "TEST_DELETE",
-    group_name = "To Delete",
+    group_id = "TEST_CLOSE",
+    group_name = "To Close",
     strategy_type = "Dividend Aristocrats",
     account_number = "12345",
     members = members
   )
 
-  # Delete the group
-  result <- delete_position_group("TEST_DELETE")
+  # Close the group
+  result <- close_position_group("TEST_CLOSE")
 
   expect_true(result)
 
-  # Verify group is gone
-  group <- get_group_by_id("TEST_DELETE")
-  expect_equal(nrow(group), 0)
+  # Verify group still exists but is closed
+  group <- get_group_by_id("TEST_CLOSE")
+  expect_equal(nrow(group), 1)
+  expect_equal(group$status, "closed")
 
-  # Verify members are gone
-  group_members <- get_group_members("TEST_DELETE")
-  expect_equal(nrow(group_members), 0)
+  # Verify members are preserved
+  group_members <- get_group_members("TEST_CLOSE")
+  expect_equal(nrow(group_members), 2)
+
+  # Verify group doesn't appear in default get_all_groups (open only)
+  open_groups <- get_all_groups()
+  expect_false("TEST_CLOSE" %in% open_groups$group_id)
+
+  # Verify group appears when including closed
+  all_groups <- get_all_groups(include_closed = TRUE)
+  expect_true("TEST_CLOSE" %in% all_groups$group_id)
+})
+
+test_that("reopen_position_group restores closed group to open", {
+  skip_on_cran()
+
+  # Create and close a group
+  members <- tibble::tibble(
+    symbol = c("AAPL"),
+    role = c("underlying_stock")
+  )
+
+  create_position_group(
+    group_id = "TEST_REOPEN",
+    group_name = "To Reopen",
+    strategy_type = "Test Strategy",
+    account_number = "12345",
+    members = members
+  )
+
+  close_position_group("TEST_REOPEN")
+
+  # Reopen the group
+  result <- reopen_position_group("TEST_REOPEN")
+
+  expect_true(result)
+
+  # Verify group is open again
+  group <- get_group_by_id("TEST_REOPEN")
+  expect_equal(group$status, "open")
+
+  # Verify group appears in default get_all_groups
+  open_groups <- get_all_groups()
+  expect_true("TEST_REOPEN" %in% open_groups$group_id)
+})
+
+test_that("delete_position_group throws error (deprecated)", {
+  skip_on_cran()
+
+  # Attempting to delete should throw an error
+  expect_error(
+    delete_position_group("ANY_ID"),
+    "deprecated"
+  )
 })
 
 test_that("check_group_integrity detects missing positions", {

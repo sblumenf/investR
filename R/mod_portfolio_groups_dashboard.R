@@ -116,7 +116,7 @@ mod_dashboard_server <- function(id, status_filter, metrics = NULL){
                     style = "background: #f8f9fa; border: 1px solid #dee2e6;",
                     tags$h3(
                       style = "margin: 0; color: #28a745;",
-                      format_percentage(open_metrics$avg_projected_return_pct)
+                      format_percentage(open_metrics$avg_projected_return_pct / 100)
                     ),
                     tags$p(style = "margin: 5px 0 0 0; color: #6c757d;", "Avg Proj. Return")
                   )
@@ -128,7 +128,7 @@ mod_dashboard_server <- function(id, status_filter, metrics = NULL){
                     style = "background: #f8f9fa; border: 1px solid #dee2e6;",
                     tags$h3(
                       style = "margin: 0; color: #6c757d;",
-                      format_percentage(open_metrics$avg_pct_recovered)
+                      format_percentage(open_metrics$avg_pct_recovered / 100)
                     ),
                     tags$p(style = "margin: 5px 0 0 0; color: #6c757d;", "Avg % Recovered")
                   )
@@ -178,7 +178,7 @@ mod_dashboard_server <- function(id, status_filter, metrics = NULL){
                     style = "background: #f8f9fa; border: 1px solid #dee2e6;",
                     tags$h3(
                       style = "margin: 0; color: #17a2b8;",
-                      format_percentage(closed_metrics$avg_total_return_pct)
+                      format_percentage(closed_metrics$avg_total_return_pct / 100)
                     ),
                     tags$p(style = "margin: 5px 0 0 0; color: #6c757d;", "Avg Total Return")
                   )
@@ -190,7 +190,7 @@ mod_dashboard_server <- function(id, status_filter, metrics = NULL){
                     style = "background: #f8f9fa; border: 1px solid #dee2e6;",
                     tags$h3(
                       style = "margin: 0; color: #007bff;",
-                      format_percentage(closed_metrics$avg_annualized_return_pct)
+                      format_percentage(closed_metrics$avg_annualized_return_pct / 100)
                     ),
                     tags$p(style = "margin: 5px 0 0 0; color: #6c757d;", "Avg Ann. Return")
                   )
@@ -241,7 +241,7 @@ create_strategy_breakdown_ui <- function(open_groups_detail, closed_groups_detai
               strategy$strategy_type,
               strategy$count,
               if (strategy$count > 1) "s" else "",
-              format_percentage(strategy$avg_return_pct))
+              format_percentage(strategy$avg_return_pct / 100))
     )
   })
 

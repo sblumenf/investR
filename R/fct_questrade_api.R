@@ -120,9 +120,10 @@ get_questrade_auth <- function() {
 #' Retrieves list of all accounts accessible via API
 #'
 #' @param auth List with access_token and api_server from get_questrade_auth()
+#' @param retry_on_401 Logical, whether to retry once on 401 error (default TRUE)
 #' @return Tibble with account information or empty tibble on failure
 #' @noRd
-fetch_questrade_accounts <- function(auth) {
+fetch_questrade_accounts <- function(auth, retry_on_401 = TRUE) {
   if (is.null(auth)) {
     log_error("Questrade API: No authentication provided")
     return(tibble())
@@ -134,6 +135,28 @@ fetch_questrade_accounts <- function(auth) {
       url,
       add_headers(Authorization = paste("Bearer", auth$access_token))
     )
+
+    # Handle 401 Unauthorized - token is invalid despite expiry check
+    if (status_code(response) == 401 && retry_on_401) {
+      log_warn("Questrade API: Received 401 Unauthorized, cached token is invalid")
+      log_info("Questrade API: Deleting stale token and forcing refresh...")
+
+      # Delete the stale cached token
+      delete_token_file()
+
+      # Get fresh authentication
+      fresh_auth <- get_questrade_auth()
+
+      if (is.null(fresh_auth)) {
+        log_error("Questrade API: Failed to refresh authentication after 401")
+        return(tibble())
+      }
+
+      log_info("Questrade API: Retrying accounts fetch with fresh token")
+
+      # Retry once with fresh token (retry_on_401 = FALSE prevents infinite loop)
+      return(fetch_questrade_accounts(fresh_auth, retry_on_401 = FALSE))
+    }
 
     if (status_code(response) != 200) {
       log_error("Questrade API: Accounts fetch failed with status {status_code(response)}")

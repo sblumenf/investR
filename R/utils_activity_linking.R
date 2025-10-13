@@ -131,61 +131,38 @@ get_orphaned_activities <- function() {
   return(orphaned)
 }
 
-#' Link activity to group
-#'
-#' Updates the group_id for a specific activity.
-#'
-#' @param activity_id Activity identifier
-#' @param group_id Group identifier
-#' @return Logical TRUE if successful
-#' @export
-link_activity_to_group <- function(activity_id, group_id) {
-  con <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
-
-  tryCatch({
-    # Verify group exists
-    group_check <- dbGetQuery(con, sprintf("
-      SELECT COUNT(*) as count
-      FROM position_groups
-      WHERE group_id = '%s'
-    ", group_id))
-
-    if (group_check$count == 0) {
-      log_warn("Cannot link activity {activity_id}: group {group_id} does not exist")
-      return(FALSE)
-    }
-
-    # Update activity
-    dbExecute(con, sprintf("
-      UPDATE account_activities
-      SET group_id = '%s'
-      WHERE activity_id = '%s'
-    ", group_id, activity_id))
-
-    log_info("Linked activity {activity_id} to group {group_id}")
-    return(TRUE)
-
-  }, error = function(e) {
-    log_warn("Failed to link activity {activity_id}: {e$message}")
-    return(FALSE)
-  })
-}
-
 #' Link multiple activities to a group
 #'
 #' Batch operation to link multiple activities to the same group.
 #'
 #' @param activity_ids Character vector of activity IDs
 #' @param group_id Group identifier
-#' @return Logical TRUE if all successful
+#' @return Logical TRUE if successful
 #' @export
 link_activities_to_group <- function(activity_ids, group_id) {
-  results <- sapply(activity_ids, function(aid) {
-    link_activity_to_group(aid, group_id)
-  })
+  if (length(activity_ids) == 0) return(TRUE)
+  con <- get_portfolio_db_connection()
+  on.exit(dbDisconnect(con, shutdown = TRUE))
 
-  return(all(results))
+  tryCatch({
+    # Verify group exists
+    group_check <- dbGetQuery(con, "SELECT COUNT(*) as count FROM position_groups WHERE group_id = ?", params = list(group_id))
+    if (group_check$count == 0) {
+      log_warn("Cannot link activities: group {group_id} does not exist")
+      return(FALSE)
+    }
+
+    # duckdb can handle a vector of values for an IN clause with a single ?
+    query <- "UPDATE account_activities SET group_id = ? WHERE activity_id IN (?)"
+    dbExecute(con, query, params = list(group_id, activity_ids))
+
+    log_info("Linked {length(activity_ids)} activities to group {group_id}")
+    return(TRUE)
+
+  }, error = function(e) {
+    log_warn("Failed to link activities to group {group_id}: {e$message}")
+    return(FALSE)
+  })
 }
 
 #' Unlink activity from group
@@ -198,17 +175,10 @@ link_activities_to_group <- function(activity_ids, group_id) {
 unlink_activity <- function(activity_id) {
   con <- get_portfolio_db_connection()
   on.exit(dbDisconnect(con, shutdown = TRUE))
-
   tryCatch({
-    dbExecute(con, sprintf("
-      UPDATE account_activities
-      SET group_id = NULL
-      WHERE activity_id = '%s'
-    ", activity_id))
-
+    dbExecute(con, "UPDATE account_activities SET group_id = NULL WHERE activity_id = ?", params = list(activity_id))
     log_info("Unlinked activity {activity_id}")
     return(TRUE)
-
   }, error = function(e) {
     log_warn("Failed to unlink activity {activity_id}: {e$message}")
     return(FALSE)
@@ -217,31 +187,38 @@ unlink_activity <- function(activity_id) {
 
 #' Mark activity to be ignored for grouping
 #'
-#' Sets ignore_for_grouping flag for activities that should not be linked to groups
-#' (e.g., historical transactions from closed positions).
+#' Sets ignore_for_grouping flag for activities that should not be linked to groups.
+#' This is a convenience wrapper around the batch function.
 #'
 #' @param activity_id Activity identifier
 #' @return Logical TRUE if successful
 #' @export
 ignore_activity <- function(activity_id) {
+  batch_ignore_activities(activity_id)
+}
+
+#' Batch ignore activities
+#'
+#' Efficiently sets ignore_for_grouping flag for multiple activities.
+#'
+#' @param activity_ids Character vector of activity IDs
+#' @return Logical TRUE if successful
+#' @export
+batch_ignore_activities <- function(activity_ids) {
+  if (length(activity_ids) == 0) return(TRUE)
   con <- get_portfolio_db_connection()
   on.exit(dbDisconnect(con, shutdown = TRUE))
-
   tryCatch({
-    dbExecute(con, sprintf("
-      UPDATE account_activities
-      SET ignore_for_grouping = TRUE
-      WHERE activity_id = '%s'
-    ", activity_id))
-
-    log_info("Marked activity {activity_id} as ignored for grouping")
+    query <- "UPDATE account_activities SET ignore_for_grouping = TRUE WHERE activity_id IN (?)"
+    dbExecute(con, query, params = list(activity_ids))
+    log_info("Marked {length(activity_ids)} activities as ignored.")
     return(TRUE)
-
   }, error = function(e) {
-    log_warn("Failed to ignore activity {activity_id}: {e$message}")
+    log_warn("Failed to batch ignore activities: {e$message}")
     return(FALSE)
   })
 }
+
 
 #' Unignore activity
 #'
@@ -253,17 +230,10 @@ ignore_activity <- function(activity_id) {
 unignore_activity <- function(activity_id) {
   con <- get_portfolio_db_connection()
   on.exit(dbDisconnect(con, shutdown = TRUE))
-
   tryCatch({
-    dbExecute(con, sprintf("
-      UPDATE account_activities
-      SET ignore_for_grouping = FALSE
-      WHERE activity_id = '%s'
-    ", activity_id))
-
+    dbExecute(con, "UPDATE account_activities SET ignore_for_grouping = FALSE WHERE activity_id = ?", params = list(activity_id))
     log_info("Cleared ignore flag for activity {activity_id}")
     return(TRUE)
-
   }, error = function(e) {
     log_warn("Failed to unignore activity {activity_id}: {e$message}")
     return(FALSE)

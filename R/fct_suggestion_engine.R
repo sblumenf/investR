@@ -165,10 +165,23 @@ create_same_day_suggestion <- function(match, activities) {
   stock <- activities %>% filter(activity_id == match$stock_activity_id)
   option <- activities %>% filter(activity_id == match$option_activity_id)
 
-  # Generate name and reasoning
-  group_name <- sprintf("%s - %s",
-                       match$ticker,
-                       format(as.Date(match$trade_date), "%b %Y"))
+  # Build temporary members tibble for standard naming (DRY principle)
+  suggested_strategy <- "Dynamic Covered Calls"  # Default, user can change
+  members <- tibble::tibble(
+    symbol = c(stock$symbol, option$symbol),
+    role = c("underlying_stock", "short_call")
+  )
+
+  # Use centralized naming function (DRY - no duplicate naming logic)
+  group_name <- generate_standard_group_name(members, suggested_strategy)
+
+  # Fallback if naming fails
+  if (is.null(group_name)) {
+    group_name <- sprintf("%s - %s",
+                         match$ticker,
+                         format(as.Date(match$trade_date), "%b %Y"))
+  }
+
   reasoning <- sprintf(
     "Bought %g shares of %s and sold %g %s call option on %s (same day). This pattern indicates an implemented strategy position.",
     stock$quantity,
@@ -183,7 +196,7 @@ create_same_day_suggestion <- function(match, activities) {
     pattern_type = "same_day_strategy",
     activity_ids = c(match$stock_activity_id, match$option_activity_id),
     suggested_group_name = group_name,
-    suggested_strategy_type = "Dynamic Covered Calls",  # Default, user can change
+    suggested_strategy_type = suggested_strategy,
     reasoning = reasoning
   )
 
@@ -237,10 +250,22 @@ create_delayed_covered_call_suggestion <- function(match, activities) {
   # Get activity details
   option <- activities %>% filter(activity_id == match$option_activity_id)
 
-  # Generate name and reasoning
-  group_name <- sprintf("%s Covered Call - %s",
-                       match$ticker,
-                       format(as.Date(option$trade_date), "%b %Y"))
+  # Build temporary members tibble for standard naming (DRY principle)
+  suggested_strategy <- "Dividend Aristocrats"  # Default
+  members <- tibble::tibble(
+    symbol = c(match$ticker, option$symbol),
+    role = c("underlying_stock", "short_call")
+  )
+
+  # Use centralized naming function (DRY - no duplicate naming logic)
+  group_name <- generate_standard_group_name(members, suggested_strategy)
+
+  # Fallback if naming fails
+  if (is.null(group_name)) {
+    group_name <- sprintf("%s Covered Call - %s",
+                         match$ticker,
+                         format(as.Date(option$trade_date), "%b %Y"))
+  }
 
   reasoning <- sprintf(
     "Sold %g %s call option on %s. You currently own %g shares at avg price $%.2f (purchased before transaction history). This pattern indicates a traditional covered call position.",
@@ -256,7 +281,7 @@ create_delayed_covered_call_suggestion <- function(match, activities) {
     pattern_type = "delayed_covered_call",
     activity_ids = c(match$option_activity_id),
     suggested_group_name = group_name,
-    suggested_strategy_type = "Dividend Aristocrats",  # Default
+    suggested_strategy_type = suggested_strategy,
     reasoning = reasoning
   )
 
@@ -330,24 +355,8 @@ create_ambiguous_suggestion <- function(match, activities) {
 # NAME GENERATION
 ################################################################################
 
-#' Generate auto group name
-#'
-#' Creates a descriptive group name based on pattern type and transaction details
-#'
-#' @param pattern_type Type of pattern detected
-#' @param ticker Stock ticker symbol
-#' @param date_info Date or date range (character)
-#' @return Character group name
-#' @noRd
-generate_group_name <- function(pattern_type, ticker, date_info) {
-  if (pattern_type == "same_day_strategy") {
-    sprintf("%s Strategy Position - %s", ticker, format(as.Date(date_info), "%b %d"))
-  } else if (pattern_type == "dividend_capture") {
-    # Date range handled in create_dividend_capture_suggestion
-    sprintf("%s Dividend Capture", ticker)
-  } else if (pattern_type == "delayed_covered_call") {
-    sprintf("%s Covered Call", ticker)
-  } else {
-    sprintf("%s Position", ticker)
-  }
-}
+#' DEPRECATED: This section has been removed.
+#' Group naming now uses the centralized generate_standard_group_name() function
+#' from fct_portfolio_groups_logic.R (DRY principle - single source of truth).
+#' See create_same_day_suggestion() and create_delayed_covered_call_suggestion()
+#' for examples of how to use the centralized naming function.

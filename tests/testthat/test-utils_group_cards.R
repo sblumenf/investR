@@ -62,10 +62,10 @@ test_that("format_currency handles edge cases", {
 test_that("format_percentage handles edge cases", {
   skip_on_cran()
 
-  expect_equal(format_percentage(12.345), "12.3%")
+  expect_equal(format_percentage(0.12345), "12.3%")  # Expects decimal input (0.12345 = 12.345%)
   expect_equal(format_percentage(0), "0.0%")
-  expect_equal(format_percentage(NA), "0.0%")
-  expect_equal(format_percentage(NULL), "0.0%")
+  expect_equal(format_percentage(NA), "N/A")
+  expect_equal(format_percentage(NULL), "N/A")
 })
 
 # New tests for refactored functions

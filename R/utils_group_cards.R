@@ -12,26 +12,9 @@
 NULL
 
 ################################################################################
-# FORMATTING HELPERS
+# NOTE: Formatting functions (format_currency, format_percentage, etc.) are
+# imported from utils_formatting.R to ensure consistency across the codebase.
 ################################################################################
-
-#' Format currency for display
-#' @param value Numeric value
-#' @return Character formatted as currency
-#' @noRd
-format_currency <- function(value) {
-  if (is.na(value) || is.null(value)) return("$0.00")
-  sprintf("$%s", format(round(value, 2), big.mark = ",", nsmall = 2))
-}
-
-#' Format percentage for display
-#' @param value Numeric percentage value
-#' @return Character formatted as percentage
-#' @noRd
-format_percentage <- function(value) {
-  if (is.na(value) || is.null(value)) return("0.0%")
-  sprintf("%.1f%%", value)
-}
 
 #' Format days to expiration as countdown
 #'
@@ -263,14 +246,44 @@ create_transaction_history_section <- function(activities) {
 #' @param cash_flows Tibble from get_group_cash_flows()
 #' @param activities Tibble from get_activities_by_group()
 #' @param latest_positions Tibble from get_latest_positions() (optional)
+#' @param ns Namespace function for Shiny modules (optional)
 #' @return bslib card component
 #' @noRd
-create_open_group_card <- function(group_data, metrics, members, cash_flows, activities, latest_positions = NULL) {
+create_open_group_card <- function(group_data, metrics, members, cash_flows, activities, latest_positions = NULL, ns = NULL) {
   # Enrich with market data
   market_data <- enrich_group_with_market_data(group_data$group_id, members, activities, latest_positions)
 
-  # Extract ticker from group name (e.g., "CZR OPEN" -> "CZR")
-  ticker <- strsplit(group_data$group_name, " ")[[1]][1]
+  # Extract ticker - prefer from members (most reliable), fallback to parsing name
+  ticker <- if (!is.null(members) && nrow(members) > 0) {
+    # Get the underlying stock symbol from members
+    underlying <- members %>% filter(role == "underlying_stock")
+    if (nrow(underlying) > 0) {
+      underlying$symbol[1]
+    } else {
+      # No underlying stock, use first member (might be option)
+      base_symbol <- members$symbol[1]
+      # If it's an option, extract underlying ticker
+      if (is_option_symbol(base_symbol)) {
+        parse_option_symbol(base_symbol)
+      } else {
+        base_symbol
+      }
+    }
+  } else {
+    # Fallback: parse from group name
+    # Handles standardized format: "{STRATEGY} - {TICKER} - {EXPIRY} @ ${STRIKE}"
+    if (grepl(" - ", group_data$group_name)) {
+      parts <- strsplit(group_data$group_name, " - ", fixed = TRUE)[[1]]
+      if (length(parts) >= 2) {
+        parts[2]  # Ticker is second segment in standardized format
+      } else {
+        parts[1]
+      }
+    } else {
+      # Simple format - take first word
+      strsplit(group_data$group_name, " ")[[1]][1]
+    }
+  }
 
   # Build header with current price if available
   header_primary <- if (!is.null(market_data$current_stock_price)) {
@@ -297,7 +310,7 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
   if (nrow(metrics) > 0 && !is.na(metrics$projected_annualized_return_pct)) {
     header_secondary_parts <- c(
       header_secondary_parts,
-      sprintf("%s annualized", format_percentage(metrics$projected_annualized_return_pct))
+      sprintf("%s annualized", format_percentage(metrics$projected_annualized_return_pct / 100))
     )
   }
 
@@ -389,8 +402,8 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
 
     # Expected profit with clear labeling
     if (metrics$projected_income > 0) {
-      return_pct <- (metrics$projected_income / metrics$cost_basis) * 100
-      annualized_pct <- metrics$projected_annualized_return_pct
+      return_pct <- metrics$projected_income / metrics$cost_basis
+      annualized_pct <- metrics$projected_annualized_return_pct / 100
 
       profit_display <- sprintf("%s (%s return | %s annualized)",
                                format_currency(metrics$projected_income),
@@ -446,23 +459,33 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
   transaction_section <- create_transaction_history_section(activities)
 
   # Action buttons
+  # Button IDs and Shiny.setInputValue names must be namespaced
+  close_btn_id <- sprintf("close_group_%s", group_data$group_id)
+  edit_btn_id <- sprintf("edit_group_%s", group_data$group_id)
+
+  # Get namespaced input names for JavaScript
+  close_input_name <- if (!is.null(ns)) ns("close_group_clicked") else "close_group_clicked"
+  edit_input_name <- if (!is.null(ns)) ns("edit_group_clicked") else "edit_group_clicked"
+
   action_buttons <- tags$div(
     class = "card-actions",
     style = "margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;",
     tags$button(
+      id = close_btn_id,
       type = "button",
       class = "btn btn-sm btn-warning",
-      id = sprintf("close_group_%s", group_data$group_id),
-      `data-group-id` = group_data$group_id,
+      onclick = sprintf("console.log('Close clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                        group_data$group_id, close_input_name, group_data$group_id),
       icon("times-circle"),
       " Close Group"
     ),
     tags$button(
+      id = edit_btn_id,
       type = "button",
       class = "btn btn-sm btn-default",
       style = "margin-left: 10px;",
-      id = sprintf("edit_group_%s", group_data$group_id),
-      `data-group-id` = group_data$group_id,
+      onclick = sprintf("console.log('Edit clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                        group_data$group_id, edit_input_name, group_data$group_id),
       icon("edit"),
       " Edit Members"
     )
@@ -487,15 +510,16 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
 #' @param members Tibble from get_group_members()
 #' @param cash_flows Tibble from get_group_cash_flows()
 #' @param activities Tibble from get_activities_by_group()
+#' @param ns Namespace function for Shiny modules (optional)
 #' @return bslib card component
 #' @noRd
-create_closed_group_card <- function(group_data, pnl, members, cash_flows, activities) {
+create_closed_group_card <- function(group_data, pnl, members, cash_flows, activities, ns = NULL) {
   # Card header
   header_primary <- sprintf("%s", group_data$group_name)
   header_secondary <- sprintf("%s | %d days | %s annualized",
                               group_data$strategy_type,
                               if (nrow(pnl) > 0) pnl$hold_days else 0,
-                              if (nrow(pnl) > 0) format_percentage(pnl$annualized_return_pct) else "0%")
+                              if (nrow(pnl) > 0) format_percentage(pnl$annualized_return_pct / 100) else "0%")
 
   header <- create_generic_card_header(
     primary_text = tags$div(
@@ -515,10 +539,10 @@ create_closed_group_card <- function(group_data, pnl, members, cash_flows, activ
     create_accordion_section(
       title = "Quick Overview",
       is_open = TRUE,
-      create_metric_row("Annualized Return", format_percentage(pnl$annualized_return_pct), is_primary = TRUE),
+      create_metric_row("Annualized Return", format_percentage(pnl$annualized_return_pct / 100), is_primary = TRUE),
       create_metric_row("Net P&L", sprintf("%s (%s)",
                                            format_currency(pnl$net_pnl),
-                                           format_percentage(pnl$total_return_pct))),
+                                           format_percentage(pnl$total_return_pct / 100))),
       create_metric_row("Hold Period", sprintf("%d days", pnl$hold_days)),
       create_metric_row("Strategy", group_data$strategy_type)
     )
@@ -582,8 +606,8 @@ create_closed_group_card <- function(group_data, pnl, members, cash_flows, activ
       tags$br(),
       tags$h5("Results"),
       create_metric_row("Net P&L", format_currency(pnl$net_pnl), is_primary = TRUE),
-      create_metric_row("Total Return", format_percentage(pnl$total_return_pct)),
-      create_metric_row("Annualized Return", format_percentage(pnl$annualized_return_pct), is_primary = TRUE)
+      create_metric_row("Total Return", format_percentage(pnl$total_return_pct / 100)),
+      create_metric_row("Annualized Return", format_percentage(pnl$annualized_return_pct / 100), is_primary = TRUE)
     )
   } else {
     create_accordion_section(
@@ -600,14 +624,21 @@ create_closed_group_card <- function(group_data, pnl, members, cash_flows, activ
   transaction_section <- create_transaction_history_section(activities)
 
   # Action buttons
+  # Button ID and Shiny.setInputValue name must be namespaced
+  reopen_btn_id <- sprintf("reopen_group_%s", group_data$group_id)
+
+  # Get namespaced input name for JavaScript
+  reopen_input_name <- if (!is.null(ns)) ns("reopen_group_clicked") else "reopen_group_clicked"
+
   action_buttons <- tags$div(
     class = "card-actions",
     style = "margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;",
     tags$button(
+      id = reopen_btn_id,
       type = "button",
       class = "btn btn-sm btn-success",
-      id = sprintf("reopen_group_%s", group_data$group_id),
-      `data-group-id` = group_data$group_id,
+      onclick = sprintf("console.log('Reopen clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                        group_data$group_id, reopen_input_name, group_data$group_id),
       icon("undo"),
       " Reopen Group"
     )
@@ -643,11 +674,12 @@ create_closed_group_card <- function(group_data, pnl, members, cash_flows, activ
 #' @param cash_flows Optional pre-fetched cash flows (from get_group_cash_flows)
 #' @param metrics Optional pre-calculated metrics (from calculate_dashboard_metrics)
 #' @param latest_positions Optional pre-fetched latest positions (from get_latest_positions)
+#' @param ns Namespace function for Shiny modules (optional, required for button interactions)
 #' @return bslib card component or NULL if group not found
 #' @export
 create_group_card <- function(group_id, group_data = NULL, members = NULL,
                                activities = NULL, cash_flows = NULL, metrics = NULL,
-                               latest_positions = NULL) {
+                               latest_positions = NULL, ns = NULL) {
   # Fetch data if not provided (allows function to work standalone)
   if (is.null(group_data)) {
     group_data <- get_group_by_id(group_id)
@@ -682,7 +714,8 @@ create_group_card <- function(group_id, group_data = NULL, members = NULL,
       pnl = pnl,
       members = members,
       cash_flows = cash_flows,
-      activities = activities
+      activities = activities,
+      ns = ns
     )
   } else {
     # Get metrics (use pre-calculated if available, otherwise calculate)
@@ -700,7 +733,8 @@ create_group_card <- function(group_id, group_data = NULL, members = NULL,
       members = members,
       cash_flows = cash_flows,
       activities = activities,
-      latest_positions = latest_positions
+      latest_positions = latest_positions,
+      ns = ns
     )
   }
 }

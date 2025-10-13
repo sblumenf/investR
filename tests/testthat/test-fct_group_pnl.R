@@ -56,24 +56,28 @@ test_that("calculate_group_pnl computes correct total and annualized returns", {
   # Assertions
   expect_equal(nrow(pnl), 1)
 
-  # Total cost = stock purchase
+  # With new accounting for covered call strategies (non-"Other"):
+  # - Option premiums reduce cost basis (net debit accounting)
+  # - Stock purchases tracked separately for display
   expect_equal(pnl$stock_purchases, 15000)
-  expect_equal(pnl$total_cost, 15000)
-
-  # Total proceeds = stock sale + option premium + dividend
-  expect_equal(pnl$stock_sales, 15500)
   expect_equal(pnl$option_premiums, 250)
-  expect_equal(pnl$total_dividends, 100)
-  expect_equal(pnl$total_proceeds, 15850)
 
-  # Net P&L = proceeds - cost = 15850 - 15000 = 850
+  # Total cost = stock purchase - option premium = 15000 - 250 = 14750
+  expect_equal(pnl$total_cost, 14750)
+
+  # Total proceeds = stock sale + dividend (no option premiums)
+  expect_equal(pnl$stock_sales, 15500)
+  expect_equal(pnl$total_dividends, 100)
+  expect_equal(pnl$total_proceeds, 15600)
+
+  # Net P&L = proceeds - cost = 15600 - 14750 = 850
   expect_equal(pnl$net_pnl, 850)
 
-  # Total return = (850 / 15000) * 100 = 5.67%
-  expect_equal(pnl$total_return_pct, (850 / 15000) * 100, tolerance = 0.01)
+  # Total return = (850 / 14750) * 100 = 5.76% (higher % due to lower cost basis)
+  expect_equal(pnl$total_return_pct, (850 / 14750) * 100, tolerance = 0.01)
 
   # Annualized return for 100-day hold
-  total_return_ratio <- 1 + (850 / 15000)  # 1.0567
+  total_return_ratio <- 1 + (850 / 14750)  # 1.0576
   annualized <- ((total_return_ratio ^ (365 / 100)) - 1) * 100
   expect_equal(pnl$annualized_return_pct, annualized, tolerance = 0.01)
 
@@ -134,12 +138,13 @@ test_that("calculate_group_pnl includes commissions in total cost", {
 
   pnl <- calculate_group_pnl(group_id)
 
-  # Total cost includes purchase + commissions
+  # Total cost includes purchase + commissions (no option premiums in this test)
   expect_equal(pnl$stock_purchases, 55000)
   expect_equal(pnl$total_commissions, 10)
-  expect_equal(pnl$total_cost, 55010)
+  expect_equal(pnl$option_premiums, 0)  # No options in this test
+  expect_equal(pnl$total_cost, 55010)   # 55000 + 10 - 0
 
-  # Proceeds
+  # Proceeds (no option premiums for Weekly Dividend Capture without options)
   expect_equal(pnl$stock_sales, 55100)
   expect_equal(pnl$total_proceeds, 55100)
 
@@ -216,13 +221,16 @@ test_that("close_position_group marks group closed and calculates final P&L", {
 
   # Assertions
   expect_equal(nrow(pnl), 1)
-  expect_equal(pnl$net_pnl, 250)  # 4200 + 50 - 4000
+  # With net debit accounting: cost = 4000 - 50 = 3950, proceeds = 4200
+  # Net P&L = 4200 - 3950 = 250 (same total gain, but from lower cost basis)
+  expect_equal(pnl$net_pnl, 250)
 
   # Verify group is marked closed
   group <- get_group_by_id(group_id)
   expect_equal(group$status, "closed")
   expect_equal(group$total_return_amount, 250)
-  expect_equal(group$total_return_pct, (250 / 4000) * 100, tolerance = 0.01)
+  # Return % = (250 / 3950) * 100 = 6.33% (higher % due to lower cost basis)
+  expect_equal(group$total_return_pct, (250 / 3950) * 100, tolerance = 0.01)
 
   # Verify projected cash flows are deleted
   cash_flows_after <- get_group_cash_flows(group_id)
@@ -293,6 +301,75 @@ test_that("calculate_group_pnl handles groups with only dividends correctly", {
   on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
   dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
   dbExecute(conn, "DELETE FROM account_activities WHERE account_number = 'TEST999'")
+})
+
+test_that("calculate_group_pnl uses legacy accounting for Other strategy", {
+  skip_on_ci()
+  skip_on_cran()
+
+  # Test that "Other" strategy keeps legacy behavior: premiums as income
+  group_id <- paste0("TEST_OTHER_", format(Sys.time(), "%Y%m%d%H%M%S"))
+  create_position_group(
+    group_id = group_id,
+    group_name = "Test Other Strategy",
+    strategy_type = "Other",
+    account_number = "TEST111",
+    members = tibble::tibble(
+      symbol = c("XYZ", "XYZ250117C00100000"),
+      role = c("underlying_stock", "short_call")
+    )
+  )
+
+  # Same activities as first test but with "Other" strategy
+  activities <- tibble::tibble(
+    account_number = rep("TEST111", 3),
+    symbol = c("XYZ", "XYZ250117C00100000", "XYZ"),
+    trade_date = c("2024-01-01", "2024-01-01", "2024-02-01"),
+    transaction_date = c("2024-01-01", "2024-01-01", "2024-02-01"),
+    settlement_date = c("2024-01-03", "2024-01-03", "2024-02-03"),
+    action = c("Buy", "Sell", "Sell"),
+    quantity = c(100, -1, -100),
+    price = c(150, 2.50, 155),
+    gross_amount = c(-15000, 250, 15500),
+    commission = c(0, 0, 0),
+    net_amount = c(-15000, 250, 15500),
+    type = rep("Trades", 3),
+    description = c("Buy XYZ", "Sell Call", "Sell XYZ"),
+    currency = rep("USD", 3),
+    symbol_id = c(7, 8, 7)
+  )
+
+  save_result <- save_activities_batch(activities)
+  saved_activities <- get_activities() %>%
+    filter(account_number == "TEST111")
+
+  for (act_id in saved_activities$activity_id) {
+    link_activity_to_group(act_id, group_id)
+  }
+
+  pnl <- calculate_group_pnl(group_id)
+
+  # With legacy accounting for "Other" strategy:
+  # Total cost = stock purchase only = 15000
+  expect_equal(pnl$stock_purchases, 15000)
+  expect_equal(pnl$option_premiums, 250)
+  expect_equal(pnl$total_cost, 15000)  # No premium offset
+
+  # Total proceeds = stock sale + option premium
+  expect_equal(pnl$stock_sales, 15500)
+  expect_equal(pnl$total_proceeds, 15750)  # 15500 + 250
+
+  # Net P&L = 15750 - 15000 = 750
+  expect_equal(pnl$net_pnl, 750)
+
+  # Return % = (750 / 15000) * 100 = 5%
+  expect_equal(pnl$total_return_pct, (750 / 15000) * 100, tolerance = 0.01)
+
+  # Cleanup
+  conn <- get_portfolio_db_connection()
+  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
+  dbExecute(conn, "DELETE FROM account_activities WHERE account_number = 'TEST111'")
 })
 
 test_that("annualized return calculation is correct for various hold periods", {

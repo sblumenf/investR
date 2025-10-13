@@ -141,6 +141,31 @@ save_token_file <- function(access_token, refresh_token, api_server, expires_in 
   })
 }
 
+#' Delete cached token file
+#'
+#' Removes the persistent token file to force a fresh token exchange.
+#' Used when a 401 error indicates the cached token is no longer valid.
+#'
+#' @return Logical TRUE if successful, FALSE otherwise
+#' @noRd
+delete_token_file <- function() {
+  token_file <- get_token_file_path()
+
+  if (file.exists(token_file)) {
+    tryCatch({
+      file.remove(token_file)
+      log_info("Questrade: Deleted stale token file")
+      return(TRUE)
+    }, error = function(e) {
+      log_warn("Questrade: Failed to delete token file - {e$message}")
+      return(FALSE)
+    })
+  } else {
+    log_debug("Questrade: Token file does not exist")
+    return(TRUE)
+  }
+}
+
 #' Update refresh token in .Renviron file (DEPRECATED)
 #'
 #' This function is kept for backward compatibility but is no longer used

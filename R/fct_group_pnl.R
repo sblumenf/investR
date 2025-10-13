@@ -40,13 +40,15 @@ calculate_group_pnl <- function(group_id) {
       return(tibble::tibble())
     }
 
-    # Get group info for dates
+    # Get group info for dates and strategy type
     group_info <- get_group_by_id(group_id)
 
     if (nrow(group_info) == 0) {
       log_warn("P&L Calc: Group {group_id} not found")
       return(tibble::tibble())
     }
+
+    strategy_type <- group_info$strategy_type[1]
 
     # Calculate total cost (money out)
     # Stock purchases: use gross_amount (excluding commissions)
@@ -65,8 +67,13 @@ calculate_group_pnl <- function(group_id) {
 
     total_commissions <- if (length(total_commissions) == 0) 0 else total_commissions
 
-    # Total cost = stock purchases + commissions
-    total_cost <- stock_purchases + total_commissions
+    # Option sales (premiums received): use gross_amount (excluding commissions)
+    option_premiums <- activities %>%
+      filter(type == "Trades", action == "Sell", purrr::map_lgl(symbol, is_option_symbol)) %>%
+      summarise(total = sum(abs(gross_amount), na.rm = TRUE)) %>%
+      pull(total)
+
+    option_premiums <- if (length(option_premiums) == 0) 0 else option_premiums
 
     # Calculate total proceeds (money in)
     # Stock sales: use gross_amount (excluding commissions)
@@ -77,14 +84,6 @@ calculate_group_pnl <- function(group_id) {
 
     stock_sales <- if (length(stock_sales) == 0) 0 else stock_sales
 
-    # Option sales (premiums received): use gross_amount (excluding commissions)
-    option_premiums <- activities %>%
-      filter(type == "Trades", action == "Sell", purrr::map_lgl(symbol, is_option_symbol)) %>%
-      summarise(total = sum(abs(gross_amount), na.rm = TRUE)) %>%
-      pull(total)
-
-    option_premiums <- if (length(option_premiums) == 0) 0 else option_premiums
-
     # Dividends received: positive (IMPORTANT: included in P&L)
     total_dividends <- activities %>%
       filter(type == "Dividends") %>%
@@ -93,8 +92,18 @@ calculate_group_pnl <- function(group_id) {
 
     total_dividends <- if (length(total_dividends) == 0) 0 else total_dividends
 
-    # Total proceeds = stock sales + option premiums + dividends
-    total_proceeds <- stock_sales + option_premiums + total_dividends
+    # Apply strategy-specific accounting
+    # For covered call strategies (non-"Other"): premiums reduce cost basis
+    # For "Other" strategy: premiums are proceeds (legacy behavior)
+    if (strategy_type != "Other") {
+      # Net debit accounting: premiums offset cost
+      total_cost <- stock_purchases + total_commissions - option_premiums
+      total_proceeds <- stock_sales + total_dividends
+    } else {
+      # Legacy accounting: premiums as income
+      total_cost <- stock_purchases + total_commissions
+      total_proceeds <- stock_sales + option_premiums + total_dividends
+    }
 
     # Net P&L = proceeds - cost
     net_pnl <- total_proceeds - total_cost

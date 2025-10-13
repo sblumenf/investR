@@ -345,6 +345,87 @@ generate_group_id <- function(strategy_type, account_number) {
   sprintf("%s_%s_%s_%s", strategy_clean, account_number, timestamp, random_suffix)
 }
 
+################################################################################
+# NAME GENERATION
+################################################################################
+
+#' Generate standardized group name from members and strategy
+#'
+#' Creates consistent group names following the pattern:
+#' - With options: "{Strategy} - {Ticker} - {Expiry} @ ${Strike}"
+#' - Stock-only: "{Strategy} - {Ticker}"
+#' - "Other" strategy: Returns NULL (requires manual naming)
+#'
+#' @param members Tibble with columns: symbol, role, (optional) allocated_quantity
+#' @param strategy_type Strategy type string
+#' @return Character group name or NULL for "Other" strategy
+#' @noRd
+generate_standard_group_name <- function(members, strategy_type) {
+  # "Other" strategy requires manual naming (catch-all category)
+  if (strategy_type == "Other") {
+    return(NULL)
+  }
+
+  # Extract member components (DRY helper function)
+  member_info <- extract_member_components(members)
+
+  # Generate name based on whether options exist
+  if (!is.null(member_info$expiry) && !is.null(member_info$strike)) {
+    # Has option: full format with expiry and strike
+    expiry_formatted <- format(member_info$expiry, "%b %Y")
+    sprintf("%s - %s - %s @ $%.0f",
+            strategy_type,
+            member_info$ticker,
+            expiry_formatted,
+            member_info$strike)
+  } else {
+    # Stock-only or no option details: simple format
+    sprintf("%s - %s", strategy_type, member_info$ticker)
+  }
+}
+
+#' Extract ticker, expiry, and strike from members tibble
+#'
+#' Helper function to parse member information for naming.
+#' Uses existing parse_option_symbol() and parse_option_details() functions.
+#'
+#' @param members Tibble with symbol and role columns
+#' @return List with ticker, expiry (Date or NULL), strike (numeric or NULL)
+#' @noRd
+extract_member_components <- function(members) {
+  # Get stock symbol (underlying ticker)
+  stock_members <- members %>% filter(role == "underlying_stock")
+  ticker <- if (nrow(stock_members) > 0) {
+    stock_members$symbol[1]
+  } else {
+    # Fallback: extract from option symbol
+    option_members <- members %>% filter(role == "short_call")
+    if (nrow(option_members) > 0) {
+      parse_option_symbol(option_members$symbol[1])
+    } else {
+      members$symbol[1]  # Last resort
+    }
+  }
+
+  # Get option details if short call exists
+  option_members <- members %>% filter(role == "short_call")
+  if (nrow(option_members) > 0) {
+    option_details <- parse_option_details(option_members$symbol[1])
+    list(
+      ticker = ticker,
+      expiry = option_details$expiry,
+      strike = option_details$strike
+    )
+  } else {
+    # Stock-only position
+    list(
+      ticker = ticker,
+      expiry = NULL,
+      strike = NULL
+    )
+  }
+}
+
 #' Get missing members from a group
 #'
 #' Compares group members to current positions and returns missing symbols

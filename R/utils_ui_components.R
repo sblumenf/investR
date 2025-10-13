@@ -94,7 +94,7 @@ create_generic_card_header <- function(primary_text, secondary_text = NULL) {
 #' @param icon_name Font Awesome icon name (optional, auto-selects based on type if NULL)
 #' @return HTML div element with alert styling
 #' @export
-create_status_alert <- function(type = "info", message, icon_name = NULL) {
+create_status_alert <- function(type = "info", message, icon_name = NULL, action_button = NULL) {
   # Auto-select icon based on type if not provided
   if (is.null(icon_name)) {
     icon_name <- switch(type,
@@ -108,12 +108,31 @@ create_status_alert <- function(type = "info", message, icon_name = NULL) {
 
   alert_class <- paste0("alert alert-", type)
 
-  div(
-    class = alert_class,
+  # Add classes for flexbox layout if a button is present
+  if (!is.null(action_button)) {
+    alert_class <- paste(alert_class, "d-flex align-items-center justify-content-between")
+  }
+
+  # Main message content
+  message_content <- div(
     icon(icon_name),
     " ",
     message
   )
+
+  # If an action button is provided, wrap message and button in a flex container
+  if (!is.null(action_button)) {
+    div(
+      class = alert_class,
+      message_content,
+      action_button
+    )
+  } else {
+    div(
+      class = alert_class,
+      message_content
+    )
+  }
 }
 
 #' Create a spinning progress alert

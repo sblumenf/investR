@@ -286,3 +286,171 @@ test_that("build_group_name_lookup handles empty database", {
   expect_true(is.data.frame(lookup))
   expect_true(all(c("account_number", "symbol", "group_name") %in% names(lookup)))
 })
+
+################################################################################
+# STANDARDIZED NAMING TESTS
+################################################################################
+
+test_that("generate_standard_group_name creates correct format for covered calls", {
+  # Mock parse_option_details to return predictable values
+  with_mocked_bindings(
+    parse_option_details = function(symbol) {
+      list(
+        expiry = as.Date("2027-12-17"),
+        strike = 55.00
+      )
+    },
+    {
+      members <- tibble::tibble(
+        symbol = c("ALB", "ALB17Dec27C55.00"),
+        role = c("underlying_stock", "short_call")
+      )
+
+      result <- generate_standard_group_name(members, "Dividend Aristocrats")
+
+      # Should follow format: {STRATEGY} - {TICKER} - {EXPIRY} @ ${STRIKE}
+      expect_equal(result, "Dividend Aristocrats - ALB - Dec 2027 @ $55")
+    },
+    .package = "investR"
+  )
+})
+
+test_that("generate_standard_group_name creates simple format for stock-only", {
+  members <- tibble::tibble(
+    symbol = c("AAPL"),
+    role = c("underlying_stock")
+  )
+
+  result <- generate_standard_group_name(members, "Zero-Dividend Stocks")
+
+  # Should follow format: {STRATEGY} - {TICKER}
+  expect_equal(result, "Zero-Dividend Stocks - AAPL")
+})
+
+test_that("generate_standard_group_name returns NULL for Other strategy", {
+  members <- tibble::tibble(
+    symbol = c("IBM", "IBM15Jan27C175.00"),
+    role = c("underlying_stock", "short_call")
+  )
+
+  result <- generate_standard_group_name(members, "Other")
+
+  # "Other" strategy requires manual naming
+  expect_null(result)
+})
+
+test_that("extract_member_components extracts ticker and option details", {
+  # Mock parse_option_details
+  with_mocked_bindings(
+    parse_option_details = function(symbol) {
+      list(
+        expiry = as.Date("2027-12-17"),
+        strike = 55.00
+      )
+    },
+    {
+      members <- tibble::tibble(
+        symbol = c("ALB", "ALB17Dec27C55.00"),
+        role = c("underlying_stock", "short_call")
+      )
+
+      result <- extract_member_components(members)
+
+      expect_equal(result$ticker, "ALB")
+      expect_equal(result$expiry, as.Date("2027-12-17"))
+      expect_equal(result$strike, 55.00)
+    },
+    .package = "investR"
+  )
+})
+
+test_that("extract_member_components handles stock-only members", {
+  members <- tibble::tibble(
+    symbol = c("AAPL"),
+    role = c("underlying_stock")
+  )
+
+  result <- extract_member_components(members)
+
+  expect_equal(result$ticker, "AAPL")
+  expect_null(result$expiry)
+  expect_null(result$strike)
+})
+
+test_that("extract_member_components handles option-only with fallback", {
+  # Mock parse_option_symbol
+  with_mocked_bindings(
+    parse_option_symbol = function(symbol) {
+      "IBM"
+    },
+    parse_option_details = function(symbol) {
+      list(
+        expiry = as.Date("2027-01-15"),
+        strike = 175.00
+      )
+    },
+    {
+      # No underlying stock, only option
+      members <- tibble::tibble(
+        symbol = c("IBM15Jan27C175.00"),
+        role = c("short_call")
+      )
+
+      result <- extract_member_components(members)
+
+      # Should extract ticker from option symbol
+      expect_equal(result$ticker, "IBM")
+      expect_equal(result$expiry, as.Date("2027-01-15"))
+      expect_equal(result$strike, 175.00)
+    },
+    .package = "investR"
+  )
+})
+
+test_that("generate_standard_group_name handles Zero-Dividend strategy", {
+  with_mocked_bindings(
+    parse_option_details = function(symbol) {
+      list(
+        expiry = as.Date("2028-01-21"),
+        strike = 150.00
+      )
+    },
+    {
+      members <- tibble::tibble(
+        symbol = c("AAPL", "AAPL21Jan28C150.00"),
+        role = c("underlying_stock", "short_call")
+      )
+
+      result <- generate_standard_group_name(members, "Zero-Dividend Stocks")
+
+      # Should include strategy name
+      expect_true(grepl("^Zero-Dividend Stocks - ", result))
+      expect_true(grepl("AAPL", result))
+      expect_true(grepl("Jan 2028", result))
+      expect_true(grepl("\\$150", result))
+    },
+    .package = "investR"
+  )
+})
+
+test_that("generate_standard_group_name handles Dynamic Covered Calls", {
+  with_mocked_bindings(
+    parse_option_details = function(symbol) {
+      list(
+        expiry = as.Date("2027-03-19"),
+        strike = 200.50
+      )
+    },
+    {
+      members <- tibble::tibble(
+        symbol = c("TSLA", "TSLA19Mar27C200.50"),
+        role = c("underlying_stock", "short_call")
+      )
+
+      result <- generate_standard_group_name(members, "Dynamic Covered Calls")
+
+      expect_equal(result, "Dynamic Covered Calls - TSLA - Mar 2027 @ $200")
+    },
+    .package = "investR"
+  )
+})
