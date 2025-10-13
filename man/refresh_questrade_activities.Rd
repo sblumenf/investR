@@ -13,5 +13,5 @@ A promise that resolves with the result of fetch_all_activities(),
 \description{
 Fetches the latest account activities from Questrade API and saves them
 to the database. This function is designed to be called from a background
-process or a timer.
+process or a timer. Updates refresh status for UI display.
 }

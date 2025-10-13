@@ -201,41 +201,43 @@ ERROR: Questrade API: Generate a new token from Questrade and update .Renviron
 
 ---
 
-## Legacy Bugs Fixed (2025-10-06)
+## Bugs Fixed
 
-### Bug 1: Duplicate Token Usage on Startup
-**Location:** R/run_app.R:72-81
+### Bug 1: Race Condition on Background Refresh (2025-10-13)
+**Location:** R/run_app.R:71-106
 
 **Problem:**
 ```r
 # OLD CODE (BROKEN)
-ping_questrade()                    # Uses token_1 → gets token_2
-start_questrade_background_ping()   # Immediately pings again!
-  # Inside this function:
-  questrade_daily_ping()  # Uses token_2 → gets token_3
+refresh_questrade_activities()  # Starts immediately
+refresh_questrade_positions()   # Also starts immediately
+# Both processes compete for same refresh token → race condition
 ```
-Result: token_2 was invalidated before it was ever saved properly!
+Result: Two API calls tried to use the same refresh token simultaneously, causing one to fail and corrupting the token cache.
 
 **Fix:**
 ```r
-# NEW CODE (FIXED)
-start_questrade_background_ping()  # Only calls ping once on startup
+# NEW CODE (FIXED - Sequential execution using promises)
+refresh_questrade_activities() %...>% {
+  refresh_questrade_positions()  # Only starts after activities completes
+}
 ```
+Sequential execution eliminates the race condition. Only ONE process accesses tokens at a time.
 
-### Bug 2: Silent Token Save Failures
-**Location:** R/utils_questrade_healthcheck.R:21-56
+### Bug 2: Deprecated Code Causing Confusion (2025-10-13)
+**Location:** R/utils_questrade_healthcheck.R
 
 **Problem:**
-- Used `getwd()` which might not be project root
-- Logging at DEBUG level (invisible)
-- No verification of file writes
-- Token updates failing silently
+- Old `ping_questrade()` function still in codebase (deprecated)
+- Old `start_questrade_background_ping()` function still exported
+- Old `update_refresh_token()` function that modified .Renviron
+- Created confusion about which token management system was active
 
 **Fix:**
-- Searches multiple paths for `.Renviron`
-- Logs at INFO level with details
-- Reads back file to verify write succeeded
-- Clear error messages if save fails
+- Deleted all deprecated functions (160 lines removed)
+- Regenerated NAMESPACE to remove exports
+- Cleaned up man pages
+- Single clear token management approach (JSON cache only)
 
 ---
 
@@ -466,6 +468,23 @@ If you get token errors tomorrow:
 
 ---
 
-**Last Updated:** 2025-10-07
-**New System:** File-based token caching with lazy refresh
+**Last Updated:** 2025-10-13
+**System:** File-based token caching with lazy refresh + sequential API calls
 **Token Storage:** `~/.investr_questrade_tokens.json`
+
+---
+
+## Recent Changes (2025-10-13)
+
+### What Was Fixed
+1. **Race Condition Eliminated:** Background refreshes now run sequentially (activities → positions) using promise chains, preventing concurrent token access
+2. **Dead Code Removed:** Deleted 160 lines of deprecated token management functions that were causing confusion
+3. **User-Facing Alerts:** Added refresh status tracking and UI alerts on portfolio groups page to show when data refreshes fail
+4. **Documentation Updated:** Fixed outdated sections to reflect actual implementation
+
+### Expected Behavior After Fix
+- Token cache file `~/.investr_questrade_tokens.json` gets created on first use
+- Access tokens are reused for 30 minutes (logged as "Using cached access token")
+- Refresh tokens rotate properly every 30 minutes when access tokens expire
+- No more daily manual token generation needed (tokens last full 7 days)
+- If refresh fails, users see clear warning message on portfolio groups page

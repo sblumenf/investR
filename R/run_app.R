@@ -68,23 +68,42 @@ run_app <- function(
   validate_dynamic_config()  # Dynamic Covered Calls
   validate_collar_config()  # Collar Strategy
 
-  # --- Background Activity Refresh ---
-  # 1. Initial refresh on app startup
-  log_info("App Startup: Kicking off initial Questrade activity refresh.")
-  refresh_questrade_activities()
+  # --- Background Data Refresh ---
+  # Sequential refresh chain to prevent token race conditions
+  # Activities completes first, then positions, then schedule next cycle
 
-  # 2. Define the recursive function for the hourly refresh
+  # 1. Initial refresh on app startup (sequential execution)
+  log_info("App Startup: Starting sequential Questrade data refresh (activities -> positions).")
+  refresh_questrade_activities() %...>% {
+    log_info("App Startup: Activities refresh complete, starting positions refresh.")
+    refresh_questrade_positions()
+  } %...>% {
+    log_info("App Startup: Initial refresh complete, scheduling hourly updates.")
+  } %...!% (function(error) {
+    log_error("App Startup: Refresh chain failed - {error$message}")
+  })
+
+  # 2. Define the recursive function for the hourly refresh (sequential)
   hourly_refresh <- function() {
-    log_info("Hourly Timer: Kicking off scheduled Questrade activity refresh.")
-    refresh_questrade_activities()
-    # Schedule the next run in 3600 seconds (1 hour)
-    later::later(hourly_refresh, 3600)
+    log_info("Hourly Timer: Starting sequential Questrade data refresh.")
+    refresh_questrade_activities() %...>% {
+      log_info("Hourly Timer: Activities refresh complete, starting positions refresh.")
+      refresh_questrade_positions()
+    } %...>% {
+      log_info("Hourly Timer: Refresh cycle complete, scheduling next cycle in 1 hour.")
+      # Schedule the next run in 3600 seconds (1 hour)
+      later::later(hourly_refresh, 3600)
+    } %...!% (function(error) {
+      log_error("Hourly Timer: Refresh chain failed - {error$message}")
+      # Still schedule next cycle even if this one failed
+      later::later(hourly_refresh, 3600)
+    })
   }
 
   # 3. Schedule the first hourly refresh to start in 1 hour
-  log_info("App Startup: Scheduling hourly background refresh of Questrade activities.")
+  log_info("App Startup: Scheduling hourly background refresh of Questrade data.")
   later::later(hourly_refresh, 3600)
-  # --- End Background Activity Refresh ---
+  # --- End Background Data Refresh ---
 
   with_golem_options(
     app = brochureApp(

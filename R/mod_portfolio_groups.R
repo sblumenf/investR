@@ -13,6 +13,7 @@ mod_portfolio_groups_ui <- function(id){
   tagList(
     # Page title
     tags$h2("Position Groups"),
+    uiOutput(ns("refresh_status_line")),
     tags$hr(),
 
     # Alert section (for broken/incomplete groups)
@@ -77,9 +78,10 @@ mod_portfolio_groups_ui <- function(id){
 #'
 #' @noRd
 #'
-#' @importFrom shiny moduleServer renderUI reactive req observeEvent reactiveVal observe
+#' @importFrom shiny moduleServer renderUI reactive req observeEvent reactiveVal observe reactiveTimer isolate
 #' @importFrom dplyr %>% filter arrange desc
 #' @importFrom DBI dbDisconnect
+#' @importFrom logger log_info
 mod_portfolio_groups_server <- function(id){
   moduleServer( id, function(input, output, session){
     ns <- session$ns
@@ -99,9 +101,39 @@ mod_portfolio_groups_server <- function(id){
       }
     })
 
+    # Reactive value to track position refresh completion
+    # This will trigger card re-rendering after refresh completes
+    position_refresh_version <- reactiveVal(0)
+
+    # Trigger position refresh on page load (runs once when module initializes)
+    observe({
+      log_info("Position Groups: Triggering position refresh on page load")
+      refresh_questrade_positions()
+
+      # Increment version after refresh is kicked off
+      # Note: refresh runs async, but we increment immediately to trigger re-render
+      isolate(position_refresh_version(position_refresh_version() + 1))
+    }, priority = 10)  # High priority to run early
+
+    # Set up hourly timer for position refresh (3600000 ms = 1 hour)
+    hourly_timer <- reactiveTimer(3600000)
+
+    # Trigger position refresh every hour
+    observeEvent(hourly_timer(), {
+      log_info("Position Groups: Hourly position refresh triggered")
+      refresh_questrade_positions()
+
+      # Increment version to trigger card re-render
+      isolate(position_refresh_version(position_refresh_version() + 1))
+    }, ignoreInit = TRUE)  # Don't run on initialization (already handled by page load observer)
+
     # Reactive: Calculate metrics for ALL groups once (DRY principle)
     # This is the single source of truth for all metrics
+    # Depends on position_refresh_version to recalculate after position refresh
     dashboard_metrics <- reactive({
+      # Create dependency on position refresh version
+      position_refresh_version()
+
       calculate_dashboard_metrics(status_filter = NULL)
     })
 
@@ -195,11 +227,104 @@ mod_portfolio_groups_server <- function(id){
       groups
     })
 
-    # Render integrity alerts
+    # Render integrity alerts (including refresh status)
     output$integrity_alerts <- renderUI({
-      # This would check for broken/incomplete groups
-      # For now, return NULL (can be implemented later)
-      NULL
+      # Create dependency on position refresh version (triggers re-render after each refresh)
+      position_refresh_version()
+
+      # Get current refresh status
+      status <- get_refresh_status()
+
+      # Check if there are any errors
+      has_activities_error <- !is.null(status$activities$last_error)
+      has_positions_error <- !is.null(status$positions$last_error)
+
+      if (!has_activities_error && !has_positions_error) {
+        return(NULL)
+      }
+
+      # Build error message
+      error_parts <- c()
+
+      if (has_activities_error && has_positions_error) {
+        # Both failed
+        activities_time <- format_time_ago(status$activities$last_error$timestamp)
+        positions_time <- format_time_ago(status$positions$last_error$timestamp)
+
+        last_success_time <- if (!is.null(status$positions$last_success)) {
+          format_time_ago(status$positions$last_success)
+        } else if (!is.null(status$activities$last_success)) {
+          format_time_ago(status$activities$last_success)
+        } else {
+          "unknown"
+        }
+
+        message <- paste0(
+          "Data refresh failed. ",
+          "Activities: Error ", activities_time, ". ",
+          "Positions: Error ", positions_time, ". ",
+          "Last successful refresh: ", last_success_time, "."
+        )
+
+      } else if (has_activities_error) {
+        # Only activities failed, positions succeeded
+        error_time <- format_time_ago(status$activities$last_error$timestamp)
+        success_time <- if (!is.null(status$positions$last_success)) {
+          format_time_ago(status$positions$last_success)
+        } else {
+          "unknown"
+        }
+
+        message <- paste0(
+          "Data refresh partially failed. ",
+          "Activities: Error ", error_time, ". ",
+          "Positions: OK (refreshed ", success_time, ")."
+        )
+
+      } else {
+        # Only positions failed, activities succeeded
+        error_time <- format_time_ago(status$positions$last_error$timestamp)
+        success_time <- if (!is.null(status$activities$last_success)) {
+          format_time_ago(status$activities$last_success)
+        } else {
+          "unknown"
+        }
+
+        message <- paste0(
+          "Data refresh partially failed. ",
+          "Activities: OK (refreshed ", success_time, "). ",
+          "Positions: Error ", error_time, "."
+        )
+      }
+
+      # Return warning alert using existing pattern
+      create_status_alert(
+        type = "warning",
+        message = message
+      )
+    })
+
+    # Render refresh status line (shows last successful refresh time)
+    output$refresh_status_line <- renderUI({
+      # Create dependency on position refresh version (triggers re-render after each refresh)
+      position_refresh_version()
+
+      # Get current refresh status
+      status <- get_refresh_status()
+
+      # Show last successful refresh time if available
+      if (!is.null(status$positions$last_success)) {
+        time_ago <- format_time_ago(status$positions$last_success)
+
+        tags$div(
+          style = "text-align: left; color: #6c757d; font-size: 12px; margin-top: -10px; margin-bottom: 5px;",
+          icon("check-circle", style = "color: #28a745;"),
+          " Last refreshed: ",
+          time_ago
+        )
+      } else {
+        NULL
+      }
     })
 
     # Call dashboard sub-module (pass pre-calculated metrics)
