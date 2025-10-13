@@ -4,7 +4,12 @@
 \alias{create_status_alert}
 \title{Create a status alert message}
 \usage{
-create_status_alert(type = "info", message, icon_name = NULL)
+create_status_alert(
+  type = "info",
+  message,
+  icon_name = NULL,
+  action_button = NULL
+)
 }
 \arguments{
 \item{type}{Alert type: "info", "success", "warning", "danger"}

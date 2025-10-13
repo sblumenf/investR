@@ -12,7 +12,7 @@ link_activities_to_group(activity_ids, group_id)
 \item{group_id}{Group identifier}
 }
 \value{
-Logical TRUE if all successful
+Logical TRUE if successful
 }
 \description{
 Batch operation to link multiple activities to the same group.

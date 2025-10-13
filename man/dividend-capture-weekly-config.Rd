@@ -4,5 +4,6 @@
 \alias{dividend-capture-weekly-config}
 \title{Weekly Dividend Capture Strategy Configuration}
 \description{
-Configuration constants and ETF list for the weekly dividend capture strategy
+Configuration constants for the weekly dividend capture strategy.
+ETF tickers are now fetched dynamically from stockanalysis.com.
 }

@@ -1,10 +1,10 @@
-#' Weekly Dividend Capture Analysis Functions
+#' Monthly High-Yield Dividend Capture Analysis Functions
 #'
-#' Core business logic for analyzing dividend capture opportunities in weekly
-#' dividend ETFs. Strategy: buy at close before ex-dividend date, sell at open
+#' Core business logic for analyzing dividend capture opportunities in monthly
+#' high-yield dividend ETFs. Strategy: buy at close before ex-dividend date, sell at open
 #' on ex-dividend date.
 #'
-#' @name dividend-capture-weekly
+#' @name dividend-capture-monthly-high-yield
 #' @import dplyr
 #' @importFrom tibble tibble
 #' @importFrom zoo index
@@ -12,50 +12,63 @@
 #' @importFrom purrr map_dfr compact
 #' @importFrom furrr future_map furrr_options
 #' @importFrom future plan multisession
-#' @importFrom logger log_info log_success
-#' @importFrom lubridate wday
+#' @importFrom logger log_info log_success log_warn
+#' @importFrom lubridate days
 NULL
 
 ################################################################################
 # HELPER FUNCTIONS
 ################################################################################
 
-#' Map ex-dividend day to buy day
+#' Estimate next ex-dividend date based on historical pattern
 #'
-#' @param ex_div_day Character day of week for ex-dividend
-#' @return Character day of week for buying
+#' Calculates average days between dividends and projects next ex-div date
+#'
+#' @param dividends xts object with dividend amounts and dates
+#' @return Date of estimated next ex-dividend, or NA if cannot calculate
 #' @noRd
-map_ex_div_to_buy_day <- function(ex_div_day) {
-  day_map <- get_dividend_capture_config("day_map")
-  buy_day <- day_map[[ex_div_day]]
-
-  if (is.null(buy_day)) {
-    return("Unknown")
+estimate_next_ex_dividend_date <- function(dividends) {
+  if (is.null(dividends) || length(dividends) < 2) {
+    return(as.Date(NA))
   }
 
-  return(buy_day)
-}
+  # Get dividend dates
+  div_dates <- index(dividends)
 
+  # Calculate days between consecutive dividends
+  date_diffs <- diff(as.numeric(div_dates))
+
+  if (length(date_diffs) == 0) {
+    return(as.Date(NA))
+  }
+
+  # Use median to be robust against outliers
+  median_days_between <- median(date_diffs, na.rm = TRUE)
+
+  # Project next ex-div date from last dividend
+  last_div_date <- tail(div_dates, 1)
+  next_ex_div <- last_div_date + lubridate::days(median_days_between)
+
+  return(as.Date(next_ex_div))
+}
 
 ################################################################################
 # ANALYSIS FUNCTIONS
 ################################################################################
-# Note: analyze_dividend_events() moved to utils_dividend_capture.R for reuse
+# Note: analyze_dividend_events() is reused from utils_dividend_capture.R (DRY)
 
 #' Calculate aggregate statistics from trade results
 #'
 #' @param trade_results Tibble with individual trade results
 #' @param ticker Character ETF ticker
 #' @param current_price Numeric current price
+#' @param yield_pct Character yield percentage string (e.g., "15.5%")
+#' @param next_ex_div_date Date estimated next ex-dividend date
 #' @param annual_sofr Numeric annual SOFR rate (passed from batch function)
 #' @return Tibble row with aggregate statistics
 #' @noRd
-calculate_weekly_statistics <- function(trade_results, ticker, current_price, annual_sofr) {
-  config <- get_dividend_capture_config()
-
-  # Determine most common ex-dividend day
-  ex_dividend_day <- get_most_common_value(trade_results$ex_div_day)
-  buy_day <- map_ex_div_to_buy_day(ex_dividend_day)
+calculate_monthly_high_yield_statistics <- function(trade_results, ticker, current_price, yield_pct, next_ex_div_date, annual_sofr) {
+  config <- get_monthly_high_yield_config()
 
   # Use SOFR rate passed from batch function (avoids redundant API calls)
   daily_sofr <- annual_sofr / config$trading_days_per_year
@@ -94,16 +107,16 @@ calculate_weekly_statistics <- function(trade_results, ticker, current_price, an
   }
 
   # Annual projections
-  weekly_return <- avg_return / 100
-  simple_annual_return <- avg_return * config$weeks_per_year
+  monthly_return <- avg_return / 100
+  simple_annual_return <- avg_return * config$months_per_year
   compound_annual_return <- calculate_compound_annual_return(
-    periodic_return = weekly_return,
-    periods_per_year = config$weeks_per_year
+    periodic_return = monthly_return,
+    periods_per_year = config$months_per_year
   ) * 100  # Convert to percentage
 
   # Income projections per $10,000
   avg_profit_per_10k <- config$investment_amount * (avg_return / 100)
-  annual_income_per_10k <- avg_profit_per_10k * config$weeks_per_year
+  annual_income_per_10k <- avg_profit_per_10k * config$months_per_year
 
   # Risk-adjusted returns
   sharpe_ratio <- calculate_sharpe_ratio(
@@ -113,7 +126,7 @@ calculate_weekly_statistics <- function(trade_results, ticker, current_price, an
 
   annual_sharpe <- calculate_annual_sharpe(
     sharpe_ratio = sharpe_ratio,
-    periods_per_year = config$weeks_per_year
+    periods_per_year = config$months_per_year
   )
 
   sortino_ratio <- calculate_sortino_ratio(
@@ -123,7 +136,7 @@ calculate_weekly_statistics <- function(trade_results, ticker, current_price, an
 
   annual_sortino <- calculate_annual_sortino(
     sortino_ratio = sortino_ratio,
-    periods_per_year = config$weeks_per_year
+    periods_per_year = config$months_per_year
   )
 
   # Date range
@@ -133,12 +146,20 @@ calculate_weekly_statistics <- function(trade_results, ticker, current_price, an
     format(max(trade_results$div_date), "%Y-%m-%d")
   )
 
+  # Days until next ex-dividend
+  days_until_next_ex_div <- if (!is.na(next_ex_div_date)) {
+    as.numeric(next_ex_div_date - Sys.Date())
+  } else {
+    NA_real_
+  }
+
   # Return tibble row
   tibble(
     ticker = ticker,
     current_price = current_price,
-    ex_dividend_day = ex_dividend_day,
-    buy_day = buy_day,
+    yield_pct = yield_pct,
+    next_ex_div_date = next_ex_div_date,
+    days_until_next_ex_div = days_until_next_ex_div,
     total_events = total_events,
     date_range = date_range,
     success_rate = success_rate,
@@ -166,7 +187,7 @@ calculate_weekly_statistics <- function(trade_results, ticker, current_price, an
   )
 }
 
-#' Analyze a single weekly dividend ETF candidate
+#' Analyze a single monthly high-yield dividend ETF candidate
 #'
 #' Phase 2 analysis function. Performs detailed backtesting on ETF that passed
 #' Phase 1 screening. Fetches full dividend and price history, backtests all
@@ -174,14 +195,15 @@ calculate_weekly_statistics <- function(trade_results, ticker, current_price, an
 #'
 #' @param ticker Character ETF ticker symbol
 #' @param current_price Numeric current price from screening
+#' @param yield_pct Character yield percentage string from screening
 #' @param annual_sofr Numeric annual SOFR rate (passed from batch function)
 #' @return Tibble row with analysis results, or NULL on error
 #' @export
-analyze_weekly_etf <- function(ticker, current_price, annual_sofr) {
-  config <- get_dividend_capture_config()
+analyze_monthly_high_yield_etf <- function(ticker, current_price, yield_pct, annual_sofr) {
+  config <- get_monthly_high_yield_config()
 
   tryCatch({
-    log_debug("{ticker}: Analyzing candidate")
+    log_debug("{ticker}: Analyzing candidate (Yield: {yield_pct})")
 
     # Fetch dividend history for backtesting
     dividends <- fetch_dividend_history(
@@ -212,7 +234,10 @@ analyze_weekly_etf <- function(ticker, current_price, annual_sofr) {
       return(NULL)
     }
 
-    # Backtest all historical dividend events
+    # Estimate next ex-dividend date
+    next_ex_div_date <- estimate_next_ex_dividend_date(dividends)
+
+    # Backtest all historical dividend events (reuse from utils_dividend_capture.R - DRY)
     trade_results <- analyze_dividend_events(price_history, dividends)
 
     if (nrow(trade_results) == 0) {
@@ -227,7 +252,14 @@ analyze_weekly_etf <- function(ticker, current_price, annual_sofr) {
     }
 
     # Calculate comprehensive statistics
-    stats <- calculate_weekly_statistics(trade_results, ticker, current_price, annual_sofr)
+    stats <- calculate_monthly_high_yield_statistics(
+      trade_results,
+      ticker,
+      current_price,
+      yield_pct,
+      next_ex_div_date,
+      annual_sofr
+    )
 
     log_success("{ticker}: Analysis complete - {nrow(trade_results)} historical events backtested")
     return(stats)
@@ -238,50 +270,59 @@ analyze_weekly_etf <- function(ticker, current_price, annual_sofr) {
   })
 }
 
-#' Batch analyze all weekly dividend ETFs
+#' Batch analyze all monthly high-yield dividend ETFs
 #'
-#' Analyzes weekly dividend ETFs using efficient two-phase filtering:
-#' - Phase 1: Lightweight screening via current quotes (price only)
+#' Analyzes monthly high-yield dividend ETFs using efficient two-phase filtering:
+#' - Phase 1: Lightweight screening via web scraping (yield data from stockanalysis.com)
 #' - Phase 2: Heavy backtesting only on qualifying candidates
 #'
 #' ETF list is fetched dynamically from stockanalysis.com (cached for 24 hours).
 #'
 #' @param max_workers Number of parallel workers (default from config)
 #' @param force_refresh Logical. If TRUE, refreshes ticker list from web
+#' @param min_yield Numeric. Minimum yield percentage filter (default from config: 8.0)
 #'
-#' @return Tibble with all results sorted by buy day and annual Sortino ratio
+#' @return Tibble with all results sorted by next ex-div date and annual Sortino ratio
 #'
 #' @export
-batch_analyze_weekly_etfs <- function(max_workers = NULL, force_refresh = FALSE) {
-  config <- get_dividend_capture_config()
+batch_analyze_monthly_high_yield_etfs <- function(max_workers = NULL, force_refresh = FALSE, min_yield = NULL) {
+  config <- get_monthly_high_yield_config()
 
   if (is.null(max_workers)) {
     max_workers <- config$max_workers
+  }
+
+  if (is.null(min_yield)) {
+    min_yield <- config$min_yield_pct
   }
 
   ############################################################################
   # PHASE 1: LIGHTWEIGHT SCREENING
   ############################################################################
 
-  log_info("Starting two-phase analysis of weekly dividend ETFs...")
+  log_info("Starting two-phase analysis of monthly high-yield dividend ETFs...")
+  log_info("Phase 1: Screening for yield >= {min_yield}%")
   log_info("Using {max_workers} parallel workers")
 
-  # Fetch current ETF list dynamically
-  etf_list <- fetch_weekly_dividend_tickers(force_refresh = force_refresh)
+  # Fetch ETF list with yield data from stockanalysis.com (already filtered by yield)
+  etf_data <- fetch_monthly_high_yield_etfs(force_refresh = force_refresh, min_yield = min_yield)
 
-  if (length(etf_list) == 0) {
-    log_warn("Phase 1: No ETFs found")
+  if (nrow(etf_data) == 0) {
+    log_warn("Phase 1: No ETFs found with yield >= {min_yield}%")
     return(tibble())
   }
 
-  log_info("Phase 1: Fetching current prices for {length(etf_list)} ETFs...")
+  log_info("Phase 1: Fetching current prices for {nrow(etf_data)} ETFs...")
 
   # Setup parallel processing for screening
   oplan <- plan(multisession, workers = max_workers)
   on.exit(plan(oplan), add = TRUE)
 
   # Fetch current prices in parallel (lightweight screening)
-  screening_results <- future_map(etf_list, function(ticker) {
+  screening_results <- future_map(seq_len(nrow(etf_data)), function(i) {
+    row <- etf_data[i, ]
+    ticker <- row$ticker
+
     tryCatch({
       # Fetch current quote (lightweight - just price)
       quote <- fetch_current_quote(ticker, fields = c("Last Trade (Price Only)"))
@@ -300,7 +341,9 @@ batch_analyze_weekly_etfs <- function(max_workers = NULL, force_refresh = FALSE)
       # Return screening data
       tibble(
         ticker = ticker,
-        price = price
+        price = price,
+        yield_pct = row$yield_pct,
+        yield_numeric = row$yield_numeric
       )
 
     }, error = function(e) {
@@ -313,7 +356,7 @@ batch_analyze_weekly_etfs <- function(max_workers = NULL, force_refresh = FALSE)
     compact() %>%
     bind_rows()
 
-  log_info("Phase 1 complete: Retrieved data for {nrow(candidates)}/{length(etf_list)} ETFs")
+  log_info("Phase 1 complete: Retrieved data for {nrow(candidates)}/{nrow(etf_data)} ETFs")
 
   if (nrow(candidates) == 0) {
     log_warn("Phase 1: No ETFs passed screening")
@@ -338,9 +381,10 @@ batch_analyze_weekly_etfs <- function(max_workers = NULL, force_refresh = FALSE)
 
     log_info("Analyzing {row$ticker} ({i}/{nrow(candidates)})")
 
-    analyze_weekly_etf(
+    analyze_monthly_high_yield_etf(
       ticker = row$ticker,
       current_price = row$price,
+      yield_pct = row$yield_pct,
       annual_sofr = annual_sofr  # Pass SOFR rate to avoid redundant API calls
     )
   }, .options = furrr_options(seed = TRUE))
@@ -351,14 +395,13 @@ batch_analyze_weekly_etfs <- function(max_workers = NULL, force_refresh = FALSE)
     bind_rows()
 
   if (nrow(results_df) > 0) {
+    # Sort by days until next ex-div (ascending), then annual Sortino (descending)
     results_df <- results_df %>%
-      mutate(day_order = get_day_order(buy_day)) %>%
-      arrange(day_order, desc(annual_sortino)) %>%
-      select(-day_order)
+      arrange(days_until_next_ex_div, desc(annual_sortino))
   }
 
   log_success("Analysis complete: {nrow(results_df)}/{nrow(candidates)} candidates passed backtesting")
-  log_success("Total: {nrow(results_df)} ETFs analyzed from {length(etf_list)} screened")
+  log_success("Total: {nrow(results_df)} ETFs analyzed from {nrow(etf_data)} screened")
 
   return(results_df)
 }

@@ -38,6 +38,19 @@ default:
     min_dividend_events: 5
     rate_limit_seconds: 2
     max_workers: 4
+    # Dynamic ticker fetching configuration
+    ticker_source_url: "https://stockanalysis.com/list/weekly-dividend-etfs/"
+    ticker_cache_hours: 24
+    use_dynamic_tickers: true
+    # Fallback tickers if scraping fails (known stable tickers)
+    fallback_tickers:
+      - QQQY
+      - XDTE
+      - WDTE
+      - QDTE
+      - ULTY
+      - YMAX
+      - YMAG
 
   # Monthly dividend capture strategy configuration
   monthly_capture:
@@ -46,6 +59,28 @@ default:
     min_dividend_events: 5
     rate_limit_seconds: 2
     max_workers: 4
+
+  # Monthly high-yield dividend capture strategy configuration
+  monthly_high_yield_capture:
+    months_per_year: 12
+    investment_amount: 10000
+    min_dividend_events: 5
+    min_yield_pct: 8.0
+    rate_limit_seconds: 2
+    max_workers: 4
+    # Dynamic ticker fetching configuration
+    ticker_source_url: "https://stockanalysis.com/list/monthly-dividend-etfs/"
+    ticker_cache_hours: 24
+    use_dynamic_tickers: true
+    # Fallback tickers if scraping fails (known high-yield monthly payers)
+    fallback_tickers:
+      - QYLD
+      - XYLD
+      - RYLD
+      - JEPI
+      - JEPQ
+      - FEPI
+      - SPYI
 
   # Zero-dividend strategy configuration
   zero_dividend:

@@ -68,9 +68,23 @@ run_app <- function(
   validate_dynamic_config()  # Dynamic Covered Calls
   validate_collar_config()  # Collar Strategy
 
-  # Questrade API now uses lazy refresh - no background ping needed
-  # Tokens are cached in ~/.investr_questrade_tokens.json and automatically
-  # refreshed when expired. Access tokens are reused for up to 30 minutes.
+  # --- Background Activity Refresh ---
+  # 1. Initial refresh on app startup
+  log_info("App Startup: Kicking off initial Questrade activity refresh.")
+  refresh_questrade_activities()
+
+  # 2. Define the recursive function for the hourly refresh
+  hourly_refresh <- function() {
+    log_info("Hourly Timer: Kicking off scheduled Questrade activity refresh.")
+    refresh_questrade_activities()
+    # Schedule the next run in 3600 seconds (1 hour)
+    later::later(hourly_refresh, 3600)
+  }
+
+  # 3. Schedule the first hourly refresh to start in 1 hour
+  log_info("App Startup: Scheduling hourly background refresh of Questrade activities.")
+  later::later(hourly_refresh, 3600)
+  # --- End Background Activity Refresh ---
 
   with_golem_options(
     app = brochureApp(
@@ -85,8 +99,10 @@ run_app <- function(
       page_collar(),
       page_dividend_capture_weekly(),
       page_dividend_capture_monthly(),
+      page_dividend_capture_monthly_high_yield(),
       page_dividend_capture_russell_2000(),
       page_portfolio_groups(),
+      page_raw_activities(),
       page_about(),
 
       # Brochure configuration

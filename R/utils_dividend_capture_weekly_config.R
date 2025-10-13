@@ -1,56 +1,161 @@
 #' Weekly Dividend Capture Strategy Configuration
 #'
-#' Configuration constants and ETF list for the weekly dividend capture strategy
+#' Configuration constants for the weekly dividend capture strategy.
+#' ETF tickers are now fetched dynamically from stockanalysis.com.
 #'
 #' @name dividend-capture-weekly-config
-#' @importFrom tibble tribble
+#' @importFrom rvest read_html html_elements html_attr
+#' @importFrom logger log_info log_warn log_error
 NULL
 
-#' Weekly Dividend ETFs List
+################################################################################
+# DYNAMIC TICKER FETCHING
+################################################################################
+
+# Session-level cache for ticker data
+.weekly_etfs_cache <- new.env(parent = emptyenv())
+
+#' Fetch weekly dividend ETF tickers dynamically
 #'
-#' List of 32 weekly dividend ETFs for analysis
+#' Scrapes stockanalysis.com for current list of weekly dividend ETFs.
+#' Results are cached for the duration specified in golem config (default: 24 hours).
 #'
-#' @format A tibble with 32 rows and 2 columns:
-#' \describe{
-#'   \item{ticker}{ETF ticker symbol}
-#'   \item{description}{ETF description/name}
-#' }
+#' @param force_refresh Logical. If TRUE, ignores cache and fetches fresh data.
+#'
+#' @return Character vector of ticker symbols
+#'
+#' @details
+#' The function implements a multi-tier fallback strategy:
+#' 1. Check session cache (if not expired)
+#' 2. Fetch from stockanalysis.com
+#' 3. Fall back to config-specified fallback tickers
+#'
+#' Caching prevents excessive HTTP requests and improves performance.
+#'
 #' @export
-WEEKLY_ETFS <- tribble(
-  ~ticker, ~description,
-  "AAPW", "Apple WeeklyPay",
-  "AMDW", "AMD WeeklyPay",
-  "AMZW", "Amazon WeeklyPay",
-  "AVGW", "Broadcom WeeklyPay",
-  "BRKW", "Berkshire WeeklyPay",
-  "CHPY", "WeeklyPay ETF",
-  "COIW", "Coinbase WeeklyPay",
-  "GOOW", "Google WeeklyPay",
-  "GPTY", "WeeklyPay ETF",
-  "HOOW", "Robinhood WeeklyPay",
-  "IWMY", "WeeklyPay ETF",
-  "LFGY", "WeeklyPay ETF",
-  "MAGY", "Magnificent 7 WeeklyPay",
-  "METW", "Meta WeeklyPay",
-  "MSFW", "Microsoft WeeklyPay",
-  "MSTW", "MicroStrategy WeeklyPay",
-  "NFLW", "Netflix WeeklyPay",
-  "NVDW", "NVIDIA WeeklyPay",
-  "PLTW", "Palantir WeeklyPay",
-  "QDTE", "Nasdaq-100 Weekly",
-  "QDTY", "Nasdaq-100 Weekly",
-  "QQQY", "Nasdaq-100 Weekly",
-  "RDTE", "Russell 2000 Weekly",
-  "RDTY", "Russell 2000 Weekly",
-  "SDTY", "S&P 500 Weekly",
-  "TSLW", "Tesla WeeklyPay",
-  "ULTY", "Ultra Treasury Weekly",
-  "WDTE", "S&P 500 Weekly",
-  "WEEK", "Weekly T-Bill",
-  "XDTE", "S&P 500 Weekly",
-  "YMAG", "YieldMax Magnificent 7",
-  "YMAX", "YieldMax Universe"
-)
+#'
+#' @examples
+#' \dontrun{
+#'   # Get current list (uses cache if available)
+#'   tickers <- fetch_weekly_dividend_tickers()
+#'
+#'   # Force refresh from web
+#'   tickers <- fetch_weekly_dividend_tickers(force_refresh = TRUE)
+#' }
+fetch_weekly_dividend_tickers <- function(force_refresh = FALSE) {
+  config <- get_dividend_capture_config()
+
+  # Check if dynamic fetching is enabled
+  use_dynamic <- get_golem_config_value("weekly_capture", "use_dynamic_tickers", TRUE)
+
+  if (!use_dynamic) {
+    log_info("Dynamic ticker fetching disabled, using fallback list")
+    return(get_fallback_tickers())
+  }
+
+  # Check cache validity
+  cache_hours <- get_golem_config_value("weekly_capture", "ticker_cache_hours", 24)
+
+  if (!force_refresh && ticker_cache_is_valid(cache_hours)) {
+    log_info("Using cached weekly ETF tickers ({length(.weekly_etfs_cache$tickers)} tickers)")
+    return(.weekly_etfs_cache$tickers)
+  }
+
+  # Fetch fresh data
+  log_info("Fetching weekly dividend ETF tickers from web...")
+
+  tickers <- tryCatch(
+    {
+      scrape_weekly_etf_tickers()
+    },
+    error = function(e) {
+      log_error("Failed to fetch tickers from web: {e$message}")
+      NULL
+    }
+  )
+
+  # Validate results
+  if (is.null(tickers) || length(tickers) == 0) {
+    log_warn("No tickers fetched, using fallback list")
+    return(get_fallback_tickers())
+  }
+
+  # Update cache
+  .weekly_etfs_cache$tickers <- tickers
+  .weekly_etfs_cache$timestamp <- Sys.time()
+
+  log_info("Successfully fetched {length(tickers)} weekly dividend ETF tickers")
+
+  return(tickers)
+}
+
+#' Scrape weekly ETF tickers from stockanalysis.com
+#'
+#' @return Character vector of ticker symbols
+#' @noRd
+scrape_weekly_etf_tickers <- function() {
+  url <- get_golem_config_value(
+    "weekly_capture",
+    "ticker_source_url",
+    "https://stockanalysis.com/list/weekly-dividend-etfs/"
+  )
+
+  # Fetch and parse HTML
+  page <- read_html(url)
+
+  # Extract ticker links
+  all_links <- page %>%
+    html_elements('a[href*="/etf/"]') %>%
+    html_attr('href')
+
+  # Extract ticker symbols from URLs
+  tickers <- gsub('.*/etf/([^/]+).*', '\\1', all_links)
+  tickers <- unique(toupper(tickers))
+
+  # Filter out navigation items
+  nav_items <- c('/ETF/', 'SCREENER', 'COMPARE', 'LIST', 'PROVIDER', 'ETFS')
+  tickers <- tickers[!tickers %in% nav_items]
+
+  # Filter to reasonable ticker length (2-5 characters)
+  tickers <- tickers[nchar(tickers) >= 2 & nchar(tickers) <= 5]
+
+  return(tickers)
+}
+
+#' Check if ticker cache is still valid
+#'
+#' @param cache_hours Number of hours before cache expires
+#' @return Logical
+#' @noRd
+ticker_cache_is_valid <- function(cache_hours) {
+  if (!exists("tickers", envir = .weekly_etfs_cache)) {
+    return(FALSE)
+  }
+
+  if (!exists("timestamp", envir = .weekly_etfs_cache)) {
+    return(FALSE)
+  }
+
+  cache_age_hours <- as.numeric(
+    difftime(Sys.time(), .weekly_etfs_cache$timestamp, units = "hours")
+  )
+
+  return(cache_age_hours < cache_hours)
+}
+
+#' Get fallback ticker list
+#'
+#' @return Character vector of fallback tickers
+#' @noRd
+get_fallback_tickers <- function() {
+  fallback <- get_golem_config_value(
+    "weekly_capture",
+    "fallback_tickers",
+    c("QQQY", "XDTE", "WDTE", "QDTE", "ULTY", "YMAX", "YMAG")
+  )
+
+  return(fallback)
+}
 
 #' Weekly Dividend Capture Strategy Configuration
 #'

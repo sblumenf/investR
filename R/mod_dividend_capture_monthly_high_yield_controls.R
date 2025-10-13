@@ -1,39 +1,27 @@
-#' dividend_capture_weekly_controls UI Function
+#' dividend_capture_monthly_high_yield_controls UI Function
 #'
-#' @description Shiny Module for weekly dividend capture analysis controls.
+#' @description Shiny Module for monthly high-yield dividend capture analysis controls.
 #'
 #' @param id,input,output,session Internal parameters for {shiny}.
 #'
 #' @noRd
 #'
-#' @importFrom shiny NS tagList sidebarPanel sliderInput actionButton downloadButton hr tags icon br
-mod_dividend_capture_weekly_controls_ui <- function(id) {
+#' @importFrom shiny NS tagList sidebarPanel actionButton downloadButton hr tags icon br p h3 strong
+mod_dividend_capture_monthly_high_yield_controls_ui <- function(id) {
   ns <- NS(id)
 
-  config <- get_dividend_capture_config()
+  config <- get_monthly_high_yield_config()
 
   sidebarPanel(
     width = 3,
-    h3("Weekly Dividend ETFs"),
+    h3("Monthly High-Yield ETFs"),
 
     # Info text
-    p("Analyzes weekly dividend ETFs for dividend capture opportunities."),
+    p("Analyzes 100+ monthly dividend ETFs with yields above 8%."),
     p("Ticker list is fetched dynamically from stockanalysis.com."),
     p(
       strong("Strategy:"),
       "Buy at close before ex-dividend, sell at open on ex-dividend day."
-    ),
-
-    hr(),
-
-    # Day of week filter
-    h5("Filter Options"),
-    checkboxGroupInput(
-      ns("day_filter"),
-      "Buy Day",
-      choices = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"),
-      selected = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"),
-      inline = FALSE
     ),
 
     hr(),
@@ -67,7 +55,7 @@ mod_dividend_capture_weekly_controls_ui <- function(id) {
   )
 }
 
-#' dividend_capture_weekly_controls Server Functions
+#' dividend_capture_monthly_high_yield_controls Server Functions
 #'
 #' @description Server logic for dividend capture controls module.
 #'   Returns reactive values for results data and status UI.
@@ -75,31 +63,31 @@ mod_dividend_capture_weekly_controls_ui <- function(id) {
 #'
 #' @param id Module ID
 #'
-#' @return A list with reactive values: results_data, day_filter, status_ui
+#' @return A list with reactive values: results_data, min_yield, status_ui
 #'
 #' @noRd
 #'
 #' @importFrom shiny moduleServer reactive
-mod_dividend_capture_weekly_controls_server <- function(id) {
+mod_dividend_capture_monthly_high_yield_controls_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    # Use analysis controls helper with weekly-specific configuration
+    # Use analysis controls helper with monthly high-yield-specific configuration
     result <- setup_analysis_controls(
       input = input,
       output = output,
       session = session,
-      analysis_func = batch_analyze_weekly_etfs,
-      progress_message = "Analyzing weekly dividend ETFs... This may take 2-5 minutes.",
+      analysis_func = function() {
+        # Use default min_yield from config (8%)
+        batch_analyze_monthly_high_yield_etfs()
+      },
+      progress_message = "Analyzing monthly high-yield dividend ETFs... This may take 1-3 minutes.",
       success_message_template = "Analysis complete! Analyzed %d ETFs successfully.",
       no_results_message = "No ETFs could be analyzed. Check logs for details.",
-      download_filename_prefix = "weekly_dividend_capture",
-      additional_return_values = list(
-        day_filter = reactive({ input$day_filter })
-      )
+      download_filename_prefix = "monthly_high_yield_dividend_capture"
     )
 
-    # Return all values from helper plus day_filter
+    # Return values from helper
     return(result)
   })
 }

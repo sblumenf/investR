@@ -70,6 +70,15 @@ page_home <- function() {
         button_text = "Analyze Monthly ETFs"
       ),
       list(
+        title = "Monthly High-Yield Dividend Capture",
+        description = c(
+          "Analyze 100+ monthly dividend ETFs with yields above 8%.",
+          "Dynamically fetched from stockanalysis.com. Buy before ex-dividend, sell on ex-dividend day. Sorted by upcoming ex-dividend dates."
+        ),
+        href = "/dividend-capture-monthly-high-yield",
+        button_text = "Analyze High-Yield Monthly"
+      ),
+      list(
         title = "Russell 2000 High-Yield Dividend Capture",
         description = c(
           "Screen Russell 2000 stocks for high-yield (>10%) dividend opportunities with immediate buying windows.",
@@ -88,6 +97,15 @@ page_home <- function() {
         ),
         href = "/portfolio/groups",
         button_text = "View Groups"
+      ),
+      list(
+        title = "Raw Activity Log",
+        description = c(
+          "View all raw, unfiltered transaction records from the `account_activities` database table.",
+          "Useful for debugging and comprehensive data validation."
+        ),
+        href = "/portfolio/raw-activities",
+        button_text = "View Raw Log"
       )
     )
   )

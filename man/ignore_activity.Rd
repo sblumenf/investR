@@ -13,6 +13,6 @@ ignore_activity(activity_id)
 Logical TRUE if successful
 }
 \description{
-Sets ignore_for_grouping flag for activities that should not be linked to groups
-(e.g., historical transactions from closed positions).
+Sets ignore_for_grouping flag for activities that should not be linked to groups.
+This is a convenience wrapper around the batch function.
 }

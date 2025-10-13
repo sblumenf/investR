@@ -4,14 +4,21 @@
 \alias{batch_analyze_weekly_etfs}
 \title{Batch analyze all weekly dividend ETFs}
 \usage{
-batch_analyze_weekly_etfs(max_workers = NULL)
+batch_analyze_weekly_etfs(max_workers = NULL, force_refresh = FALSE)
 }
 \arguments{
 \item{max_workers}{Number of parallel workers (default from config)}
+
+\item{force_refresh}{Logical. If TRUE, refreshes ticker list from web}
 }
 \value{
-Tibble with all results sorted by success rate
+Tibble with all results sorted by buy day and annual Sortino ratio
 }
 \description{
-Analyzes all 32 weekly dividend ETFs in parallel and returns combined results.
+Analyzes weekly dividend ETFs using efficient two-phase filtering:
+- Phase 1: Lightweight screening via current quotes (price only)
+- Phase 2: Heavy backtesting only on qualifying candidates
+}
+\details{
+ETF list is fetched dynamically from stockanalysis.com (cached for 24 hours).
 }

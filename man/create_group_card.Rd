@@ -11,7 +11,8 @@ create_group_card(
   activities = NULL,
   cash_flows = NULL,
   metrics = NULL,
-  latest_positions = NULL
+  latest_positions = NULL,
+  ns = NULL
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ create_group_card(
 \item{metrics}{Optional pre-calculated metrics (from calculate_dashboard_metrics)}
 
 \item{latest_positions}{Optional pre-fetched latest positions (from get_latest_positions)}
+
+\item{ns}{Namespace function for Shiny modules (optional, required for button interactions)}
 }
 \value{
 bslib card component or NULL if group not found
