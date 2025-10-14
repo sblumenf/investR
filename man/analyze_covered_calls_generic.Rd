@@ -11,6 +11,7 @@ analyze_covered_calls_generic(
   min_days = NULL,
   max_days = NULL,
   expiry_month = NULL,
+  target_days = NULL,
   max_workers = 10,
   result_flags = list()
 )

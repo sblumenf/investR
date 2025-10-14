@@ -71,7 +71,8 @@ log_analysis_params_generic <- function(n_stocks, strategy_name,
 #' @noRd
 process_stocks_parallel_generic <- function(stock_universe, strike_threshold_pct,
                                            min_days = NULL, max_days = NULL,
-                                           expiry_month = NULL, result_flags) {
+                                           expiry_month = NULL, target_days = NULL,
+                                           result_flags) {
   log_info("Processing stocks in parallel...")
 
   # Export package to workers to ensure they have access to all functions
@@ -81,7 +82,7 @@ process_stocks_parallel_generic <- function(stock_universe, strike_threshold_pct
       suppressPackageStartupMessages(loadNamespace("investR"))
     }
     log_info("Analyzing {ticker}...")
-    analyze_single_stock_generic(ticker, strike_threshold_pct, min_days, max_days, expiry_month, result_flags)
+    analyze_single_stock_generic(ticker, strike_threshold_pct, min_days, max_days, expiry_month, target_days, result_flags)
   }, .options = furrr_options(
     seed = TRUE,
     packages = "investR"  # Load investR package in each worker
@@ -112,6 +113,7 @@ analyze_single_stock_generic <- function(ticker,
                                         min_days = NULL,
                                         max_days = NULL,
                                         expiry_month = NULL,
+                                        target_days = NULL,
                                         result_flags = list()) {
 
   validate_ticker(ticker)
@@ -138,7 +140,7 @@ analyze_single_stock_generic <- function(ticker,
 
   # Select optimal option (already parameterized!)
   selection <- select_optimal_option(ticker, stock_data$current_price, options_df,
-                                    strike_threshold_pct, min_days, max_days, expiry_month)
+                                    strike_threshold_pct, min_days, max_days, expiry_month, target_days)
   if (is.null(selection)) {
     log_debug("{ticker}: No suitable options found")
     return(NULL)
@@ -211,6 +213,7 @@ analyze_covered_calls_generic <- function(stock_universe,
                                          min_days = NULL,
                                          max_days = NULL,
                                          expiry_month = NULL,
+                                         target_days = NULL,
                                          max_workers = 10,
                                          result_flags = list()) {
 
@@ -246,6 +249,7 @@ analyze_covered_calls_generic <- function(stock_universe,
     min_days = min_days,
     max_days = max_days,
     expiry_month = expiry_month,
+    target_days = target_days,
     result_flags = result_flags
   )
 
