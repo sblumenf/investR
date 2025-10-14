@@ -230,6 +230,10 @@ DIVIDEND_CAPTURE_MONTHLY_HIGH_YIELD_CONFIG <- list(
   # Yield Filter (from golem-config.yml)
   min_yield_pct = get_golem_config_value("monthly_high_yield_capture", "min_yield_pct", 8.0),
 
+  # Quality Filters (from golem-config.yml)
+  min_success_rate = get_golem_config_value("monthly_high_yield_capture", "min_success_rate", 70.0),
+  exclude_negative_returns = get_golem_config_value("monthly_high_yield_capture", "exclude_negative_returns", TRUE),
+
   # Rate Limiting (from golem-config.yml)
   rate_limit_seconds = get_golem_config_value("monthly_high_yield_capture", "rate_limit_seconds", 2),
 

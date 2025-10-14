@@ -1,8 +1,7 @@
 #' Income Projection Database Operations
 #'
 #' Functions for managing projected and actual cash flow events for position
-#' groups. Tracks dividends and option gains with automatic recalculation
-#' when actual events differ from projections.
+#' groups. Tracks dividends and option gains for position groups.
 #'
 #' @name income-projection-database
 #' @import dplyr
@@ -137,53 +136,9 @@ save_cash_flow_event <- function(group_id, event_date, event_type, amount,
   })
 }
 
-#' Update cash flow event status
-#'
-#' Updates an event's status (e.g., from projected to actual) and optionally
-#' updates the amount if actual differs from projection.
-#'
-#' @param event_id Event identifier
-#' @param status New status ("projected" or "actual")
-#' @param amount New amount (optional, NULL = no change)
-#' @return Logical TRUE if successful
-#' @noRd
-update_cash_flow_event <- function(event_id, status, amount = NULL) {
-  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
-
-  tryCatch({
-    # Build update statement
-    if (!is.null(amount)) {
-      sql <- "UPDATE position_group_cash_flows
-              SET status = ?, amount = ?, updated_at = ?
-              WHERE event_id = ?"
-      params <- list(status, amount, Sys.time(), event_id)
-    } else {
-      sql <- "UPDATE position_group_cash_flows
-              SET status = ?, updated_at = ?
-              WHERE event_id = ?"
-      params <- list(status, Sys.time(), event_id)
-    }
-
-    rows_affected <- dbExecute(conn, sql, params = params)
-
-    if (rows_affected > 0) {
-      log_info("Income Projection DB: Updated event {event_id} to status '{status}'")
-      return(TRUE)
-    } else {
-      log_warn("Income Projection DB: Event {event_id} not found")
-      return(FALSE)
-    }
-  }, error = function(e) {
-    log_error("Income Projection DB: Failed to update event {event_id} - {e$message}")
-    return(FALSE)
-  })
-}
-
 #' Delete all cash flow events for a group
 #'
-#' Removes all events associated with a group (used during recalculation
-#' or when group is deleted).
+#' Removes all events associated with a group (used when group is closed).
 #'
 #' @param group_id Group identifier
 #' @param status_filter Optional status filter ("projected" to delete only projections)
@@ -441,32 +396,5 @@ log_projection_recalculation <- function(group_id, reason, old_count = 0, new_co
   }, error = function(e) {
     log_error("Income Projection DB: Failed to log recalculation - {e$message}")
     return(NULL)
-  })
-}
-
-#' Get recalculation history for a group
-#'
-#' @param group_id Group identifier
-#' @return Tibble with recalculation history
-#' @noRd
-get_recalculation_history <- function(group_id) {
-  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
-
-  tryCatch({
-    result <- dbGetQuery(conn, "
-      SELECT * FROM projection_recalculations
-      WHERE group_id = ?
-      ORDER BY recalc_date DESC
-    ", params = list(group_id))
-
-    if (nrow(result) == 0) {
-      return(tibble::tibble())
-    }
-
-    return(tibble::as_tibble(result))
-  }, error = function(e) {
-    log_error("Income Projection DB: Failed to get recalc history for {group_id} - {e$message}")
-    return(tibble::tibble())
   })
 }

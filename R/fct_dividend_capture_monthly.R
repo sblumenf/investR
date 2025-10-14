@@ -275,6 +275,16 @@ analyze_monthly_etf <- function(ticker, schedule_type = NULL) {
   # Calculate statistics
   stats <- calculate_monthly_statistics(trade_results, ticker, current_price, schedule_type, last_dividend_info)
 
+  # Apply quality filters (DRY - uses shared function)
+  if (should_filter_dividend_opportunity(
+    stats = stats,
+    ticker = ticker,
+    min_success_rate = config$min_success_rate,
+    exclude_negative_returns = config$exclude_negative_returns
+  )) {
+    return(NULL)  # Filtered out - won't appear in results
+  }
+
   return(stats)
 }
 

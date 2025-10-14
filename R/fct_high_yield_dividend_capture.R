@@ -331,6 +331,16 @@ analyze_high_yield_candidate <- function(ticker,
       universe_config
     )
 
+    # Apply quality filters (DRY - uses shared function)
+    if (should_filter_dividend_opportunity(
+      stats = stats,
+      ticker = ticker,
+      min_success_rate = universe_config$min_success_rate,
+      exclude_negative_returns = universe_config$exclude_negative_returns
+    )) {
+      return(NULL)  # Filtered out - won't appear in results
+    }
+
     log_success("{ticker}: Analysis complete - {nrow(trade_results)} historical events backtested")
     return(stats)
 

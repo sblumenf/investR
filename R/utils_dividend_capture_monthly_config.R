@@ -125,6 +125,10 @@ DIVIDEND_CAPTURE_MONTHLY_CONFIG <- list(
   # Data Validation (from golem-config.yml)
   min_dividend_events = get_golem_config_value("monthly_capture", "min_dividend_events", 5),
 
+  # Quality Filters (from golem-config.yml)
+  min_success_rate = get_golem_config_value("monthly_capture", "min_success_rate", 70.0),
+  exclude_negative_returns = get_golem_config_value("monthly_capture", "exclude_negative_returns", TRUE),
+
   # Rate Limiting (from golem-config.yml)
   rate_limit_seconds = get_golem_config_value("monthly_capture", "rate_limit_seconds", 2),
 

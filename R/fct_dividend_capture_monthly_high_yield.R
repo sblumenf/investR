@@ -261,6 +261,16 @@ analyze_monthly_high_yield_etf <- function(ticker, current_price, yield_pct, ann
       annual_sofr
     )
 
+    # Apply quality filters (DRY - uses shared function)
+    if (should_filter_dividend_opportunity(
+      stats = stats,
+      ticker = ticker,
+      min_success_rate = config$min_success_rate,
+      exclude_negative_returns = config$exclude_negative_returns
+    )) {
+      return(NULL)  # Filtered out - won't appear in results
+    }
+
     log_success("{ticker}: Analysis complete - {nrow(trade_results)} historical events backtested")
     return(stats)
 
@@ -395,6 +405,10 @@ batch_analyze_monthly_high_yield_etfs <- function(max_workers = NULL, force_refr
     bind_rows()
 
   if (nrow(results_df) > 0) {
+    # Remove opportunities with past ex-dividend dates (not actionable)
+    results_df <- results_df %>%
+      filter(!is.na(days_until_next_ex_div), days_until_next_ex_div > 0)
+
     # Sort by days until next ex-div (ascending), then annual Sortino (descending)
     results_df <- results_df %>%
       arrange(days_until_next_ex_div, desc(annual_sortino))

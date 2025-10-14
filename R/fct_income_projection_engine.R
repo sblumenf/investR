@@ -1,8 +1,7 @@
 #' Income Projection Engine
 #'
 #' Core logic for generating cash flow projections for position groups.
-#' Handles dividend projections and option gain calculations with automatic
-#' recalculation when actual events differ from projections.
+#' Handles dividend projections and option gain calculations.
 #'
 #' @name income-projection-engine
 #' @import dplyr
@@ -287,106 +286,6 @@ generate_option_gain_event <- function(expiry_date, strike_price, shares,
     amount = gain,
     confidence = "high"
   )
-}
-
-################################################################################
-# VARIANCE DETECTION AND RECALCULATION
-################################################################################
-
-#' Detect variance between projected and actual events
-#'
-#' Compares actual event amount with projected amount to determine if
-#' recalculation is needed.
-#'
-#' @param group_id Group identifier
-#' @param actual_event_date Date of actual event
-#' @param actual_amount Actual amount received
-#' @param event_type Type of event ("dividend" or "option_gain")
-#' @param variance_threshold Percentage threshold for triggering recalc (default 5%)
-#' @return List with variance_detected (logical) and variance_pct (numeric)
-#' @noRd
-detect_variance <- function(group_id, actual_event_date, actual_amount, event_type,
-                           variance_threshold = 0.05) {
-
-  # Get projected events for this group
-  cash_flows <- get_group_cash_flows(group_id) %>%
-    filter(status == "projected", event_type == !!event_type)
-
-  if (nrow(cash_flows) == 0) {
-    return(list(variance_detected = FALSE, variance_pct = 0))
-  }
-
-  # Find closest projected event by date
-  cash_flows <- cash_flows %>%
-    mutate(date_diff = abs(as.numeric(as.Date(event_date) - as.Date(actual_event_date)))) %>%
-    arrange(date_diff)
-
-  closest_event <- cash_flows[1, ]
-
-  # Calculate variance
-  projected_amount <- closest_event$amount
-  variance_pct <- abs((actual_amount - projected_amount) / projected_amount)
-
-  variance_detected <- variance_pct > variance_threshold
-
-  if (variance_detected) {
-    log_info("Income Projection: Variance detected for group {group_id} - {variance_pct*100}% difference")
-  }
-
-  list(
-    variance_detected = variance_detected,
-    variance_pct = variance_pct
-  )
-}
-
-#' Recalculate projections after variance detected
-#'
-#' Deletes future projected events and regenerates them with updated assumptions.
-#'
-#' @param group_id Group identifier
-#' @param members Group members tibble
-#' @param account_number Account number
-#' @return Logical TRUE if successful
-#' @noRd
-recalculate_projections <- function(group_id, members, account_number) {
-
-  tryCatch({
-    log_info("Income Projection: Recalculating projections for group {group_id}")
-
-    # Get current projection count
-    old_cash_flows <- get_group_cash_flows(group_id) %>%
-      filter(status == "projected")
-    old_count <- nrow(old_cash_flows)
-
-    # Delete all projected events
-    delete_group_cash_flows(group_id, status_filter = "projected")
-
-    # Regenerate projections (same logic as initial)
-    success <- generate_initial_projections(group_id, members, account_number)
-
-    if (success) {
-      # Get new projection count
-      new_cash_flows <- get_group_cash_flows(group_id) %>%
-        filter(status == "projected")
-      new_count <- nrow(new_cash_flows)
-
-      # Log recalculation
-      log_projection_recalculation(
-        group_id = group_id,
-        reason = "variance_detected",
-        old_count = old_count,
-        new_count = new_count
-      )
-
-      log_info("Income Projection: Recalculated projections ({old_count} -> {new_count} events)")
-    }
-
-    return(success)
-
-  }, error = function(e) {
-    log_warn("Income Projection: Failed to recalculate for {group_id} - {e$message}")
-    return(FALSE)
-  })
 }
 
 ################################################################################

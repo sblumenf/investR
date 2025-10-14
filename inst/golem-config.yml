@@ -36,6 +36,8 @@ default:
     weeks_per_year: 52
     investment_amount: 10000
     min_dividend_events: 5
+    min_success_rate: 70.0
+    exclude_negative_returns: true
     rate_limit_seconds: 2
     max_workers: 4
     # Dynamic ticker fetching configuration
@@ -57,6 +59,8 @@ default:
     months_per_year: 12
     investment_amount: 10000
     min_dividend_events: 5
+    min_success_rate: 70.0
+    exclude_negative_returns: true
     rate_limit_seconds: 2
     max_workers: 4
 
@@ -66,6 +70,8 @@ default:
     investment_amount: 10000
     min_dividend_events: 5
     min_yield_pct: 8.0
+    min_success_rate: 70.0
+    exclude_negative_returns: true
     rate_limit_seconds: 2
     max_workers: 4
     # Dynamic ticker fetching configuration
@@ -99,6 +105,18 @@ default:
     error_truncate_length: 50
     default_top_n: 10
     output_dir: strategies
+
+  # High-yield dividend capture strategy configuration (Russell 2000, etc.)
+  high_yield_capture:
+    investment_amount: 10000
+    default_yield_threshold: 10.0
+    min_yield_threshold: 5.0
+    max_yield_threshold: 20.0
+    min_dividend_events: 5
+    min_success_rate: 70.0
+    exclude_negative_returns: true
+    max_days_until_ex_div: 2
+    max_workers: 4
 
   # Dynamic covered calls strategy configuration
   dynamic_covered_calls:

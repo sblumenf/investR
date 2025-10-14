@@ -58,6 +58,10 @@ get_russell_2000_high_yield_config <- function() {
     # Data Validation
     min_dividend_events = get_golem_config_value_hy_r2000("high_yield_capture", "min_dividend_events", 5),
 
+    # Quality Filters
+    min_success_rate = get_golem_config_value_hy_r2000("high_yield_capture", "min_success_rate", 70.0),
+    exclude_negative_returns = get_golem_config_value_hy_r2000("high_yield_capture", "exclude_negative_returns", TRUE),
+
     # Date Filtering (business days)
     max_days_until_ex_div = get_golem_config_value_hy_r2000("high_yield_capture", "max_days_until_ex_div", 2),
 

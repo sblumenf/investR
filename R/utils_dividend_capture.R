@@ -136,3 +136,50 @@ get_day_order <- function(day_name) {
                   "Friday", "Saturday", "Sunday")
   match(day_name, day_levels)
 }
+
+#' Filter dividend capture opportunity based on quality criteria
+#'
+#' Applies standard filters to dividend capture opportunities:
+#' 1. Negative expected returns (avg_return <= 0)
+#' 2. Low probability of success (success_rate < threshold)
+#'
+#' This is a shared function following DRY principles - used by all
+#' dividend capture strategies (weekly, monthly, high-yield, etc.)
+#'
+#' @param stats Tibble row with analysis statistics
+#' @param ticker Character ticker symbol (for logging)
+#' @param min_success_rate Numeric minimum success rate threshold (percentage, 0-100)
+#' @param exclude_negative_returns Logical whether to filter negative returns
+#'
+#' @return Logical TRUE if opportunity should be filtered out, FALSE if it passes
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#'   # After calculating statistics
+#'   stats <- calculate_weekly_statistics(...)
+#'
+#'   if (should_filter_dividend_opportunity(stats, "QQQY", 70, TRUE)) {
+#'     return(NULL)  # Filtered out
+#'   }
+#' }
+should_filter_dividend_opportunity <- function(stats,
+                                               ticker,
+                                               min_success_rate = 70,
+                                               exclude_negative_returns = TRUE) {
+
+  # Filter 1: Negative expected returns
+  if (exclude_negative_returns && stats$avg_return <= 0) {
+    log_debug("{ticker}: Filtered out - negative avg return: {sprintf('%.3f', stats$avg_return)}%")
+    return(TRUE)
+  }
+
+  # Filter 2: Low probability of success
+  if (stats$success_rate < min_success_rate) {
+    log_debug("{ticker}: Filtered out - success rate {sprintf('%.1f', stats$success_rate)}% < {min_success_rate}%")
+    return(TRUE)
+  }
+
+  # All filters passed
+  return(FALSE)
+}

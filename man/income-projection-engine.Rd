@@ -5,6 +5,5 @@
 \title{Income Projection Engine}
 \description{
 Core logic for generating cash flow projections for position groups.
-Handles dividend projections and option gain calculations with automatic
-recalculation when actual events differ from projections.
+Handles dividend projections and option gain calculations.
 }

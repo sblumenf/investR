@@ -5,6 +5,5 @@
 \title{Income Projection Database Operations}
 \description{
 Functions for managing projected and actual cash flow events for position
-groups. Tracks dividends and option gains with automatic recalculation
-when actual events differ from projections.
+groups. Tracks dividends and option gains for position groups.
 }
