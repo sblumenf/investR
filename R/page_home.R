@@ -99,6 +99,15 @@ page_home <- function() {
         button_text = "View Groups"
       ),
       list(
+        title = "Cash Flow Projection",
+        description = c(
+          "View projected and actual cash flows across all position groups.",
+          "Track dividend payments and option premiums with monthly aggregation. Shows actuals when received, projections for future periods."
+        ),
+        href = "/portfolio/cash-flow-projection",
+        button_text = "View Cash Flows"
+      ),
+      list(
         title = "Raw Activity Log",
         description = c(
           "View all raw, unfiltered transaction records from the `account_activities` database table.",

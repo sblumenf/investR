@@ -26,6 +26,7 @@ Imports:
     later,
     logger,
     lubridate,
+    plotly,
     promises,
     purrr,
     quantmod,
