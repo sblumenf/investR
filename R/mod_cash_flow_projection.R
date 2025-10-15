@@ -22,32 +22,16 @@ mod_cash_flow_projection_ui <- function(id){
     tags$div(
       class = "well",
       style = "background: #f8f9fa; padding: 15px; margin-bottom: 20px;",
-      tags$div(
-        class = "row",
-        tags$div(
-          class = "col-md-6",
-          tags$label("Time Period:"),
-          shiny::radioButtons(
-            ns("period_filter"),
-            label = NULL,
-            choices = c(
-              "Past Periods (Historical)" = "past",
-              "Current and Future Periods" = "current_future"
-            ),
-            selected = "current_future",
-            inline = FALSE
-          )
+      tags$label("Time Period:"),
+      shiny::radioButtons(
+        ns("period_filter"),
+        label = NULL,
+        choices = c(
+          "Past Periods (Historical)" = "past",
+          "Current and Future Periods" = "current_future"
         ),
-        tags$div(
-          class = "col-md-6",
-          tags$div(
-            style = "margin-top: 25px; padding: 10px; background: #e7f3ff; border-left: 3px solid #0066cc;",
-            tags$small(
-              tags$strong("Note: "),
-              "For the current month, the 'Actual/Projected' column shows whether each transaction has been received or is still expected."
-            )
-          )
-        )
+        selected = "current_future",
+        inline = FALSE
       )
     ),
 
@@ -137,25 +121,69 @@ mod_cash_flow_projection_server <- function(id){
     # Reactive: Filter monthly aggregates for chart
     filtered_monthly <- reactive({
       req(filtered_transactions())
+      req(date_range())
 
       transactions <- filtered_transactions()
+      dr <- date_range()
 
       if (nrow(transactions) == 0) {
         return(tibble(
           month_label = character(),
           type = character(),
-          total_amount = numeric()
+          total_amount = numeric(),
+          ticker_breakdown = character()
         ))
       }
 
-      # Recalculate aggregates from filtered transactions
-      transactions %>%
+      # Recalculate aggregates from filtered transactions with ticker breakdown
+      aggregated <- transactions %>%
         group_by(month_label, type) %>%
         summarise(
           total_amount = sum(amount, na.rm = TRUE),
+          ticker_breakdown = paste(
+            paste0("  - ", ticker, ": $", format(round(amount, 2), big.mark = ",", nsmall = 2)),
+            collapse = "\n"
+          ),
           .groups = "drop"
+        )
+
+      # Create complete month sequence based on filtered data range
+      if (nrow(aggregated) > 0) {
+        min_month <- min(as.Date(paste0(aggregated$month_label, "-01")))
+        max_month <- max(as.Date(paste0(aggregated$month_label, "-01")))
+
+        all_months <- seq(
+          floor_date(min_month, "month"),
+          floor_date(max_month, "month"),
+          by = "month"
+        )
+
+        all_month_labels <- format(all_months, "%Y-%m")
+
+        # Get unique transaction types
+        all_types <- unique(aggregated$type)
+
+        # Create complete grid of all months x all types
+        complete_grid <- expand.grid(
+          month_label = all_month_labels,
+          type = all_types,
+          stringsAsFactors = FALSE
         ) %>%
-        arrange(month_label, type)
+          as_tibble()
+
+        # Left join actual data and fill missing with 0
+        result <- complete_grid %>%
+          left_join(aggregated, by = c("month_label", "type")) %>%
+          mutate(
+            total_amount = coalesce(total_amount, 0),
+            ticker_breakdown = coalesce(ticker_breakdown, "No transactions")
+          ) %>%
+          arrange(month_label, type)
+
+        return(result)
+      } else {
+        return(aggregated)
+      }
     })
 
     # Render plotly stacked bar chart
@@ -178,6 +206,11 @@ mod_cash_flow_projection_server <- function(id){
           "option_gain" = "#ffc107"      # Yellow/Gold
         )
 
+        # Calculate monthly totals for annotations
+        monthly_totals <- monthly_data %>%
+          group_by(month_label) %>%
+          summarise(total = sum(total_amount, na.rm = TRUE), .groups = "drop")
+
         # Create stacked bar chart
         plot_ly(
           data = monthly_data,
@@ -190,8 +223,11 @@ mod_cash_flow_projection_server <- function(id){
           text = ~paste0(
             "<b>", month_label, "</b><br>",
             tools::toTitleCase(gsub("_", " ", type)), ": $",
-            format(round(total_amount, 2), big.mark = ",", nsmall = 2)
-          )
+            format(round(total_amount, 2), big.mark = ",", nsmall = 2),
+            "<br>",
+            ticker_breakdown
+          ),
+          textposition = "none"
         ) %>%
           layout(
             title = list(
@@ -200,21 +236,37 @@ mod_cash_flow_projection_server <- function(id){
             ),
             xaxis = list(
               title = "Month",
-              tickangle = -45
+              tickangle = -45,
+              showspikes = FALSE
             ),
             yaxis = list(
               title = "Total Amount ($)",
-              tickformat = "$,.0f"
+              tickformat = "$,.0f",
+              showspikes = FALSE
             ),
             barmode = "stack",
             hovermode = "x unified",
+            hoverdistance = 100,
+            spikedistance = -1,
             legend = list(
               title = list(text = "Transaction Type"),
               orientation = "v",
               x = 1.02,
               y = 1
             ),
-            margin = list(b = 100)  # Space for rotated labels
+            margin = list(b = 100),  # Space for rotated labels
+            annotations = lapply(1:nrow(monthly_totals), function(i) {
+              list(
+                x = monthly_totals$month_label[i],
+                y = monthly_totals$total[i],
+                text = paste0("$", format(round(monthly_totals$total[i], 0), big.mark = ",")),
+                showarrow = FALSE,
+                xanchor = "center",
+                yanchor = "bottom",
+                yshift = 5,
+                font = list(size = 10, color = "#333")
+              )
+            })
           ) %>%
           config(displayModeBar = TRUE, displaylogo = FALSE)
       }
@@ -251,20 +303,16 @@ mod_cash_flow_projection_server <- function(id){
           Amount = amount,
           Type = tools::toTitleCase(gsub("_", " ", type)),
           Group = group_name,
-          `Actual/Projected` = if_else(
-            is_current_month,
-            tools::toTitleCase(source),
-            ""  # Empty for non-current months
-          )
+          `Actual/Projected` = tools::toTitleCase(source)
         ) %>%
-        arrange(desc(Month), Ticker)
+        arrange(Month, Ticker)  # Ascending order by month, then ticker
 
       # Create datatable with formatting
       datatable(
         table_data,
         options = list(
           pageLength = 25,
-          order = list(list(0, "desc")),  # Sort by Month descending
+          order = list(list(0, "asc")),  # Sort by Month ascending
           searching = TRUE,
           dom = "ftip"  # Filter, table, info, pagination
         ),
