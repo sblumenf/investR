@@ -7,7 +7,7 @@
 get_quote_source()
 }
 \value{
-Character: "yahoo" (default) or "questrade"
+Character: "questrade" (default) or "yahoo"
 }
 \description{
 Helper function to retrieve current quote source option.

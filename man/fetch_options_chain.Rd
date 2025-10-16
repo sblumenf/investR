@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils_market_data.R
 \name{fetch_options_chain}
 \alias{fetch_options_chain}
-\title{Fetch options chain from Yahoo Finance}
+\title{Fetch options chain from configured source}
 \usage{
 fetch_options_chain(ticker, expiration = NULL)
 }
@@ -15,5 +15,10 @@ fetch_options_chain(ticker, expiration = NULL)
 List with calls and puts for each expiration, or NULL on error
 }
 \description{
-Wrapper around getOptionChain() with consistent error handling
+Source-aware options chain fetcher that delegates to Yahoo Finance or
+Questrade API based on the global option 'investR.quote_source'.
+}
+\details{
+The quote source is controlled by strategy modules via the quote source toggle.
+Defaults to Questrade API if no source is specified.
 }

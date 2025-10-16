@@ -20,5 +20,5 @@ based on the global option 'investR.quote_source'.
 }
 \details{
 The quote source is controlled by strategy modules via the quote source toggle.
-Defaults to Yahoo Finance if no source is specified.
+Defaults to Questrade API if no source is specified.
 }

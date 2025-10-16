@@ -134,24 +134,52 @@ fetch_current_quote <- function(ticker, fields = c("Last Trade (Price Only)", "N
 
 #' Fetch options chain from Yahoo Finance
 #'
-#' Wrapper around getOptionChain() with consistent error handling
+#' Internal Yahoo-specific options chain fetcher.
+#' Wrapper around getOptionChain() with consistent error handling.
 #'
 #' @param ticker Character ticker symbol
 #' @param expiration Optional specific expiration date, NULL for all
 #' @return List with calls and puts for each expiration, or NULL on error
-#' @export
-fetch_options_chain <- function(ticker, expiration = NULL) {
+#' @noRd
+fetch_options_chain_yahoo <- function(ticker, expiration = NULL) {
   tryCatch({
-    log_debug("Fetching options chain for {ticker}")
+    log_debug("Fetching options chain for {ticker} from Yahoo Finance")
 
     opt_chain <- getOptionChain(ticker, Exp = expiration)
 
     return(opt_chain)
 
   }, error = function(e) {
-    log_warn("{ticker}: Failed to fetch options chain - {e$message}")
+    log_warn("{ticker}: Failed to fetch options chain from Yahoo - {e$message}")
     return(NULL)
   })
+}
+
+#' Fetch options chain from configured source
+#'
+#' Source-aware options chain fetcher that delegates to Yahoo Finance or
+#' Questrade API based on the global option 'investR.quote_source'.
+#'
+#' The quote source is controlled by strategy modules via the quote source toggle.
+#' Defaults to Questrade API if no source is specified.
+#'
+#' @param ticker Character ticker symbol
+#' @param expiration Optional specific expiration date, NULL for all
+#' @return List with calls and puts for each expiration, or NULL on error
+#' @export
+fetch_options_chain <- function(ticker, expiration = NULL) {
+  # Get configured quote source (defaults to "questrade")
+  source <- getOption("investR.quote_source", default = "questrade")
+
+  log_info("Options source for {ticker}: {toupper(source)}")
+
+  if (source == "questrade") {
+    # Use Questrade API (with automatic Yahoo fallback on error)
+    return(fetch_questrade_options_chain(ticker, expiration))
+  } else {
+    # Use Yahoo Finance
+    return(fetch_options_chain_yahoo(ticker, expiration))
+  }
 }
 
 #' Fetch current SOFR rate from FRED
