@@ -411,8 +411,15 @@ batch_analyze_high_yield_stocks <- function(universe_config,
   oplan <- plan(multisession, workers = max_workers)
   on.exit(plan(oplan), add = TRUE)
 
+  # Capture quote source setting to pass to workers
+  quote_source <- get_quote_source()
+  log_info("Quote source for this analysis: {toupper(quote_source)}")
+
   # Fetch screening data in parallel
   screening_results <- future_map(stock_list, function(ticker) {
+    # Set quote source in this worker to match main process
+    options(investR.quote_source = quote_source)
+
     tryCatch({
       # Fetch quote with price, yield, and ex-dividend date
       quote <- fetch_current_quote(
@@ -480,7 +487,11 @@ batch_analyze_high_yield_stocks <- function(universe_config,
   log_info("Phase 2: Backtesting {nrow(candidates)} candidates...")
 
   # Analyze candidates in parallel
+  # Note: quote_source already captured above, reuse it
   analysis_results <- future_map(seq_len(nrow(candidates)), function(i) {
+    # Set quote source in this worker to match main process
+    options(investR.quote_source = quote_source)
+
     row <- candidates[i, ]
 
     log_info("Analyzing {row$ticker} ({i}/{nrow(candidates)})")

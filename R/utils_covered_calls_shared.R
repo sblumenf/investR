@@ -75,12 +75,20 @@ process_stocks_parallel_generic <- function(stock_universe, strike_threshold_pct
                                            result_flags) {
   log_info("Processing stocks in parallel...")
 
+  # Capture quote source setting to pass to workers
+  quote_source <- get_quote_source()
+  log_info("Quote source for this analysis: {toupper(quote_source)}")
+
   # Export package to workers to ensure they have access to all functions
   results <- future_map(stock_universe, function(ticker) {
     # Ensure package is loaded in worker
     if (!"investR" %in% loadedNamespaces()) {
       suppressPackageStartupMessages(loadNamespace("investR"))
     }
+
+    # Set quote source in this worker to match main process
+    options(investR.quote_source = quote_source)
+
     log_info("Analyzing {ticker}...")
     analyze_single_stock_generic(ticker, strike_threshold_pct, min_days, max_days, expiry_month, target_days, result_flags)
   }, .options = furrr_options(

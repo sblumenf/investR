@@ -2,21 +2,23 @@
 % Please edit documentation in R/utils_market_data.R
 \name{fetch_current_quote}
 \alias{fetch_current_quote}
-\title{Fetch current quote from Yahoo Finance}
+\title{Fetch current quote from configured source}
 \usage{
 fetch_current_quote(ticker, fields = c("Last Trade (Price Only)", "Name"))
 }
 \arguments{
 \item{ticker}{Character ticker symbol (or vector of tickers)}
 
-\item{fields}{Character vector of fields to fetch. Common fields:
-- "Last Trade (Price Only)" - current price
-- "Name" - company name
-- "Dividend Yield" - dividend yield}
+\item{fields}{Character vector of fields to fetch (for Yahoo compatibility)}
 }
 \value{
 Data frame with quote data, or NULL on error
 }
 \description{
-Wrapper around getQuote() with consistent error handling
+Source-aware quote fetcher that delegates to Yahoo Finance or Questrade API
+based on the global option 'investR.quote_source'.
+}
+\details{
+The quote source is controlled by strategy modules via the quote source toggle.
+Defaults to Yahoo Finance if no source is specified.
 }

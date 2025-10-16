@@ -15,6 +15,9 @@ mod_collar_controls_ui <- function(id){
       h3("Collar Strategy"),
       helpText("Synthetic bond: Long stock + Short ATM call + Long ATM put"),
 
+      # Quote source toggle
+      quote_source_toggle_ui(ns),
+
       hr(),
 
       # Universe selector
@@ -156,6 +159,9 @@ mod_collar_controls_ui <- function(id){
 mod_collar_controls_server <- function(id){
   moduleServer(id, function(input, output, session){
     ns <- session$ns
+
+    # Setup quote source toggle
+    quote_source_toggle_server(input, session, "Collar Strategy")
 
     # Create analysis function based on selected universe
     analysis_function <- function() {

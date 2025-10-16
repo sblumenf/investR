@@ -16,6 +16,11 @@ mod_dividend_capture_monthly_controls_ui <- function(id) {
     width = 3,
     h3("Monthly Dividend ETFs"),
 
+    # Quote source toggle
+    quote_source_toggle_ui(ns),
+
+    hr(),
+
     # Info text
     p("Analyzes 76+ monthly dividend ETFs for dividend capture opportunities."),
     p(
@@ -82,6 +87,9 @@ mod_dividend_capture_monthly_controls_ui <- function(id) {
 mod_dividend_capture_monthly_controls_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    # Setup quote source toggle
+    quote_source_toggle_server(input, session, "Monthly Dividend Capture")
 
     # Use analysis controls helper with monthly-specific configuration
     result <- setup_analysis_controls(

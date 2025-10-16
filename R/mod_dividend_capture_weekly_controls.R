@@ -16,6 +16,11 @@ mod_dividend_capture_weekly_controls_ui <- function(id) {
     width = 3,
     h3("Weekly Dividend ETFs"),
 
+    # Quote source toggle
+    quote_source_toggle_ui(ns),
+
+    hr(),
+
     # Info text
     p("Analyzes weekly dividend ETFs for dividend capture opportunities."),
     p("Ticker list is fetched dynamically from stockanalysis.com."),
@@ -83,6 +88,9 @@ mod_dividend_capture_weekly_controls_ui <- function(id) {
 mod_dividend_capture_weekly_controls_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    # Setup quote source toggle
+    quote_source_toggle_server(input, session, "Weekly Dividend Capture")
 
     # Use analysis controls helper with weekly-specific configuration
     result <- setup_analysis_controls(

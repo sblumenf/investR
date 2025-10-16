@@ -347,6 +347,10 @@ analyze_dynamic_covered_calls <- function(limit = NULL,
   oplan <- setup_parallel_processing(max_workers)
   on.exit(plan(oplan), add = TRUE)
 
+  # Capture quote source setting to pass to workers
+  quote_source <- get_quote_source()
+  log_info("Quote source for this analysis: {toupper(quote_source)}")
+
   # Process stocks in parallel with rate limiting
   log_info("Processing stocks in parallel...")
 
@@ -357,6 +361,9 @@ analyze_dynamic_covered_calls <- function(limit = NULL,
     if (!"investR" %in% loadedNamespaces()) {
       suppressPackageStartupMessages(loadNamespace("investR"))
     }
+
+    # Set quote source in this worker to match main process
+    options(investR.quote_source = quote_source)
 
     log_info("Analyzing {ticker}...")
 

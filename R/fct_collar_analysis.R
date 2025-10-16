@@ -336,6 +336,10 @@ analyze_collar_stocks <- function(dividend_filter = "all",
   oplan <- setup_parallel_processing(max_workers)
   on.exit(plan(oplan), add = TRUE)
 
+  # Capture quote source setting to pass to workers
+  quote_source <- get_quote_source()
+  log_info("Quote source for this analysis: {toupper(quote_source)}")
+
   # Process stocks in parallel
   log_info("Processing stocks in parallel (workers: {max_workers})...")
 
@@ -343,6 +347,10 @@ analyze_collar_stocks <- function(dividend_filter = "all",
     if (!"investR" %in% loadedNamespaces()) {
       suppressPackageStartupMessages(loadNamespace("investR"))
     }
+
+    # Set quote source in this worker to match main process
+    options(investR.quote_source = quote_source)
+
     investR::analyze_collar_single(ticker, target_days, strike_adjustment_pct)
   }, .options = furrr_options(seed = TRUE, packages = "investR"))
 
@@ -413,6 +421,10 @@ analyze_collar_etfs <- function(min_market_cap = COLLAR_CONFIG$min_market_cap,
   oplan <- setup_parallel_processing(max_workers)
   on.exit(plan(oplan), add = TRUE)
 
+  # Capture quote source setting to pass to workers
+  quote_source <- get_quote_source()
+  log_info("Quote source for this analysis: {toupper(quote_source)}")
+
   # Process ETFs in parallel
   log_info("Processing ETFs in parallel (workers: {max_workers})...")
 
@@ -420,6 +432,10 @@ analyze_collar_etfs <- function(min_market_cap = COLLAR_CONFIG$min_market_cap,
     if (!"investR" %in% loadedNamespaces()) {
       suppressPackageStartupMessages(loadNamespace("investR"))
     }
+
+    # Set quote source in this worker to match main process
+    options(investR.quote_source = quote_source)
+
     investR::analyze_collar_single(ticker, target_days, strike_adjustment_pct)
   }, .options = furrr_options(seed = TRUE, packages = "investR"))
 

@@ -48,6 +48,9 @@ setup_analysis_controls <- function(input,
 
   # Run analysis when button is clicked
   observeEvent(input$run_analysis, {
+    # Reset fallback tracker before starting analysis
+    reset_fallback_tracker()
+
     # Show progress message
     status_message(create_progress_alert(progress_message))
 
@@ -88,6 +91,9 @@ setup_analysis_controls <- function(input,
         )
       }
     }
+
+    # Check for Questrade fallbacks and notify user
+    check_and_notify_fallbacks()
   })
 
   # Download handler - works with both download_results and download_csv button IDs

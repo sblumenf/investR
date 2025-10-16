@@ -16,6 +16,11 @@ mod_high_yield_dividend_capture_controls_ui <- function(id, universe_config) {
     width = 3,
     h3(paste(universe_config$universe_name, "High-Yield")),
 
+    # Quote source toggle
+    quote_source_toggle_ui(ns),
+
+    hr(),
+
     # Info text
     p(paste0("Screens ", universe_config$universe_name, " stocks for high-yield dividend capture opportunities with announced ex-dividend dates in the next 1-2 business days.")),
     p(
@@ -100,6 +105,9 @@ mod_high_yield_dividend_capture_controls_ui <- function(id, universe_config) {
 mod_high_yield_dividend_capture_controls_server <- function(id, universe_config) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    # Setup quote source toggle
+    quote_source_toggle_server(input, session, paste(universe_config$universe_name, "High-Yield"))
 
     # Create wrapper function that passes parameters to batch analysis
     analysis_wrapper <- function() {

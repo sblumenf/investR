@@ -14,6 +14,11 @@ mod_aristocrats_analysis_ui <- function(id){
       width = 3,
       h3("Strategy Parameters"),
 
+      # Quote source toggle
+      quote_source_toggle_ui(ns),
+
+      hr(),
+
       # Strike threshold
       sliderInput(
         ns("strike_threshold"),
@@ -93,6 +98,9 @@ mod_aristocrats_analysis_ui <- function(id){
 mod_aristocrats_analysis_server <- function(id){
   moduleServer(id, function(input, output, session){
     ns <- session$ns
+
+    # Setup quote source toggle
+    quote_source_toggle_server(input, session, "Dividend Aristocrats")
 
     # Reactive: Analysis parameters
     analysis_params <- reactive({

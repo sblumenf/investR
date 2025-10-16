@@ -14,6 +14,11 @@ mod_dynamic_covered_calls_analysis_ui <- function(id){
       width = 3,
       h3("Strategy Parameters"),
 
+      # Quote source toggle
+      quote_source_toggle_ui(ns),
+
+      hr(),
+
       # Price threshold slider
       sliderInput(
         ns("max_price"),
@@ -148,6 +153,9 @@ mod_dynamic_covered_calls_analysis_server <- function(id){
   moduleServer(id, function(input, output, session){
     ns <- session$ns
 
+    # Setup quote source toggle
+    quote_source_toggle_server(input, session, "Dynamic Covered Calls")
+
     # Reactive values
     results_data <- reactiveVal(NULL)
     status_message <- reactiveVal(NULL)
@@ -186,6 +194,9 @@ mod_dynamic_covered_calls_analysis_server <- function(id){
       if (is.null(params)) {
         return()
       }
+
+      # Reset fallback tracker before starting analysis
+      reset_fallback_tracker()
 
       # Show progress message
       status_message(create_progress_alert(
@@ -230,6 +241,9 @@ mod_dynamic_covered_calls_analysis_server <- function(id){
               message = "No opportunities found with current parameters."
             ))
           }
+
+          # Check for Questrade fallbacks and notify user
+          check_and_notify_fallbacks()
         } %...!% {
           # On error
           error_msg <- .
@@ -282,6 +296,9 @@ mod_dynamic_covered_calls_analysis_server <- function(id){
             ))
           }
         }
+
+        # Check for Questrade fallbacks and notify user
+        check_and_notify_fallbacks()
       }
     })
 

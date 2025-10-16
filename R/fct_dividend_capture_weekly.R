@@ -290,8 +290,15 @@ batch_analyze_weekly_etfs <- function(max_workers = NULL, force_refresh = FALSE)
   oplan <- plan(multisession, workers = max_workers)
   on.exit(plan(oplan), add = TRUE)
 
+  # Capture quote source setting to pass to workers
+  quote_source <- get_quote_source()
+  log_info("Quote source for this analysis: {toupper(quote_source)}")
+
   # Fetch current prices in parallel (lightweight screening)
   screening_results <- future_map(etf_list, function(ticker) {
+    # Set quote source in this worker to match main process
+    options(investR.quote_source = quote_source)
+
     tryCatch({
       # Fetch current quote (lightweight - just price)
       quote <- fetch_current_quote(ticker, fields = c("Last Trade (Price Only)"))

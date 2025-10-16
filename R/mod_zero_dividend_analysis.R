@@ -14,6 +14,11 @@ mod_zero_dividend_analysis_ui <- function(id){
       width = 3,
       h3("Strategy Parameters"),
 
+      # Quote source toggle
+      quote_source_toggle_ui(ns),
+
+      hr(),
+
       # Strike threshold slider (50-100%, default 85%)
       sliderInput(
         ns("strike_threshold"),
@@ -122,6 +127,9 @@ mod_zero_dividend_analysis_ui <- function(id){
 mod_zero_dividend_analysis_server <- function(id){
   moduleServer(id, function(input, output, session){
     ns <- session$ns
+
+    # Setup quote source toggle
+    quote_source_toggle_server(input, session, "Zero Dividend Analysis")
 
     # Create analysis function using parameters from sliders
     # Month filtering happens client-side after results are returned

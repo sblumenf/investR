@@ -83,7 +83,8 @@ fetch_dividend_history <- function(ticker,
 
 #' Fetch current quote from Yahoo Finance
 #'
-#' Wrapper around getQuote() with consistent error handling
+#' Internal Yahoo-specific quote fetcher.
+#' Wrapper around getQuote() with consistent error handling.
 #'
 #' @param ticker Character ticker symbol (or vector of tickers)
 #' @param fields Character vector of fields to fetch. Common fields:
@@ -91,19 +92,44 @@ fetch_dividend_history <- function(ticker,
 #'   - "Name" - company name
 #'   - "Dividend Yield" - dividend yield
 #' @return Data frame with quote data, or NULL on error
-#' @export
-fetch_current_quote <- function(ticker, fields = c("Last Trade (Price Only)", "Name")) {
+#' @noRd
+fetch_current_quote_yahoo <- function(ticker, fields = c("Last Trade (Price Only)", "Name")) {
   tryCatch({
-    log_debug("Fetching current quote for {ticker}")
+    log_debug("Fetching current quote for {ticker} from Yahoo Finance")
 
     quote_data <- getQuote(ticker, what = yahooQF(fields))
 
     return(quote_data)
 
   }, error = function(e) {
-    log_warn("{ticker}: Failed to fetch quote - {e$message}")
+    log_warn("{ticker}: Failed to fetch quote from Yahoo - {e$message}")
     return(NULL)
   })
+}
+
+#' Fetch current quote from configured source
+#'
+#' Source-aware quote fetcher that delegates to Yahoo Finance or Questrade API
+#' based on the global option 'investR.quote_source'.
+#'
+#' The quote source is controlled by strategy modules via the quote source toggle.
+#' Defaults to Yahoo Finance if no source is specified.
+#'
+#' @param ticker Character ticker symbol (or vector of tickers)
+#' @param fields Character vector of fields to fetch (for Yahoo compatibility)
+#' @return Data frame with quote data, or NULL on error
+#' @export
+fetch_current_quote <- function(ticker, fields = c("Last Trade (Price Only)", "Name")) {
+  # Get configured quote source (defaults to "yahoo")
+  source <- getOption("investR.quote_source", default = "yahoo")
+
+  if (source == "questrade") {
+    # Use Questrade API (with automatic Yahoo fallback on error)
+    return(fetch_questrade_quote(ticker, fields))
+  } else {
+    # Use Yahoo Finance (default)
+    return(fetch_current_quote_yahoo(ticker, fields))
+  }
 }
 
 #' Fetch options chain from Yahoo Finance
