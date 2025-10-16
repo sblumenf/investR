@@ -113,15 +113,15 @@ fetch_current_quote_yahoo <- function(ticker, fields = c("Last Trade (Price Only
 #' based on the global option 'investR.quote_source'.
 #'
 #' The quote source is controlled by strategy modules via the quote source toggle.
-#' Defaults to Yahoo Finance if no source is specified.
+#' Defaults to Questrade API if no source is specified.
 #'
 #' @param ticker Character ticker symbol (or vector of tickers)
 #' @param fields Character vector of fields to fetch (for Yahoo compatibility)
 #' @return Data frame with quote data, or NULL on error
 #' @export
 fetch_current_quote <- function(ticker, fields = c("Last Trade (Price Only)", "Name")) {
-  # Get configured quote source (defaults to "yahoo")
-  source <- getOption("investR.quote_source", default = "yahoo")
+  # Get configured quote source (defaults to "questrade")
+  source <- getOption("investR.quote_source", default = "questrade")
 
   if (source == "questrade") {
     # Use Questrade API (with automatic Yahoo fallback on error)

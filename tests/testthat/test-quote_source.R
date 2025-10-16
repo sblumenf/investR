@@ -1,10 +1,10 @@
-test_that("get_quote_source returns default yahoo when not set", {
+test_that("get_quote_source returns default questrade when not set", {
   # Clear any existing option
   options(investR.quote_source = NULL)
 
   result <- get_quote_source()
 
-  expect_equal(result, "yahoo")
+  expect_equal(result, "questrade")
 })
 
 test_that("get_quote_source returns configured source", {
@@ -18,13 +18,13 @@ test_that("get_quote_source returns configured source", {
   options(investR.quote_source = NULL)
 })
 
-test_that("fetch_current_quote routes to Yahoo by default", {
+test_that("fetch_current_quote routes to Questrade by default", {
   # Clear any existing option
   options(investR.quote_source = NULL)
 
-  # Mock the Yahoo-specific function
+  # Mock the Questrade-specific function
   local_mocked_bindings(
-    fetch_current_quote_yahoo = function(ticker, fields) {
+    fetch_questrade_quote = function(ticker, fields) {
       data.frame(Last = 150.25, Name = "Test Stock", row.names = ticker)
     }
   )
@@ -36,13 +36,13 @@ test_that("fetch_current_quote routes to Yahoo by default", {
   expect_equal(result$Name, "Test Stock")
 })
 
-test_that("fetch_current_quote routes to Questrade when configured", {
-  options(investR.quote_source = "questrade")
+test_that("fetch_current_quote routes to Yahoo when configured", {
+  options(investR.quote_source = "yahoo")
 
-  # Mock the Questrade-specific function
+  # Mock the Yahoo-specific function
   local_mocked_bindings(
-    fetch_questrade_quote = function(ticker, fields) {
-      data.frame(Last = 175.50, Name = "Questrade Stock", row.names = ticker)
+    fetch_current_quote_yahoo = function(ticker, fields) {
+      data.frame(Last = 175.50, Name = "Yahoo Stock", row.names = ticker)
     }
   )
 
@@ -50,7 +50,7 @@ test_that("fetch_current_quote routes to Questrade when configured", {
 
   expect_s3_class(result, "data.frame")
   expect_equal(result$Last, 175.50)
-  expect_equal(result$Name, "Questrade Stock")
+  expect_equal(result$Name, "Yahoo Stock")
 
   # Cleanup
   options(investR.quote_source = NULL)

@@ -24,7 +24,7 @@ quote_source_toggle_ui <- function(ns) {
       "Yahoo Finance" = "yahoo",
       "Questrade API" = "questrade"
     ),
-    selected = "yahoo",
+    selected = "questrade",
     inline = FALSE
   )
 }
@@ -74,10 +74,10 @@ set_quote_source <- function(source) {
 #'
 #' Helper function to retrieve current quote source option.
 #'
-#' @return Character: "yahoo" (default) or "questrade"
+#' @return Character: "questrade" (default) or "yahoo"
 #' @export
 get_quote_source <- function() {
-  getOption("investR.quote_source", default = "yahoo")
+  getOption("investR.quote_source", default = "questrade")
 }
 
 #' Check and notify about Questrade fallbacks
