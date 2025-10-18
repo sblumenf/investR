@@ -38,6 +38,8 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
     total_tickers <- reactive(length(ticker_data()))
     # Track actions to trigger banner refresh in parent module
     action_count <- reactiveVal(0)
+    # Track which transaction rows are selected via checkboxes
+    selected_rows <- reactiveVal(integer())
 
     # Helper function to fetch and group unlinked activities
     refresh_data <- function() {
@@ -108,6 +110,16 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
         size = "l",
         easyClose = TRUE,
 
+        # Selection helper buttons
+        fluidRow(
+          column(12,
+            actionButton(ns("select_all"), "Select All", class = "btn-sm"),
+            actionButton(ns("deselect_all"), "Deselect All", class = "btn-sm"),
+            tags$span(id = ns("selection_info"), style = "margin-left: 15px;")
+          )
+        ),
+        tags$br(),
+
         # Transaction table
         DT::dataTableOutput(ns("transaction_table")),
 
@@ -142,7 +154,12 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
       req(current_index() <= total_tickers())
       ticker_data()[[current_index()]] %>%
         select(trade_date, action, description, quantity, net_amount)
-    }, options = list(dom = 't', paging = FALSE))
+    }, options = list(dom = 't', paging = FALSE), selection = list(mode = 'multiple', target = 'row'))
+
+    # Update selected_rows when user clicks checkboxes
+    observeEvent(input$transaction_table_rows_selected, {
+      selected_rows(input$transaction_table_rows_selected)
+    })
 
     # --- Server-Side Action Logic ---
 
@@ -170,30 +187,45 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
     # --- Button Handlers ---
     observeEvent(input$next_ticker, {
       req(current_index() < total_tickers())
+      selected_rows(integer())  # Clear selection when changing tickers
       current_index(current_index() + 1)
     })
-    
+
     observeEvent(input$prev_ticker, {
       req(current_index() > 1)
+      selected_rows(integer())  # Clear selection when changing tickers
       current_index(current_index() - 1)
     })
-    
+
+    observeEvent(input$select_all, {
+      req(ticker_data())
+      req(current_index() <= total_tickers())
+      num_rows <- nrow(ticker_data()[[current_index()]])
+      DT::selectRows(DT::dataTableProxy("transaction_table"), 1:num_rows)
+    })
+
+    observeEvent(input$deselect_all, {
+      DT::selectRows(DT::dataTableProxy("transaction_table"), NULL)
+    })
+
     observeEvent(input$ignore_transactions, {
-      activity_ids <- ticker_data()[[current_index()]]$activity_id
+      req(length(selected_rows()) > 0)
+      current_activities <- ticker_data()[[current_index()]]
+      activity_ids <- current_activities$activity_id[selected_rows()]
       log_info(sprintf("Ignoring %d activities for ticker %s", length(activity_ids), names(ticker_data())[current_index()]))
       batch_ignore_activities(activity_ids)
-      # Increment action count to trigger banner refresh
       action_count(action_count() + 1)
       advance_or_close()
     })
 
     observeEvent(input$link_to_group, {
       req(input$existing_group_id)
-      activity_ids <- ticker_data()[[current_index()]]$activity_id
+      req(length(selected_rows()) > 0)
+      current_activities <- ticker_data()[[current_index()]]
+      activity_ids <- current_activities$activity_id[selected_rows()]
       group_id <- input$existing_group_id
       log_info(sprintf("Linking %d activities to group %s", length(activity_ids), group_id))
       link_activities_to_group(activity_ids, group_id)
-      # Increment action count to trigger banner refresh
       action_count(action_count() + 1)
       advance_or_close()
     })
@@ -246,26 +278,38 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
 
     # Handle confirmation of group creation
     observeEvent(input$confirm_create_group, {
+      req(length(selected_rows()) > 0)
+
       # Get values from form
       group_name <- input$new_group_name
       strategy_type <- input$new_group_strategy
 
-      # Get current ticker and activities
-      current_ticker <- names(virgin_by_ticker())[current_index()]
-      current_activities <- virgin_by_ticker()[[current_index()]]
+      # Get current ticker and SELECTED activities only
+      current_ticker <- names(ticker_data())[current_index()]
+      current_activities <- ticker_data()[[current_index()]]
+      selected_activities <- current_activities[selected_rows(), ]
 
-      log_info(sprintf("Creating new group '%s' for ticker: %s", group_name, current_ticker))
+      log_info(sprintf("Creating new group '%s' for ticker: %s with %d selected activities",
+                       group_name, current_ticker, nrow(selected_activities)))
 
-      # Get account number from first activity
-      account_number <- current_activities$account_number[1]
+      # Get account number from first selected activity
+      account_number <- selected_activities$account_number[1]
 
       # Generate group ID
       group_id <- generate_group_id(strategy_type, account_number)
 
-      # Create members tibble
+      # Build complete members list from selected activities
+      unique_symbols <- unique(selected_activities$symbol)
+
       members <- tibble::tibble(
-        symbol = current_ticker,
-        role = "underlying_stock"
+        symbol = unique_symbols,
+        role = purrr::map_chr(unique_symbols, function(sym) {
+          if (is_option_symbol(sym)) {
+            "short_call"
+          } else {
+            "underlying_stock"
+          }
+        })
       )
 
       # Create the group
@@ -287,8 +331,8 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
         return()
       }
 
-      # Link activities to the group
-      activity_ids <- current_activities$activity_id
+      # Link only selected activities to the group
+      activity_ids <- selected_activities$activity_id
       link_success <- link_activities_to_group(activity_ids, group_id)
 
       if (!link_success) {
