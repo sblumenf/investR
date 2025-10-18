@@ -53,55 +53,48 @@ generate_initial_projections <- function(group_id, members, account_number) {
       return(TRUE)
     }
 
-    # Get current positions to fetch quantities and prices
-    current_positions <- get_latest_positions() %>%
-      filter(account_number == !!account_number)
+    # Get activities for this group to calculate actual costs
+    activities <- get_activities_by_group(group_id)
 
-    # Extract underlying stock and option
-    underlying <- members %>% filter(role == "underlying_stock") %>% pull(symbol)
-    option_symbol <- members %>% filter(role == "short_call") %>% pull(symbol)
-
-    # Get stock position details
-    stock_position <- current_positions %>%
-      filter(symbol == underlying[1])
-
-    if (nrow(stock_position) == 0) {
-      log_warn("Income Projection: Stock position not found for {underlying[1]}")
+    if (nrow(activities) == 0) {
+      log_warn("Income Projection: No activities found for group {group_id}")
       return(FALSE)
     }
 
-    # Check if allocated_quantity is specified in members
-    stock_member <- members %>% filter(role == "underlying_stock")
-    if ("allocated_quantity" %in% names(stock_member) && !is.na(stock_member$allocated_quantity[1])) {
-      # Use allocated quantity for multi-group scenarios
-      shares <- stock_member$allocated_quantity[1]
-      log_info("Income Projection: Using allocated quantity {shares} shares for group {group_id}")
-    } else {
-      # Use full position quantity
-      shares <- stock_position$open_quantity[1]
+    # Extract underlying stock and option symbols
+    underlying <- members %>% filter(role == "underlying_stock") %>% pull(symbol)
+    option_symbol <- members %>% filter(role == "short_call") %>% pull(symbol)
+
+    # Calculate stock cost from activities (using gross_amount)
+    stock_activities <- activities %>%
+      filter(type == "Trades", action == "Buy", !purrr::map_lgl(symbol, is_option_symbol))
+
+    if (nrow(stock_activities) == 0) {
+      log_warn("Income Projection: No stock purchase activities found for group {group_id}")
+      return(FALSE)
     }
 
-    stock_price <- stock_position$average_entry_price[1]
+    # Get shares from stock purchase quantity
+    shares <- sum(abs(stock_activities$quantity), na.rm = TRUE)
+    stock_cost <- sum(abs(stock_activities$gross_amount), na.rm = TRUE)
 
-    # Get option position details (if exists)
-    option_position <- NULL
+    # Calculate option premium from activities (if exists)
     expiry_date <- NULL
     strike_price <- NULL
     premium_received <- 0
 
     if (length(option_symbol) > 0) {
-      option_position <- current_positions %>%
-        filter(symbol == option_symbol[1])
+      option_activities <- activities %>%
+        filter(type == "Trades", action == "Sell", symbol == option_symbol[1])
 
-      if (nrow(option_position) > 0) {
+      if (nrow(option_activities) > 0) {
         # Extract strike and expiry from option symbol (e.g., "ALB17Dec27C55.00")
         option_info <- parse_option_details(option_symbol[1])
         strike_price <- option_info$strike
         expiry_date <- option_info$expiry
 
-        # Premium received = abs(avg_entry_price * quantity * 100)
-        premium_received <- abs(option_position$average_entry_price[1] *
-                                option_position$open_quantity[1] * 100)
+        # Premium received from activities (using gross_amount)
+        premium_received <- sum(abs(option_activities$gross_amount), na.rm = TRUE)
       }
     }
 
@@ -119,7 +112,7 @@ generate_initial_projections <- function(group_id, members, account_number) {
         expiry_date = expiry_date,
         strike_price = strike_price,
         shares = shares,
-        stock_cost = stock_price * shares,
+        stock_cost = stock_cost,
         premium_received = premium_received
       )
     }
