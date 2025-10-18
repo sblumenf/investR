@@ -39,10 +39,9 @@ page_zero_dividend <- function() {
       # Call analysis module and get reactive results + month filter
       analysis <- mod_zero_dividend_analysis_server("analysis")
 
-      # Pass results and month filter to table module for client-side filtering
+      # Pass results to table module
       mod_zero_dividend_results_table_server("results",
-                                            analysis$results_data,
-                                            analysis$expiry_month_filter)
+                                            analysis$results_data)
 
       # Display status messages from analysis module
       output$analysis_status <- renderUI({

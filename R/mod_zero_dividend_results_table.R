@@ -21,20 +21,17 @@ mod_zero_dividend_results_table_ui <- function(id){
 #' zero_dividend_results_table Server Functions
 #'
 #' @description Server logic for displaying the results as cards.
-#'   Applies client-side filtering by expiry month.
 #'
 #' @param id Module ID
 #' @param results_data Reactive containing results data frame
-#' @param expiry_month_filter Reactive containing selected expiry month filter values (vector of "1"-"12")
 #'
 #' @noRd
 #'
 #' @importFrom shiny moduleServer renderUI req tags wellPanel h4 p
 #' @importFrom bslib card card_header card_body
-#' @importFrom dplyr %>% filter
+#' @importFrom dplyr %>%
 #' @importFrom purrr map
-#' @importFrom lubridate month
-mod_zero_dividend_results_table_server <- function(id, results_data, expiry_month_filter){
+mod_zero_dividend_results_table_server <- function(id, results_data){
   moduleServer(id, function(input, output, session){
     ns <- session$ns
 
@@ -43,51 +40,40 @@ mod_zero_dividend_results_table_server <- function(id, results_data, expiry_mont
       if (is.null(results_data()) || nrow(results_data()) == 0) {
         wellPanel(
           h4("Strategy Overview"),
-          p("This strategy analyzes S&P 500 zero-dividend stocks for deep in-the-money (ITM)
+          p("This strategy analyzes zero-dividend stocks for deep in-the-money (ITM)
             covered call opportunities. It targets growth stocks that reinvest profits rather
             than paying dividends."),
           tags$ul(
-            tags$li(strong("Target stocks:"), " AMZN, GOOGL, META, TSLA, NVDA, BRK.B, and ~80-100 others"),
+            tags$li(strong("Variants available:"), " S&P 500 zero-dividend, overbought, oversold, most shorted, 2x/3x leveraged ETFs"),
             tags$li(strong("Default strike:"), " 85% of current price (deeper ITM than aristocrats)"),
             tags$li(strong("Adjustable parameters:"), " Strike threshold (50-100%) and expiration (30-365+ days)"),
             tags$li(strong("No dividend income:"), " Returns come purely from option premiums + capital appreciation"),
             tags$li(strong("Higher volatility:"), " Growth stocks typically have higher option premiums")
           ),
-          p(strong("Click 'Run Analysis' to fetch opportunities, then use month checkboxes to filter results instantly.")),
+          p(strong("Select a variant and click 'Run Analysis' to fetch opportunities.")),
           tags$hr(),
-          p(tags$em("Note: First run may take 5-10 minutes to scan S&P 500 for zero-dividend stocks.
-                    Results are cached for 30 days."))
+          p(tags$em("Note: First run may take several minutes to scan stocks.
+                    Results are cached for efficiency."))
         )
       } else {
         NULL
       }
     })
 
-    # Render results as cards with client-side month filtering
+    # Render results as cards
     output$results_cards <- renderUI({
       req(results_data())
-      req(expiry_month_filter())
 
-      # Apply client-side filter by expiry month
-      filtered_data <- results_data()
-
-      # Filter by selected expiry months
-      if (!is.null(expiry_month_filter()) && length(expiry_month_filter()) > 0) {
-        filtered_data <- filtered_data %>%
-          filter(as.character(lubridate::month(as.Date(expiration))) %in% expiry_month_filter())
-      }
-
-      # Show message if no results after filtering
-      if (nrow(filtered_data) == 0) {
+      # Show message if no results
+      if (nrow(results_data()) == 0) {
         return(wellPanel(
-          h4("No opportunities match selected filters"),
-          p("Try selecting more expiry months."),
-          p(sprintf("Total opportunities available: %d", nrow(results_data())))
+          h4("No opportunities found"),
+          p("Try adjusting the strike threshold or expiration range parameters.")
         ))
       }
 
-      # Create cards for filtered results
-      filtered_data %>%
+      # Create cards for results
+      results_data() %>%
         split(seq_len(nrow(.))) %>%
         purrr::map(create_zero_dividend_opportunity_card) %>%
         tags$div(class = "opportunity-cards-container", .)
