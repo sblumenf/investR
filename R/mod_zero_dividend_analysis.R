@@ -19,6 +19,24 @@ mod_zero_dividend_analysis_ui <- function(id){
 
       hr(),
 
+      # Variant selector
+      h4("Select Variant"),
+      selectInput(
+        ns("zero_dividend_variant"),
+        NULL,
+        choices = c(
+          "S&P 500 Zero-Dividend Stocks" = "sp500_zero",
+          "Overbought Stocks" = "overbought",
+          "Oversold Stocks" = "oversold",
+          "Most Shorted Stocks" = "most_shorted",
+          "2x Leveraged ETFs" = "leveraged_2x",
+          "3x Leveraged ETFs" = "leveraged_3x"
+        ),
+        selected = "sp500_zero"
+      ),
+
+      hr(),
+
       # Strike threshold slider (50-100%, default 85%)
       sliderInput(
         ns("strike_threshold"),
@@ -43,30 +61,6 @@ mod_zero_dividend_analysis_ui <- function(id){
       helpText("Select minimum and maximum days to expiration"),
 
       hr(),
-
-      # Expiry month filter (client-side filtering)
-      h5("Filter Options"),
-      checkboxGroupInput(
-        ns("expiry_month_filter"),
-        "Expiry Month",
-        choices = c(
-          "January" = "1",
-          "February" = "2",
-          "March" = "3",
-          "April" = "4",
-          "May" = "5",
-          "June" = "6",
-          "July" = "7",
-          "August" = "8",
-          "September" = "9",
-          "October" = "10",
-          "November" = "11",
-          "December" = "12"
-        ),
-        selected = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
-        inline = FALSE
-      ),
-      helpText("Check/uncheck months to filter results instantly"),
 
       # Parallel workers slider
       sliderInput(
@@ -131,18 +125,72 @@ mod_zero_dividend_analysis_server <- function(id){
     # Setup quote source toggle
     quote_source_toggle_server(input, session, "Zero Dividend Analysis")
 
-    # Create analysis function using parameters from sliders
+    # Create analysis function based on selected variant
     # Month filtering happens client-side after results are returned
     analysis_function <- function() {
-      analyze_zero_dividend(
-        limit = NULL,
-        strike_threshold_pct = input$strike_threshold / 100,
-        min_days = input$days_range[1],
-        max_days = input$days_range[2],
-        expiry_month = NULL,  # Always NULL - filter client-side with checkboxes
-        max_workers = input$max_workers
+      switch(input$zero_dividend_variant,
+        "sp500_zero" = analyze_zero_dividend(
+          limit = NULL,
+          strike_threshold_pct = input$strike_threshold / 100,
+          min_days = input$days_range[1],
+          max_days = input$days_range[2],
+          expiry_month = NULL,  # Always NULL - filter client-side with checkboxes
+          max_workers = input$max_workers
+        ),
+        "overbought" = analyze_zero_dividend_custom_list(
+          list_type = "overbought",
+          strike_threshold_pct = input$strike_threshold / 100,
+          min_days = input$days_range[1],
+          max_days = input$days_range[2],
+          expiry_month = NULL,
+          max_workers = input$max_workers
+        ),
+        "oversold" = analyze_zero_dividend_custom_list(
+          list_type = "oversold",
+          strike_threshold_pct = input$strike_threshold / 100,
+          min_days = input$days_range[1],
+          max_days = input$days_range[2],
+          expiry_month = NULL,
+          max_workers = input$max_workers
+        ),
+        "most_shorted" = analyze_zero_dividend_custom_list(
+          list_type = "most_shorted",
+          strike_threshold_pct = input$strike_threshold / 100,
+          min_days = input$days_range[1],
+          max_days = input$days_range[2],
+          expiry_month = NULL,
+          max_workers = input$max_workers
+        ),
+        "leveraged_2x" = analyze_zero_dividend_custom_list(
+          list_type = "leveraged_2x",
+          strike_threshold_pct = input$strike_threshold / 100,
+          min_days = input$days_range[1],
+          max_days = input$days_range[2],
+          expiry_month = NULL,
+          max_workers = input$max_workers
+        ),
+        "leveraged_3x" = analyze_zero_dividend_custom_list(
+          list_type = "leveraged_3x",
+          strike_threshold_pct = input$strike_threshold / 100,
+          min_days = input$days_range[1],
+          max_days = input$days_range[2],
+          expiry_month = NULL,
+          max_workers = input$max_workers
+        )
       )
     }
+
+    # Get variant label for messages
+    variant_label <- reactive({
+      switch(input$zero_dividend_variant,
+        "sp500_zero" = "S&P 500 zero-dividend stocks",
+        "overbought" = "overbought stocks",
+        "oversold" = "oversold stocks",
+        "most_shorted" = "most shorted stocks",
+        "leveraged_2x" = "2x leveraged ETFs",
+        "leveraged_3x" = "3x leveraged ETFs"
+      )
+    })
 
     # Use analysis controls helper function (DRY!)
     result <- setup_analysis_controls(
@@ -150,16 +198,15 @@ mod_zero_dividend_analysis_server <- function(id){
       output = output,
       session = session,
       analysis_func = analysis_function,
-      progress_message = "Analyzing zero-dividend stocks... This may take several minutes on first run (building cache).",
-      success_message_template = "Analysis complete! Found %d opportunities. Use month checkboxes to filter.",
+      progress_message = reactive({
+        sprintf("Analyzing %s... This may take several minutes on first run (building cache).", variant_label())
+      }),
+      success_message_template = "Analysis complete! Found %d opportunities.",
       no_results_message = "No opportunities found with current parameters. Try adjusting strike threshold or expiration range.",
-      download_filename_prefix = "zero_dividend_analysis",
-      additional_return_values = list(
-        expiry_month_filter = reactive({ input$expiry_month_filter })
-      )
+      download_filename_prefix = "zero_dividend_analysis"
     )
 
-    # Return all values including month filter
+    # Return reactive values
     return(result)
   })
 }

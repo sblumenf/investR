@@ -3,6 +3,15 @@ default:
   golem_version: 0.0.0.9000
   app_prod: no
 
+  # Custom ticker lists (shared across strategies)
+  custom_ticker_lists:
+    ticker_cache_hours: 24
+    overbought_url: "https://stockanalysis.com/list/overbought-stocks/"
+    oversold_url: "https://stockanalysis.com/list/oversold-stocks/"
+    most_shorted_url: "https://stockanalysis.com/list/most-shorted-stocks/"
+    leveraged_2x_url: "https://www.2xetfs.com/"
+    leveraged_3x_url: "https://3xetf.com/"
+
   # Shared constants across all strategies
   shared:
     days_per_year: 365
@@ -140,6 +149,25 @@ default:
     cache_enabled: true  # Enable session-level caching
     cache_ttl_hours: 8  # Cache valid for 8 hours (trading day)
     enable_async: true  # Enable async analysis in Shiny
+
+  # Collar strategy configuration
+  collar:
+    max_workers: 10
+    min_net_credit: 0.01
+    min_open_interest: 10
+    max_stock_price: 1000
+    shares_per_contract: 100
+    history_years: 5
+    cache_ttl_days: 30
+    sgov_yield_default: 0.0414
+    max_sgov_yield_sanity: 0.15
+    negative_return_threshold: 0
+    error_truncate_length: 50
+    default_top_n: 50
+    output_dir: strategies
+    # Liquid ETFs configuration
+    min_market_cap: 1000000000  # $1 billion
+    min_avg_volume: 1000000  # 1 million shares
 
   # Portfolio management configuration
   portfolio:
