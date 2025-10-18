@@ -19,6 +19,9 @@ mod_portfolio_groups_ui <- function(id){
     # Alert section (for broken/incomplete groups)
     uiOutput(ns("integrity_alerts")),
 
+    # Unlinked activities banner
+    uiOutput(ns("unlinked_activities_banner")),
+
     # Filter and sort controls
     tags$div(
       class = "well",
@@ -78,8 +81,9 @@ mod_portfolio_groups_ui <- function(id){
 #'
 #' @noRd
 #'
-#' @importFrom shiny moduleServer renderUI reactive req observeEvent reactiveVal observe reactiveTimer isolate
-#' @importFrom dplyr %>% filter arrange desc
+#' @importFrom shiny moduleServer renderUI reactive req observeEvent reactiveVal observe reactiveTimer isolate eventReactive actionButton icon
+#' @importFrom dplyr %>% filter arrange desc mutate
+#' @importFrom purrr map_chr
 #' @importFrom DBI dbDisconnect
 #' @importFrom logger log_info
 mod_portfolio_groups_server <- function(id){
@@ -127,6 +131,66 @@ mod_portfolio_groups_server <- function(id){
       isolate(position_refresh_version(position_refresh_version() + 1))
     }, ignoreInit = TRUE)  # Don't run on initialization (already handled by page load observer)
 
+    # ============================================================================
+    # UNLINKED ACTIVITIES REVIEW WORKFLOW
+    # ============================================================================
+
+    # Capture unlinked activities data when review button is clicked
+    virgin_by_ticker <- eventReactive(input$review_unlinked_btn, {
+      # Auto-link cash equivalents (ZMMK.to and SGOV) before reviewing
+      auto_link_cash_equivalents()
+
+      # Get remaining unlinked activities
+      unlinked <- get_unlinked_activities()
+
+      # Add ticker column (extract underlying ticker from option symbols)
+      unlinked <- unlinked %>%
+        mutate(ticker = purrr::map_chr(symbol, function(sym) {
+          if (grepl("\\d{2}[A-Z][a-z]{2}\\d{2}[CP]", sym)) {
+            result <- parse_option_symbol(sym)
+            if (is.na(result)) sym else result
+          } else {
+            sym
+          }
+        }))
+
+      # Group by ticker (combines all symbols for same underlying)
+      split(unlinked, unlinked$ticker)
+    })
+
+    # Initialize review transactions module (returns reactive that tracks actions)
+    review_actions <- mod_review_transactions_server(
+      "review_transactions",
+      trigger = reactive(input$review_unlinked_btn),
+      virgin_by_ticker = virgin_by_ticker
+    )
+
+    # Render unlinked activities banner
+    output$unlinked_activities_banner <- renderUI({
+      # Create dependency on review actions to force refresh after modal actions
+      review_actions()
+
+      # Get count of unlinked activities
+      unlinked <- get_unlinked_activities()
+
+      if (nrow(unlinked) == 0) {
+        return(NULL)
+      }
+
+      # Show banner with count and action button
+      create_status_alert(
+        type = "info",
+        message = sprintf("%d unlinked activities need review", nrow(unlinked)),
+        action_button = actionButton(
+          ns("review_unlinked_btn"),
+          "Review Activities",
+          icon = icon("tasks")
+        )
+      )
+    })
+
+    # ============================================================================
+
     # Reactive: Calculate metrics for ALL groups once (DRY principle)
     # This is the single source of truth for all metrics
     # Depends on position_refresh_version to recalculate after position refresh
@@ -140,6 +204,9 @@ mod_portfolio_groups_server <- function(id){
     # Reactive: Get all groups based on status filter
     all_groups <- reactive({
       req(input$status_filter)
+
+      # Create dependency on review actions to refresh when groups are created/modified via modal
+      review_actions()
 
       if (input$status_filter == "open") {
         get_all_groups(include_closed = FALSE)
