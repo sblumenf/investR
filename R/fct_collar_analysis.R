@@ -453,6 +453,95 @@ analyze_collar_etfs <- function(min_market_cap = COLLAR_CONFIG$min_market_cap,
   return(results_df)
 }
 
+#' Analyze custom ticker list for collar opportunities
+#'
+#' @param list_type Type of custom list: "overbought", "oversold", or "most_shorted"
+#' @param target_days Target days to expiry (finds closest match, default 300)
+#' @param strike_adjustment_pct Strike adjustment as decimal (0 = ATM, 0.05 = 5% above)
+#' @param max_workers Number of parallel workers
+#' @return Tibble with all opportunities sorted by annualized return
+#' @export
+#' @examples
+#' \dontrun{
+#'   # Analyze overbought stocks
+#'   results <- analyze_collar_custom_list("overbought")
+#'
+#'   # Analyze with custom parameters
+#'   results <- analyze_collar_custom_list("most_shorted", target_days = 180)
+#' }
+analyze_collar_custom_list <- function(list_type,
+                                       target_days = 300,
+                                       strike_adjustment_pct = 0,
+                                       max_workers = COLLAR_CONFIG$max_workers) {
+
+  # Get display name for logging
+  list_name <- switch(list_type,
+    "overbought" = "Overbought Stocks",
+    "oversold" = "Oversold Stocks",
+    "most_shorted" = "Most Shorted Stocks",
+    "leveraged_2x" = "2x Leveraged ETFs",
+    "leveraged_3x" = "3x Leveraged ETFs",
+    stop("Invalid list_type. Must be 'overbought', 'oversold', 'most_shorted', 'leveraged_2x', or 'leveraged_3x'")
+  )
+
+  log_analysis_header_generic(paste("Collar Strategy -", list_name))
+
+  # Fetch ticker list (web scraping with caching)
+  ticker_list <- switch(list_type,
+    "overbought" = fetch_overbought_tickers(),
+    "oversold" = fetch_oversold_tickers(),
+    "most_shorted" = fetch_most_shorted_tickers(),
+    "leveraged_2x" = fetch_2x_leveraged_etfs(),
+    "leveraged_3x" = fetch_3x_leveraged_etfs()
+  )
+
+  if (length(ticker_list) == 0) {
+    log_warn("No tickers found for {list_name}")
+    return(tibble())
+  }
+
+  log_info("Analyzing {length(ticker_list)} stocks...")
+
+  # Get reinvestment rate
+  reinvest_rate <- get_reinvestment_rate()
+  log_info("SGOV yield for reinvestment: {sprintf('%.2f%%', reinvest_rate * 100)}")
+
+  # Setup parallel processing
+  oplan <- setup_parallel_processing(max_workers)
+  on.exit(plan(oplan), add = TRUE)
+
+  # Capture quote source setting to pass to workers
+  quote_source <- get_quote_source()
+  log_info("Quote source for this analysis: {toupper(quote_source)}")
+
+  # Process stocks in parallel
+  log_info("Processing stocks in parallel (workers: {max_workers})...")
+
+  results <- future_map(ticker_list, function(ticker) {
+    if (!"investR" %in% loadedNamespaces()) {
+      suppressPackageStartupMessages(loadNamespace("investR"))
+    }
+
+    # Set quote source in this worker to match main process
+    options(investR.quote_source = quote_source)
+
+    investR::analyze_collar_single(ticker, target_days, strike_adjustment_pct)
+  }, .options = furrr_options(seed = TRUE, packages = "investR"))
+
+  # Filter out NULLs and combine
+  results_df <- compact(results) %>% bind_rows()
+
+  # Sort by annualized return
+  if (nrow(results_df) > 0) {
+    results_df <- results_df %>% arrange(desc(annualized_return))
+  }
+
+  # Log completion
+  log_analysis_footer(nrow(results_df))
+
+  return(results_df)
+}
+
 ################################################################################
 # HELPER FUNCTIONS
 ################################################################################

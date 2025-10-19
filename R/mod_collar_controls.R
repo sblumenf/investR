@@ -20,59 +20,22 @@ mod_collar_controls_ui <- function(id){
 
       hr(),
 
-      # Universe selector
-      h4("Select Universe"),
-      radioButtons(
-        ns("universe"),
+      # Collar variant selector
+      h4("Select Collar Variant"),
+      selectInput(
+        ns("collar_variant"),
         NULL,
         choices = c(
-          "S&P 500 Stocks" = "stocks",
-          "Liquid ETFs" = "etfs"
+          "S&P 500 Dividend Payers" = "sp500_dividend",
+          "S&P 500 Non-Dividend Payers" = "sp500_zero",
+          "High Liquidity ETFs" = "liquid_etfs",
+          "Overbought Stocks" = "overbought",
+          "Oversold Stocks" = "oversold",
+          "Most Shorted Stocks" = "most_shorted",
+          "2x Leveraged ETFs" = "leveraged_2x",
+          "3x Leveraged ETFs" = "leveraged_3x"
         ),
-        selected = "stocks"
-      ),
-
-      hr(),
-
-      # Conditional filters based on universe
-      # For S&P 500: dividend filter
-      conditionalPanel(
-        condition = sprintf("input['%s'] == 'stocks'", ns("universe")),
-        h5("Stock Filters"),
-        selectInput(
-          ns("dividend_filter"),
-          "Dividend Status",
-          choices = c(
-            "All Stocks" = "all",
-            "Dividend-Paying Only" = "dividend",
-            "Non-Dividend Only" = "zero"
-          ),
-          selected = "all"
-        )
-      ),
-
-      # For ETFs: market cap and volume filters
-      conditionalPanel(
-        condition = sprintf("input['%s'] == 'etfs'", ns("universe")),
-        h5("ETF Filters"),
-        sliderInput(
-          ns("min_market_cap"),
-          "Minimum Market Cap",
-          min = 100,  # $100M
-          max = 10000,  # $10B
-          value = 1000,  # $1B default
-          step = 100,
-          post = "M"
-        ),
-
-        sliderInput(
-          ns("min_avg_volume"),
-          "Minimum Avg Volume",
-          min = 100000,  # 100K
-          max = 10000000,  # 10M
-          value = 1000000,  # 1M default
-          step = 100000
-        )
+        selected = "sp500_dividend"
       ),
 
       hr(),
@@ -163,41 +126,76 @@ mod_collar_controls_server <- function(id){
     # Setup quote source toggle
     quote_source_toggle_server(input, session, "Collar Strategy")
 
-    # Create analysis function based on selected universe
+    # Create analysis function based on selected variant
     analysis_function <- function() {
-      if (input$universe == "stocks") {
-        # Analyze S&P 500 stocks
-        analyze_collar_stocks(
-          dividend_filter = input$dividend_filter,
+      switch(input$collar_variant,
+        "sp500_dividend" = analyze_collar_stocks(
+          dividend_filter = "dividend",
           target_days = input$target_days,
           strike_adjustment_pct = input$strike_adjustment / 100,
           limit = NULL,
           max_workers = input$max_workers
-        )
-      } else {
-        # Analyze ETFs
-        analyze_collar_etfs(
-          min_market_cap = input$min_market_cap * 1e6,  # Convert millions to actual value
-          min_avg_volume = input$min_avg_volume,
+        ),
+        "sp500_zero" = analyze_collar_stocks(
+          dividend_filter = "zero",
           target_days = input$target_days,
           strike_adjustment_pct = input$strike_adjustment / 100,
           limit = NULL,
           max_workers = input$max_workers
+        ),
+        "liquid_etfs" = analyze_collar_etfs(
+          min_market_cap = COLLAR_CONFIG$min_market_cap,
+          min_avg_volume = COLLAR_CONFIG$min_avg_volume,
+          target_days = input$target_days,
+          strike_adjustment_pct = input$strike_adjustment / 100,
+          limit = NULL,
+          max_workers = input$max_workers
+        ),
+        "overbought" = analyze_collar_custom_list(
+          list_type = "overbought",
+          target_days = input$target_days,
+          strike_adjustment_pct = input$strike_adjustment / 100,
+          max_workers = input$max_workers
+        ),
+        "oversold" = analyze_collar_custom_list(
+          list_type = "oversold",
+          target_days = input$target_days,
+          strike_adjustment_pct = input$strike_adjustment / 100,
+          max_workers = input$max_workers
+        ),
+        "most_shorted" = analyze_collar_custom_list(
+          list_type = "most_shorted",
+          target_days = input$target_days,
+          strike_adjustment_pct = input$strike_adjustment / 100,
+          max_workers = input$max_workers
+        ),
+        "leveraged_2x" = analyze_collar_custom_list(
+          list_type = "leveraged_2x",
+          target_days = input$target_days,
+          strike_adjustment_pct = input$strike_adjustment / 100,
+          max_workers = input$max_workers
+        ),
+        "leveraged_3x" = analyze_collar_custom_list(
+          list_type = "leveraged_3x",
+          target_days = input$target_days,
+          strike_adjustment_pct = input$strike_adjustment / 100,
+          max_workers = input$max_workers
         )
-      }
+      )
     }
 
-    # Get universe label for messages
-    universe_label <- reactive({
-      if (input$universe == "stocks") {
-        switch(input$dividend_filter,
-          "dividend" = "dividend-paying S&P 500 stocks",
-          "zero" = "non-dividend S&P 500 stocks",
-          "S&P 500 stocks"
-        )
-      } else {
-        "liquid ETFs"
-      }
+    # Get variant label for messages
+    variant_label <- reactive({
+      switch(input$collar_variant,
+        "sp500_dividend" = "S&P 500 dividend-paying stocks",
+        "sp500_zero" = "S&P 500 non-dividend stocks",
+        "liquid_etfs" = "high liquidity ETFs",
+        "overbought" = "overbought stocks",
+        "oversold" = "oversold stocks",
+        "most_shorted" = "most shorted stocks",
+        "leveraged_2x" = "2x leveraged ETFs",
+        "leveraged_3x" = "3x leveraged ETFs"
+      )
     })
 
     # Use analysis controls helper function (DRY!)
@@ -207,7 +205,7 @@ mod_collar_controls_server <- function(id){
       session = session,
       analysis_func = analysis_function,
       progress_message = reactive({
-        sprintf("Analyzing %s for collar opportunities... This may take several minutes.", universe_label())
+        sprintf("Analyzing %s for collar opportunities... This may take several minutes.", variant_label())
       }),
       success_message_template = "Analysis complete! Found %d collar opportunities (net credit > 0).",
       no_results_message = "No collar opportunities found. All positions had net debit (call bid < put ask).",

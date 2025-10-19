@@ -398,6 +398,19 @@ link_activity_to_group <- function(activity_id, group_id) {
   on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
 
   tryCatch({
+    # First, get activity details to check if reconciliation is needed
+    activity <- dbGetQuery(conn, "
+      SELECT activity_id, type, transaction_date
+      FROM account_activities
+      WHERE activity_id = ?
+    ", params = list(activity_id))
+
+    if (nrow(activity) == 0) {
+      log_warn("Activities DB: Activity {activity_id} not found")
+      return(FALSE)
+    }
+
+    # Link activity to group
     rows_affected <- dbExecute(conn, "
       UPDATE account_activities
       SET group_id = ?
@@ -406,9 +419,20 @@ link_activity_to_group <- function(activity_id, group_id) {
 
     if (rows_affected > 0) {
       log_debug("Activities DB: Linked activity {activity_id} to group {group_id}")
+
+      # Reconcile projected dividends if this is a dividend activity
+      if (activity$type[1] == "Dividends") {
+        delete_projected_cash_flows_by_month(
+          group_id = group_id,
+          event_type = "dividend",
+          event_date = as.Date(activity$transaction_date[1]),
+          conn = conn
+        )
+      }
+
       return(TRUE)
     } else {
-      log_warn("Activities DB: Activity {activity_id} not found")
+      log_warn("Activities DB: Failed to update activity {activity_id}")
       return(FALSE)
     }
 

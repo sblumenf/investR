@@ -29,6 +29,7 @@ get_unlinked_activities <- function() {
       action,
       quantity,
       price,
+      net_amount,
       trade_date,
       type,
       description
@@ -152,11 +153,47 @@ link_activities_to_group <- function(activity_ids, group_id) {
       return(FALSE)
     }
 
-    # duckdb can handle a vector of values for an IN clause with a single ?
-    query <- "UPDATE account_activities SET group_id = ? WHERE activity_id IN (?)"
-    dbExecute(con, query, params = list(group_id, activity_ids))
+    # Build parameterized UPDATE query with IN clause
+    placeholders <- paste(rep("?", length(activity_ids)), collapse = ", ")
+    query <- sprintf("UPDATE account_activities SET group_id = ? WHERE activity_id IN (%s)", placeholders)
+    dbExecute(con, query, params = c(list(group_id), as.list(activity_ids)))
 
     log_info("Linked {length(activity_ids)} activities to group {group_id}")
+
+    # Reconcile projected dividends for any dividend activities in the batch
+    placeholders <- paste(rep("?", length(activity_ids)), collapse = ", ")
+    div_sql <- sprintf("
+      SELECT group_id, type, transaction_date
+      FROM account_activities
+      WHERE activity_id IN (%s)
+        AND type = 'Dividends'
+    ", placeholders)
+    dividends <- dbGetQuery(con, div_sql, params = as.list(activity_ids))
+
+    if (nrow(dividends) > 0) {
+      # Group by month and reconcile once per unique group+month combination
+      dividend_months <- dividends %>%
+        as_tibble() %>%
+        mutate(
+          transaction_date = as.Date(transaction_date),
+          year = lubridate::year(transaction_date),
+          month = lubridate::month(transaction_date)
+        ) %>%
+        distinct(group_id, year, month, .keep_all = TRUE)
+
+      # Reconcile each unique month
+      for (i in seq_len(nrow(dividend_months))) {
+        delete_projected_cash_flows_by_month(
+          group_id = dividend_months$group_id[i],
+          event_type = "dividend",
+          event_date = dividend_months$transaction_date[i],
+          conn = con
+        )
+      }
+
+      log_info("Reconciled projected dividends for {nrow(dividend_months)} month(s) in group {group_id}")
+    }
+
     return(TRUE)
 
   }, error = function(e) {

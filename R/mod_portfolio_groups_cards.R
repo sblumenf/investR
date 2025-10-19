@@ -25,8 +25,8 @@ mod_group_cards_ui <- function(id) {
 #'
 #' @noRd
 #'
-#' @importFrom shiny moduleServer renderUI req tags observeEvent showModal modalDialog removeModal showNotification
-#' @importFrom dplyr %>% arrange desc filter left_join
+#' @importFrom shiny moduleServer renderUI req tags observeEvent showModal modalDialog removeModal showNotification reactiveValues textInput selectInput uiOutput
+#' @importFrom dplyr %>% arrange desc filter left_join anti_join bind_rows mutate select
 #' @importFrom purrr map
 mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
   moduleServer(id, function(input, output, session){
@@ -229,15 +229,436 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
 
       log_info("Edit Members clicked - group_id: {group_id}")
 
-      # Show info notification (feature not implemented yet)
-      showNotification(
-        "Edit Members feature coming soon!",
-        type = "message",
-        duration = 3
+      # Fetch group data and members
+      group_data <- get_group_by_id(group_id)
+      if (nrow(group_data) == 0) {
+        showNotification(
+          "Group not found. Please refresh the page.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+
+      current_members <- get_group_members(group_id)
+      all_positions <- get_latest_positions()
+
+      # Reactive values to track pending changes
+      edit_state <- reactiveValues(
+        to_remove = character(0),
+        to_add = tibble::tibble(symbol = character(0), role = character(0)),
+        group_name = group_data$group_name
       )
+
+      # Compute available positions (excluding current members)
+      available_positions <- get_available_positions_for_group(
+        group_data$account_number,
+        current_members,
+        all_positions
+      )
+
+      # Role choices for dropdown
+      role_choices <- c(
+        "Underlying Stock" = "underlying_stock",
+        "Short Call" = "short_call",
+        "Short Put" = "short_put",
+        "Long Call" = "long_call",
+        "Long Put" = "long_put"
+      )
+
+      # Show modal
+      showModal(modalDialog(
+        title = sprintf("Edit Group: %s", group_id),
+        size = "m",
+        tags$div(
+          # Group Name Section
+          tags$h5("Group Name"),
+          shiny::textInput(
+            ns("edit_group_name"),
+            label = NULL,
+            value = group_data$group_name,
+            width = "100%",
+            placeholder = "Enter group name..."
+          ),
+          tags$hr(),
+
+          # Current Members Section
+          tags$h5("Members"),
+          uiOutput(ns("edit_members_list")),
+          tags$hr(),
+
+          # Add Member Section
+          tags$h5("Add Member (Optional)"),
+          tags$div(
+            class = "row",
+            tags$div(
+              class = "col-md-6",
+              shiny::selectInput(
+                ns("edit_add_symbol"),
+                label = "Position:",
+                choices = c("Select position..." = "", setNames(available_positions$symbol, available_positions$symbol)),
+                width = "100%"
+              )
+            ),
+            tags$div(
+              class = "col-md-4",
+              shiny::selectInput(
+                ns("edit_add_role"),
+                label = "Role:",
+                choices = c("Select role..." = "", role_choices),
+                width = "100%"
+              )
+            ),
+            tags$div(
+              class = "col-md-2",
+              tags$label(HTML("&nbsp;")),
+              tags$button(
+                id = ns("edit_add_btn"),
+                type = "button",
+                class = "btn btn-sm btn-success btn-block",
+                onclick = sprintf("Shiny.setInputValue('%s', Math.random(), {priority: 'event'})",
+                                 ns("add_member_clicked")),
+                icon("plus"),
+                " Add"
+              )
+            )
+          )
+        ),
+        footer = tagList(
+          modalButton("Cancel"),
+          tags$button(
+            id = ns(sprintf("save_edit_btn_%s", group_id)),
+            type = "button",
+            class = "btn btn-primary",
+            onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                             ns("save_edit_clicked"), group_id),
+            icon("save"),
+            " Save Changes"
+          )
+        ),
+        easyClose = FALSE
+      ))
+
+      # Render members list
+      output$edit_members_list <- renderUI({
+        # Combine current members with pending changes
+        # Start with current members
+        display_members <- current_members %>%
+          mutate(
+            is_pending = FALSE,
+            is_removed = symbol %in% edit_state$to_remove
+          )
+
+        # Add pending additions
+        if (nrow(edit_state$to_add) > 0) {
+          pending_members <- edit_state$to_add %>%
+            mutate(
+              is_pending = TRUE,
+              is_removed = FALSE
+            )
+
+          display_members <- bind_rows(display_members, pending_members)
+        }
+
+        # Render member rows
+        if (nrow(display_members) == 0) {
+          tags$p(class = "text-muted", "No members in this group")
+        } else {
+          member_rows <- purrr::map(seq_len(nrow(display_members)), function(i) {
+            member <- display_members[i, ]
+            render_member_row(
+              symbol = member$symbol,
+              role = member$role,
+              is_pending = member$is_pending,
+              is_removed = member$is_removed,
+              ns = ns
+            )
+          })
+
+          tags$div(member_rows)
+        }
+      })
+
+      # Handle Remove Member clicks
+      observeEvent(input$remove_member_clicked, {
+        symbol_to_remove <- input$remove_member_clicked
+
+        # Show mini-confirmation
+        showModal(modalDialog(
+          title = "Remove Member",
+          tags$p(sprintf("Are you sure you want to remove %s from this group?", symbol_to_remove)),
+          footer = tagList(
+            modalButton("Cancel"),
+            tags$button(
+              type = "button",
+              class = "btn btn-danger",
+              onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'}); $('#%s').modal('hide');",
+                               ns("confirm_remove_member"), symbol_to_remove, ns("shiny-modal")),
+              icon("trash"),
+              " Remove"
+            )
+          ),
+          size = "s",
+          easyClose = TRUE
+        ))
+      }, ignoreInit = TRUE)
+
+      # Handle confirmed removal
+      observeEvent(input$confirm_remove_member, {
+        symbol_to_remove <- input$confirm_remove_member
+
+        # Check if this is a pending addition (remove from to_add instead)
+        if (symbol_to_remove %in% edit_state$to_add$symbol) {
+          edit_state$to_add <- edit_state$to_add %>%
+            filter(symbol != symbol_to_remove)
+        } else {
+          # Add to removal list
+          edit_state$to_remove <- c(edit_state$to_remove, symbol_to_remove)
+        }
+
+        # Re-render will happen automatically via reactive output
+      }, ignoreInit = TRUE)
+
+      # Handle Add Member clicks
+      observeEvent(input$add_member_clicked, {
+        req(input$edit_add_symbol, input$edit_add_role)
+
+        new_symbol <- input$edit_add_symbol
+        new_role <- input$edit_add_role
+
+        # Validate inputs
+        if (new_symbol == "" || new_role == "") {
+          showNotification(
+            "Please select both a position and a role.",
+            type = "warning",
+            duration = 3
+          )
+          return()
+        }
+
+        # Check if already in current members or pending additions
+        if (new_symbol %in% current_members$symbol || new_symbol %in% edit_state$to_add$symbol) {
+          showNotification(
+            sprintf("%s is already a member of this group.", new_symbol),
+            type = "warning",
+            duration = 3
+          )
+          return()
+        }
+
+        # Add to pending additions
+        edit_state$to_add <- bind_rows(
+          edit_state$to_add,
+          tibble::tibble(symbol = new_symbol, role = new_role)
+        )
+
+        # Clear dropdowns (using updateSelectInput would be ideal, but we'll let it refresh)
+        showNotification(
+          sprintf("Added %s as pending member.", new_symbol),
+          type = "message",
+          duration = 2
+        )
+      }, ignoreInit = TRUE)
+
+      # Handle Save Changes
+      observeEvent(input$save_edit_clicked, {
+        save_group_id <- input$save_edit_clicked
+
+        log_info("Saving edits for group: {save_group_id}")
+
+        # Track if any changes were made
+        changes_made <- FALSE
+
+        # Update group name if changed
+        new_name <- input$edit_group_name
+        if (!is.null(new_name) && new_name != group_data$group_name) {
+          result <- update_position_group(save_group_id, group_name = new_name)
+          if (result) {
+            log_info("Updated group name to: {new_name}")
+            changes_made <- TRUE
+          } else {
+            showNotification(
+              "Failed to update group name.",
+              type = "error",
+              duration = 5
+            )
+          }
+        }
+
+        # Remove members
+        if (length(edit_state$to_remove) > 0) {
+          for (symbol in edit_state$to_remove) {
+            result <- remove_group_member(save_group_id, symbol)
+            if (result) {
+              log_info("Removed member: {symbol}")
+              changes_made <- TRUE
+            } else {
+              showNotification(
+                sprintf("Failed to remove member: %s", symbol),
+                type = "error",
+                duration = 5
+              )
+            }
+          }
+        }
+
+        # Add members
+        if (nrow(edit_state$to_add) > 0) {
+          for (i in seq_len(nrow(edit_state$to_add))) {
+            new_member <- edit_state$to_add[i, ]
+            result <- add_group_member(
+              group_id = save_group_id,
+              account_number = group_data$account_number,
+              symbol = new_member$symbol,
+              role = new_member$role
+            )
+            if (result) {
+              log_info("Added member: {new_member$symbol} as {new_member$role}")
+              changes_made <- TRUE
+            } else {
+              showNotification(
+                sprintf("Failed to add member: %s", new_member$symbol),
+                type = "error",
+                duration = 5
+              )
+            }
+          }
+        }
+
+        # Show success notification
+        if (changes_made) {
+          showNotification(
+            "Group updated successfully.",
+            type = "message",
+            duration = 5
+          )
+
+          # Force card re-render
+          card_version(card_version() + 1)
+        } else {
+          showNotification(
+            "No changes were made.",
+            type = "message",
+            duration = 3
+          )
+        }
+
+        # Close modal
+        removeModal()
+      }, ignoreInit = TRUE)
+
     }, ignoreInit = TRUE)
   })
 }
+
+################################################################################
+# HELPER FUNCTIONS FOR EDIT MEMBERS MODAL
+################################################################################
+
+#' Format role code to human-readable label
+#'
+#' @param role Character role code (e.g., "underlying_stock")
+#' @return Character formatted label (e.g., "Underlying Stock")
+#' @noRd
+format_role_label <- function(role) {
+  role_map <- c(
+    "underlying_stock" = "Underlying Stock",
+    "short_call" = "Short Call",
+    "short_put" = "Short Put",
+    "long_call" = "Long Call",
+    "long_put" = "Long Put"
+  )
+
+  role_map[role] %||% tools::toTitleCase(gsub("_", " ", role))
+}
+
+#' Get available positions for adding to a group
+#'
+#' Filters positions to same account and excludes current members.
+#'
+#' @param group_account_number Character account number for the group
+#' @param current_members Tibble with current member symbols
+#' @param all_positions Tibble with all available positions
+#' @return Tibble with available positions
+#' @noRd
+get_available_positions_for_group <- function(group_account_number, current_members, all_positions) {
+  # Filter to same account
+  available <- all_positions %>%
+    filter(account_number == group_account_number)
+
+  # Exclude current members
+  if (nrow(current_members) > 0) {
+    available <- available %>%
+      anti_join(current_members, by = "symbol")
+  }
+
+  available %>%
+    select(symbol, current_price) %>%
+    arrange(symbol)
+}
+
+#' Render a single member row for the edit modal
+#'
+#' @param symbol Character position symbol
+#' @param role Character role code
+#' @param is_pending Logical, is this a pending addition?
+#' @param is_removed Logical, is this marked for removal?
+#' @param ns Namespace function
+#' @return HTML div for member row
+#' @noRd
+render_member_row <- function(symbol, role, is_pending = FALSE, is_removed = FALSE, ns) {
+  # Determine styling
+  style <- if (is_removed) {
+    "padding: 8px; margin-bottom: 5px; background: #f8d7da; border-left: 3px solid #dc3545; text-decoration: line-through; opacity: 0.6;"
+  } else if (is_pending) {
+    "padding: 8px; margin-bottom: 5px; background: #d1ecf1; border-left: 3px solid #0c5460;"
+  } else {
+    "padding: 8px; margin-bottom: 5px; background: #f8f9fa; border-left: 3px solid #6c757d;"
+  }
+
+  # Determine badge color
+  badge_class <- if (is_removed) {
+    "badge badge-danger"
+  } else if (is_pending) {
+    "badge badge-info"
+  } else {
+    "badge badge-secondary"
+  }
+
+  tags$div(
+    style = style,
+    tags$span(
+      class = badge_class,
+      style = "font-family: monospace; margin-right: 10px;",
+      symbol
+    ),
+    tags$span(
+      format_role_label(role),
+      style = "color: #6c757d;"
+    ),
+    if (!is_removed) {
+      tags$button(
+        type = "button",
+        class = "btn btn-xs btn-danger pull-right",
+        style = "padding: 2px 6px; font-size: 11px;",
+        onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                         ns("remove_member_clicked"), symbol),
+        icon("times")
+      )
+    },
+    if (is_pending) {
+      tags$span(
+        class = "label label-info pull-right",
+        style = "margin-right: 5px; font-size: 10px;",
+        "PENDING"
+      )
+    }
+  )
+}
+
+################################################################################
+# P&L PREVIEW HELPER
+################################################################################
 
 #' Render P&L preview for close confirmation modal
 #'

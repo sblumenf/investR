@@ -8,6 +8,7 @@
 #' @importFrom duckdb duckdb dbConnect dbDisconnect
 #' @importFrom DBI dbExecute dbWriteTable dbGetQuery
 #' @importFrom logger log_info log_warn log_error log_debug
+#' @importFrom lubridate year month
 NULL
 
 ################################################################################
@@ -165,6 +166,65 @@ delete_group_cash_flows <- function(group_id, status_filter = NULL) {
   }, error = function(e) {
     log_error("Income Projection DB: Failed to delete cash flows for {group_id} - {e$message}")
     return(FALSE)
+  })
+}
+
+#' Delete projected cash flow events for a specific month
+#'
+#' Removes projected events matching a specific group, event type, and calendar month.
+#' Used for dividend reconciliation - when an actual dividend arrives, this deletes
+#' the projected dividend(s) for that month.
+#'
+#' @param group_id Group identifier
+#' @param event_type Event type ("dividend" or "option_gain")
+#' @param event_date Date object - year and month will be extracted
+#' @param conn Optional DBI connection (for transaction support)
+#' @return Integer count of rows deleted
+#' @noRd
+delete_projected_cash_flows_by_month <- function(group_id, event_type, event_date, conn = NULL) {
+
+  # Connection management - use provided conn or create new one
+  should_close <- FALSE
+  if (is.null(conn)) {
+    conn <- get_portfolio_db_connection()
+    should_close <- TRUE
+  }
+
+  if (should_close) {
+    on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  }
+
+  tryCatch({
+    # Extract year and month from event date
+    event_year <- lubridate::year(event_date)
+    event_month <- lubridate::month(event_date)
+
+    # Delete all projected events in the same month
+    sql <- "
+      DELETE FROM position_group_cash_flows
+      WHERE group_id = ?
+        AND event_type = ?
+        AND status = 'projected'
+        AND EXTRACT(YEAR FROM event_date) = ?
+        AND EXTRACT(MONTH FROM event_date) = ?
+    "
+
+    rows_affected <- dbExecute(conn, sql, params = list(
+      group_id,
+      event_type,
+      event_year,
+      event_month
+    ))
+
+    if (rows_affected > 0) {
+      log_debug("Income Projection DB: Reconciled {rows_affected} projected {event_type} event(s) for group {group_id} ({event_year}-{sprintf('%02d', event_month)})")
+    }
+
+    return(rows_affected)
+
+  }, error = function(e) {
+    log_error("Income Projection DB: Failed to delete projected events by month - {e$message}")
+    return(0L)
   })
 }
 
