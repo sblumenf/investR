@@ -255,24 +255,45 @@ extract_portfolio_positions <- function(open_groups) {
         0
       }
 
-      # Calculate current value (get shares and symbol_id from latest_positions)
-      stock_member <- members %>% filter(role == "underlying_stock")
-      shares <- 100  # Default fallback
-      symbol_id <- NA_integer_  # Default
+      # Calculate shares from group's stock purchase activities (single source of truth)
+      # This handles positions split across multiple groups without needing allocated_quantity
+      stock_purchases <- activities %>%
+        filter(type == "Trades", action == "Buy") %>%
+        filter(!purrr::map_lgl(symbol, is_option_symbol))
 
+      shares <- if (nrow(stock_purchases) > 0) {
+        sum(abs(stock_purchases$quantity), na.rm = TRUE)
+      } else {
+        100  # Default fallback
+      }
+
+      # Calculate weighted average purchase price from stock purchases
+      # This is the cost basis per share for P&L calculations
+      purchase_price <- if (nrow(stock_purchases) > 0) {
+        total_cost <- sum(abs(stock_purchases$gross_amount), na.rm = TRUE)
+        total_shares <- sum(abs(stock_purchases$quantity), na.rm = TRUE)
+        if (total_shares > 0) {
+          total_cost / total_shares
+        } else {
+          current_price  # Fallback if shares calculation fails
+        }
+      } else {
+        current_price  # Fallback if no stock purchases found
+      }
+
+      # Get symbol_id from latest_positions for sector lookup
+      stock_member <- members %>% filter(role == "underlying_stock")
+      symbol_id <- NA_integer_
       if (nrow(stock_member) > 0) {
-        # Get shares and symbol_id from latest_positions using the stock symbol
         stock_symbol <- stock_member$symbol[1]
         stock_position <- latest_positions %>% filter(symbol == stock_symbol)
-        if (nrow(stock_position) > 0) {
-          if (!is.na(stock_position$open_quantity[1])) {
-            shares <- abs(stock_position$open_quantity[1])
-          }
-          if (!is.null(stock_position$symbol_id) && !is.na(stock_position$symbol_id[1])) {
-            symbol_id <- stock_position$symbol_id[1]
-          }
+        if (nrow(stock_position) > 0 &&
+            !is.null(stock_position$symbol_id) &&
+            !is.na(stock_position$symbol_id[1])) {
+          symbol_id <- stock_position$symbol_id[1]
         }
       }
+
       current_value <- shares * current_price
 
       # Log if position has no expiration
@@ -285,6 +306,7 @@ extract_portfolio_positions <- function(open_groups) {
         ticker = ticker,
         symbol_id = symbol_id,
         current_price = current_price,
+        purchase_price = purchase_price,
         strike = strike,
         expiration = expiration,
         premium_received = abs(premium_received),  # Take absolute value
@@ -321,6 +343,7 @@ extract_portfolio_positions <- function(open_groups) {
       ticker = character(0),
       symbol_id = integer(0),
       current_price = numeric(0),
+      purchase_price = numeric(0),
       strike = numeric(0),
       expiration = as.Date(character(0)),
       premium_received = numeric(0),
@@ -566,6 +589,7 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
     list(
       ticker = pos$ticker,
       current_price = pos$current_price,
+      purchase_price = pos$purchase_price,
       strike = pos$strike,
       premium_received = pos$premium_received,
       shares = pos$shares,
@@ -613,19 +637,20 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
       final_price <- param$current_price * exp((r - 0.5 * param$sigma^2) * T + param$sigma * sqrt(T) * shock)
 
       # Calculate covered call payoff
+      # P&L is calculated from purchase_price (cost basis), not current_price
       if (!is.null(param$strike) && !is.na(param$strike)) {
         if (final_price >= param$strike) {
-          # Called away
-          stock_pnl <- (param$strike - param$current_price) * param$shares
+          # Called away at strike price
+          stock_pnl <- (param$strike - param$purchase_price) * param$shares
         } else {
-          # Hold
-          stock_pnl <- (final_price - param$current_price) * param$shares
+          # Keep shares at final price
+          stock_pnl <- (final_price - param$purchase_price) * param$shares
         }
 
         total_pnl <- stock_pnl + param$premium_received
       } else {
         # No option, just stock
-        total_pnl <- (final_price - param$current_price) * param$shares
+        total_pnl <- (final_price - param$purchase_price) * param$shares
       }
 
       # Store dollar P&L (not returns)
