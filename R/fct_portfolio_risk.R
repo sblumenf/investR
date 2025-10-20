@@ -570,21 +570,16 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
   params <- lapply(seq_len(n_positions), function(i) {
     pos <- positions[i, ]
 
-    # Fetch price history for volatility
-    hist_data <- tryCatch({
-      fetch_price_history(
-        pos$ticker,
-        from = Sys.Date() - lubridate::years(1),
-        auto_adjust = TRUE
+    # Calculate adaptive volatility based on time horizon
+    sigma <- tryCatch({
+      calculate_adaptive_volatility(
+        ticker = pos$ticker,
+        days_to_expiry = pos$days_to_expiry
       )
-    }, error = function(e) NULL)
-
-    if (!is.null(hist_data) && nrow(hist_data) >= 50) {
-      returns <- diff(log(Cl(hist_data)))
-      sigma <- sd(returns, na.rm = TRUE) * sqrt(252)
-    } else {
-      sigma <- 0.30  # Default 30% volatility
-    }
+    }, error = function(e) {
+      log_error("Portfolio Risk: Failed to calculate volatility for {pos$ticker} (days_to_expiry={pos$days_to_expiry}, class={class(pos$days_to_expiry)}): {e$message}")
+      stop(e)
+    })
 
     list(
       ticker = pos$ticker,

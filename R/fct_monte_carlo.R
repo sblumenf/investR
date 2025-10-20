@@ -329,21 +329,11 @@ run_monte_carlo_simulation <- function(ticker,
   # Build dividend schedule
   div_schedule <- build_dividend_schedule(ticker, days_to_expiry, is_aristocrat)
 
-  # Estimate parameters from historical data
-  hist_data <- fetch_price_history(
-    ticker,
-    from = Sys.Date() - lubridate::years(1),
-    auto_adjust = TRUE
+  # Calculate adaptive volatility based on time horizon
+  sigma <- calculate_adaptive_volatility(
+    ticker = ticker,
+    days_to_expiry = days_to_expiry
   )
-
-  if (is.null(hist_data) || nrow(hist_data) < 50) {
-    stop("Insufficient historical data for simulation")
-  }
-
-  # Calculate historical volatility
-  returns <- diff(log(Cl(hist_data)))
-  returns <- returns[!is.na(returns)]
-  sigma <- sd(returns) * sqrt(252)  # Annualized
 
   # Use risk-free rate from config (could fetch SOFR)
   r <- RISK_CONFIG$risk_free_rate

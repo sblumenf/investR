@@ -59,7 +59,18 @@ RISK_CONFIG <- list(
 
   # Historical data for correlation
   correlation_lookback_years = 2,
-  min_observations_for_correlation = 250  # ~1 year of trading days
+  min_observations_for_correlation = 250,  # ~1 year of trading days
+
+  # Adaptive volatility estimation (three-tier approach)
+  volatility_short_term_threshold = 90,      # Days: use EWMA fast for ≤ 90 days
+  volatility_long_term_threshold = 365,      # Days: use historical for > 365 days
+  volatility_lambda_fast = 0.94,             # EWMA decay for short-term (half-life ~11 days)
+  volatility_lambda_slow = 0.97,             # EWMA decay for medium-term (half-life ~23 days)
+  volatility_short_term_lookback = 60,       # Days of data for short-term positions
+  volatility_medium_term_lookback = 180,     # Days of data for medium-term positions
+  volatility_long_term_lookback = 500,       # Days of data for long-term positions (2+ years)
+  volatility_min_observations = 50,          # Minimum data points required for estimation
+  volatility_default = 0.30                  # Fallback if insufficient data (30% annual vol)
 )
 
 ################################################################################
