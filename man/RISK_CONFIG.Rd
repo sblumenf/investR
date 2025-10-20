@@ -5,7 +5,7 @@
 \alias{RISK_CONFIG}
 \title{Risk Analysis Configuration List}
 \format{
-An object of class \code{list} of length 27.
+An object of class \code{list} of length 25.
 }
 \usage{
 RISK_CONFIG

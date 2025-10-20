@@ -154,6 +154,20 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
       # Parse option symbol to get strike and expiration
       option_details <- parse_option_details(option_activity$symbol)
 
+      # Extract cost basis from stock purchase activities
+      stock_purchases <- activities %>%
+        filter(type == "Trades", action == "Buy") %>%
+        filter(!purrr::map_lgl(symbol, is_option_symbol))
+
+      cost_basis <- if (nrow(stock_purchases) > 0) {
+        # Weighted average cost basis
+        total_cost <- sum(abs(stock_purchases$net_amount), na.rm = TRUE)
+        total_shares <- sum(abs(stock_purchases$quantity), na.rm = TRUE)
+        total_cost / total_shares
+      } else {
+        NULL  # No stock purchases found, will use current price
+      }
+
       # Trigger risk analysis module
       mod_position_risk_server(
         id = paste0("risk_group_", group_id),
@@ -162,10 +176,14 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
         strike = reactive(option_details$strike),
         expiration = reactive(option_details$expiry),
         premium_received = reactive({
-          # Use net_amount from activity (already includes all multipliers)
-          abs(option_activity$net_amount)
+          # Premium per contract (100 shares)
+          # net_amount is total for all contracts, quantity is number of contracts
+          total_premium <- abs(option_activity$net_amount)
+          num_contracts <- abs(option_activity$quantity)
+          total_premium / num_contracts
         }),
         current_price = reactive(NULL),  # Will fetch live
+        cost_basis = reactive(cost_basis),  # Actual entry price
         is_aristocrat = reactive(FALSE),  # Unknown for portfolio positions
         simulation_paths = reactive(10000)
       )

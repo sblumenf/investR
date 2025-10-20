@@ -292,7 +292,8 @@ is_early_exercise_optimal <- function(stock_price,
 #' at each dividend date along each path.
 #'
 #' @param ticker Stock ticker
-#' @param current_price Current stock price
+#' @param current_price Current stock price (for simulation)
+#' @param entry_price Stock entry/cost basis price (for return calculations, defaults to current_price)
 #' @param strike Option strike price
 #' @param expiration_date Option expiration date
 #' @param premium_received Premium received from selling call
@@ -303,12 +304,18 @@ is_early_exercise_optimal <- function(stock_price,
 #' @export
 run_monte_carlo_simulation <- function(ticker,
                                        current_price,
+                                       entry_price = NULL,
                                        strike,
                                        expiration_date,
                                        premium_received,
                                        n_paths = RISK_CONFIG$default_simulation_paths,
                                        model = "jump_diffusion",
                                        is_aristocrat = FALSE) {
+
+  # Use entry_price for return calculations if provided, otherwise use current_price
+  if (is.null(entry_price)) {
+    entry_price <- current_price
+  }
 
   # Calculate days to expiration
   days_to_expiry <- as.numeric(difftime(expiration_date, Sys.Date(), units = "days"))
@@ -413,7 +420,7 @@ run_monte_carlo_simulation <- function(ticker,
             stock_price = strike,  # Called away at strike
             strike = strike,
             premium_received = premium_received,
-            entry_stock_price = current_price,
+            entry_stock_price = entry_price,
             shares = 100
           )
 
@@ -430,15 +437,15 @@ run_monte_carlo_simulation <- function(ticker,
         stock_price = final_price,
         strike = strike,
         premium_received = premium_received,
-        entry_stock_price = current_price,
+        entry_stock_price = entry_price,
         shares = 100
       )
     }
   }
 
   # Calculate statistics
-  # Return based on net outlay (stock cost - premium received)
-  net_outlay <- (current_price * 100) - premium_received
+  # Return based on net outlay (actual cost basis - premium received)
+  net_outlay <- (entry_price * 100) - premium_received
   returns <- payoffs / net_outlay
 
   list(

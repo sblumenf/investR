@@ -33,6 +33,7 @@ mod_position_risk_ui <- function(id) {
 #' @param expiration Reactive expiration date
 #' @param premium_received Reactive premium received
 #' @param current_price Reactive current price (optional)
+#' @param cost_basis Reactive cost basis (optional, for actual positions)
 #' @param is_aristocrat Reactive logical for aristocrat status
 #' @param simulation_paths Reactive number of paths (default 10000)
 #' @noRd
@@ -43,6 +44,7 @@ mod_position_risk_server <- function(id,
                                     expiration,
                                     premium_received,
                                     current_price = reactive(NULL),
+                                    cost_basis = reactive(NULL),
                                     is_aristocrat = reactive(FALSE),
                                     simulation_paths = reactive(10000)) {
 
@@ -91,6 +93,7 @@ mod_position_risk_server <- function(id,
           expiration = expiration(),
           premium_received = premium_received(),
           current_price = current_price(),
+          cost_basis = cost_basis(),
           simulation_paths = simulation_paths(),
           is_aristocrat = is_aristocrat()
         )
@@ -196,124 +199,86 @@ create_summary_tab <- function(results) {
   mc <- results$monte_carlo
   rql <- results$rquantlib
 
-  # Risk score with color coding
-  risk_score <- results$risk_score
-  score_class <- if (risk_score < 40) {
-    "success"
-  } else if (risk_score < 70) {
-    "warning"
-  } else {
-    "danger"
-  }
-
   tags$div(
     style = "padding: 20px;",
 
-    # Risk Score Card
-    tags$div(
-      class = paste("alert alert", score_class, "alert-", score_class),
-      role = "alert",
-      tags$h4(
-        class = "alert-heading",
-        "Overall Risk Score: ", tags$strong(round(risk_score, 1)), " / 100"
-      ),
-      tags$p(
-        if (risk_score < 40) {
-          "Low risk position with minimal concerns."
-        } else if (risk_score < 70) {
-          "Moderate risk. Monitor for changes in early exercise probability."
-        } else {
-          "High risk position. Consider rolling or closing if conditions deteriorate."
-        }
+    # Return Metrics (Most Important - Top)
+    tags$h5("Return Metrics"),
+    if (!is.null(mc) && !is.null(results$risk_adjusted_return_annualized)) {
+      tags$div(
+        create_metric_row("Expected Return (annualized)",
+                        sprintf("%.2f%%", results$risk_adjusted_return_annualized * 100)),
+        create_metric_row("Median Return",
+                        sprintf("%.2f%%", mc$median_return * 100)),
+        create_metric_row("Probability of Profit",
+                        sprintf("%.1f%%", mc$prob_profit * 100))
       )
-    ),
+    } else {
+      tags$p(class = "text-muted", "Return metrics not available")
+    },
 
     tags$hr(),
 
-    # Key Metrics Grid
-    tags$div(
-      class = "row",
-
-      # Early Exercise Risk
+    # Return Distribution
+    tags$h5("Return Distribution"),
+    if (!is.null(mc)) {
       tags$div(
-        class = "col-md-6",
-        tags$h5("Early Exercise Risk"),
-        if (!is.null(mc) && !is.null(mc$early_exercise_prob)) {
-          tags$div(
-            create_metric_row("Probability of Early Assignment",
-                            sprintf("%.1f%%", mc$early_exercise_prob * 100),
-                            is_primary = TRUE),
-            create_metric_row("Most Likely Outcome",
-                            if (mc$early_exercise_prob > 0.5) "Assigned before expiration" else "Held to expiration"),
-            if (mc$early_exercise_prob > 0.01) {
-              create_metric_row("Average Days if Assigned Early",
-                              sprintf("%.0f days", results$days_to_expiry * 0.5))
-            }
-          )
-        } else {
-          tags$p(class = "text-muted", "Monte Carlo simulation not available")
-        }
-      ),
-
-      # Return Metrics
-      tags$div(
-        class = "col-md-6",
-        tags$h5("Return Projections"),
-        if (!is.null(mc)) {
-          tags$div(
-            create_metric_row("Expected Return (Risk-Adjusted)",
-                            sprintf("%.2f%% annualized", results$risk_adjusted_return_annualized * 100),
-                            is_primary = TRUE),
-            create_metric_row("Median Return",
-                            sprintf("%.2f%%", mc$median_return * 100)),
-            create_metric_row("Probability of Profit",
-                            sprintf("%.1f%%", mc$prob_profit * 100)),
-            create_metric_row("Best Case (95th percentile)",
-                            sprintf("%.2f%%", mc$percentile_95 * 100)),
-            create_metric_row("Worst Case (5th percentile)",
-                            sprintf("%.2f%%", mc$percentile_5 * 100),
-                            is_negative = mc$percentile_5 < 0)
-          )
-        } else {
-          tags$p(class = "text-muted", "Return distribution not available")
-        }
+        create_metric_row("Best Case (95th percentile)",
+                        sprintf("%.2f%%", mc$percentile_95 * 100)),
+        create_metric_row("Worst Case (5th percentile)",
+                        sprintf("%.2f%%", mc$percentile_5 * 100))
       )
-    ),
+    } else {
+      tags$p(class = "text-muted", "Distribution not available")
+    },
 
     tags$hr(),
 
     # Position Details
+    tags$h5("Position Details"),
     tags$div(
-      tags$h5("Position Details"),
+      class = "row",
       tags$div(
-        class = "row",
-        tags$div(
-          class = "col-md-6",
-          create_metric_row("Current Stock Price", sprintf("$%.2f", results$current_price)),
-          create_metric_row("Strike Price", sprintf("$%.2f", results$strike)),
-          create_metric_row("Premium Received", sprintf("$%.2f", results$premium_received))
-        ),
-        tags$div(
-          class = "col-md-6",
-          create_metric_row("Days to Expiration", as.character(results$days_to_expiry)),
-          create_metric_row("Expiration Date", results$expiration),
-          create_metric_row("Dividend Status", if (results$is_aristocrat) "Dividend Aristocrat" else "Regular Dividend Payer")
-        )
+        class = "col-md-6",
+        create_metric_row("Current Stock Price", sprintf("$%.2f", results$current_price)),
+        create_metric_row("Strike Price", sprintf("$%.2f", results$strike)),
+        create_metric_row("Premium Received", sprintf("$%.2f", results$premium_received))
+      ),
+      tags$div(
+        class = "col-md-6",
+        create_metric_row("Days to Expiration", as.character(results$days_to_expiry)),
+        create_metric_row("Expiration Date", results$expiration),
+        create_metric_row("Dividend Status", if (results$is_aristocrat) "Dividend Aristocrat" else "Regular Dividend Payer")
       )
     ),
 
-    # Simulation Details
+    tags$hr(),
+
+    # Assignment Risk
+    tags$h5("Assignment Risk"),
+    if (!is.null(mc) && !is.null(mc$early_exercise_prob)) {
+      tags$div(
+        create_metric_row("Probability of Early Assignment",
+                        sprintf("%.1f%%", mc$early_exercise_prob * 100)),
+        create_metric_row("Most Likely Outcome",
+                        if (mc$early_exercise_prob > 0.5) "Assigned before expiration" else "Held to expiration")
+      )
+    } else {
+      tags$p(class = "text-muted", "Assignment probability not available")
+    },
+
+    tags$hr(),
+
+    # Volatility & Simulation Details
+    tags$h5("Volatility & Simulation Details"),
     if (!is.null(mc)) {
       tags$div(
-        tags$hr(),
-        tags$p(
-          class = "text-muted small",
-          sprintf("Analysis based on %s Monte Carlo paths using %s model with implied volatility of %.1f%%",
-                 format(results$simulation_paths, big.mark = ","),
-                 mc$model,
-                 mc$implied_volatility * 100)
-        )
+        create_metric_row("Implied Volatility", sprintf("%.1f%%", mc$implied_volatility * 100)),
+        create_metric_row("Simulation Model", mc$model),
+        create_metric_row("Number of Paths", format(results$simulation_paths, big.mark = ","))
       )
+    } else {
+      tags$p(class = "text-muted", "Simulation details not available")
     }
   )
 }

@@ -46,10 +46,6 @@ RISK_CONFIG <- list(
   regular_stress_dividend_cut = 0.30,      # Regular payers cut 30% in crisis
   severe_stress_dividend_cut = 0.50,       # Non-aristocrats cut 50% in severe crisis
 
-  # Portfolio risk thresholds (for adaptive alerts)
-  risk_score_yellow_threshold = 60,    # Moderate risk
-  risk_score_red_threshold = 80,       # High risk
-
   # VaR/CVaR settings
   var_confidence_levels = c(0.95, 0.99),  # 95% and 99% VaR
   cvar_confidence_level = 0.95,           # Expected shortfall at 95%

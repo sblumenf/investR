@@ -7,6 +7,7 @@
 run_monte_carlo_simulation(
   ticker,
   current_price,
+  entry_price = NULL,
   strike,
   expiration_date,
   premium_received,
@@ -18,7 +19,9 @@ run_monte_carlo_simulation(
 \arguments{
 \item{ticker}{Stock ticker}
 
-\item{current_price}{Current stock price}
+\item{current_price}{Current stock price (for simulation)}
+
+\item{entry_price}{Stock entry/cost basis price (for return calculations, defaults to current_price)}
 
 \item{strike}{Option strike price}
 
