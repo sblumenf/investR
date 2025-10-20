@@ -241,6 +241,7 @@ create_summary_tab <- function(results) {
       tags$div(
         class = "col-md-6",
         create_metric_row("Current Stock Price", sprintf("$%.2f", results$current_price)),
+        create_metric_row("Purchase Price (Cost Basis)", sprintf("$%.2f", results$purchase_price)),
         create_metric_row("Strike Price", sprintf("$%.2f", results$strike)),
         create_metric_row("Premium Received", sprintf("$%.2f", results$premium_received))
       ),

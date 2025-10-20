@@ -159,14 +159,43 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
         filter(type == "Trades", action == "Buy") %>%
         filter(!purrr::map_lgl(symbol, is_option_symbol))
 
+      # DEBUG LOGGING
+      log_info("DEBUG: Group {group_id} - Found {nrow(stock_purchases)} stock purchases out of {nrow(activities)} total activities")
+
+      if (nrow(stock_purchases) > 0) {
+        log_info("DEBUG: Stock purchase symbols: {paste(stock_purchases$symbol, collapse=', ')}")
+        log_info("DEBUG: Stock purchase quantities: {paste(stock_purchases$quantity, collapse=', ')}")
+        log_info("DEBUG: Stock purchase net_amounts: {paste(stock_purchases$net_amount, collapse=', ')}")
+      } else {
+        log_info("DEBUG: No stock purchases found. All activity symbols: {paste(unique(activities$symbol), collapse=', ')}")
+        log_info("DEBUG: Activity types: {paste(unique(activities$type), collapse=', ')}")
+        log_info("DEBUG: Activity actions: {paste(unique(activities$action), collapse=', ')}")
+      }
+
       cost_basis <- if (nrow(stock_purchases) > 0) {
         # Weighted average cost basis
         total_cost <- sum(abs(stock_purchases$net_amount), na.rm = TRUE)
         total_shares <- sum(abs(stock_purchases$quantity), na.rm = TRUE)
-        total_cost / total_shares
+        cost_basis_value <- total_cost / total_shares
+        log_info("DEBUG: Calculated cost_basis = ${sprintf('%.2f', cost_basis_value)} (total_cost=${sprintf('%.2f', total_cost)}, total_shares={total_shares})")
+        cost_basis_value
       } else {
+        log_warn("DEBUG: No stock purchases found - cost_basis will be NULL (will default to current_price)")
         NULL  # No stock purchases found, will use current price
       }
+
+      # Calculate premium per contract
+      total_premium <- abs(option_activity$net_amount)
+      option_quantity <- abs(option_activity$quantity)
+
+      # DEBUG: Check if quantity is in shares or contracts
+      log_info("DEBUG: Option activity - total_premium=${sprintf('%.2f', total_premium)}, quantity={option_quantity}")
+
+      # Quantity is stored as SHARES, not contracts. Convert to contracts (divide by 100)
+      num_contracts <- option_quantity / 100
+      premium_per_contract <- total_premium / num_contracts
+
+      log_info("DEBUG: Calculated premium = ${sprintf('%.2f', premium_per_contract)} per contract ({num_contracts} contracts)")
 
       # Trigger risk analysis module
       mod_position_risk_server(
@@ -175,13 +204,7 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
         ticker = reactive(ticker),
         strike = reactive(option_details$strike),
         expiration = reactive(option_details$expiry),
-        premium_received = reactive({
-          # Premium per contract (100 shares)
-          # net_amount is total for all contracts, quantity is number of contracts
-          total_premium <- abs(option_activity$net_amount)
-          num_contracts <- abs(option_activity$quantity)
-          total_premium / num_contracts
-        }),
+        premium_received = reactive(premium_per_contract),
         current_price = reactive(NULL),  # Will fetch live
         cost_basis = reactive(cost_basis),  # Actual entry price
         is_aristocrat = reactive(FALSE),  # Unknown for portfolio positions

@@ -76,6 +76,9 @@ analyze_position_risk <- function(ticker,
 
   log_debug("{ticker}: Found {nrow(dividend_schedule)} projected dividends")
 
+  # Determine entry price for return calculations
+  entry_price <- if (!is.null(cost_basis)) cost_basis else current_price
+
   # Initialize results list
   results <- list(
     # Position details
@@ -84,6 +87,7 @@ analyze_position_risk <- function(ticker,
     expiration = as.character(expiration),
     days_to_expiry = days_to_expiry,
     current_price = current_price,
+    purchase_price = entry_price,  # Show what price was used for return calculations
     premium_received = premium_received,
     is_aristocrat = is_aristocrat,
     simulation_paths = simulation_paths,
@@ -100,9 +104,6 @@ analyze_position_risk <- function(ticker,
   # Run Monte Carlo simulation
   if (use_monte_carlo) {
     log_info("{ticker}: Running Monte Carlo simulation ({simulation_paths} paths)...")
-
-    # Use cost_basis for return calculations if provided, otherwise use current_price
-    entry_price <- if (!is.null(cost_basis)) cost_basis else current_price
 
     tryCatch({
       mc_result <- run_monte_carlo_simulation(
@@ -164,14 +165,11 @@ analyze_position_risk <- function(ticker,
     results$risk_adjusted_return_annualized <- NA
   }
 
-  # Run stress tests
-  # Use cost_basis for return calculations if provided, otherwise current_price
-  entry_price_for_stress <- if (!is.null(cost_basis)) cost_basis else current_price
-
+  # Run stress tests (reuse entry_price already calculated above)
   results$stress_tests <- run_position_stress_tests(
     ticker = ticker,
     current_price = current_price,
-    entry_price = entry_price_for_stress,
+    entry_price = entry_price,
     strike = strike,
     premium_received = premium_received,
     is_aristocrat = is_aristocrat
