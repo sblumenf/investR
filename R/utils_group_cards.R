@@ -467,13 +467,43 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
   close_input_name <- if (!is.null(ns)) ns("close_group_clicked") else "close_group_clicked"
   edit_input_name <- if (!is.null(ns)) ns("edit_group_clicked") else "edit_group_clicked"
 
+  # Risk analysis button (only for strategies with options)
+  risk_btn_id <- if (!is.null(ns)) {
+    ns(paste0("analyze_risk_btn_group_", group_data$group_id))
+  } else {
+    paste0("analyze_risk_btn_group_", group_data$group_id)
+  }
+
+  # Determine if this group has option data needed for risk analysis
+  has_option_data <- !is.null(market_data$strike_price) &&
+                     !is.null(market_data$expiration_date) &&
+                     !is.na(market_data$strike_price) &&
+                     !is.na(market_data$expiration_date)
+
   action_buttons <- tags$div(
     class = "card-actions",
     style = "margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;",
+
+    # Add Analyze Risk button if option data exists
+    if (has_option_data) {
+      tags$button(
+        id = risk_btn_id,
+        type = "button",
+        class = "btn btn-sm btn-primary",
+        onclick = sprintf("console.log('Analyze Risk clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                          group_data$group_id,
+                          if (!is.null(ns)) ns("analyze_risk_group_clicked") else "analyze_risk_group_clicked",
+                          group_data$group_id),
+        icon("chart-line"),
+        " Analyze Risk"
+      )
+    },
+
     tags$button(
       id = close_btn_id,
       type = "button",
       class = "btn btn-sm btn-warning",
+      style = if (has_option_data) "margin-left: 10px;" else "",
       onclick = sprintf("console.log('Close clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
                         group_data$group_id, close_input_name, group_data$group_id),
       icon("times-circle"),

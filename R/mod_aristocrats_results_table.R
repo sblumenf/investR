@@ -27,7 +27,7 @@ mod_aristocrats_results_table_ui <- function(id){
 #'
 #' @noRd
 #'
-#' @importFrom shiny moduleServer renderUI req tags
+#' @importFrom shiny moduleServer renderUI req tags actionButton observeEvent
 #' @importFrom bslib card card_header card_body
 #' @importFrom dplyr %>%
 #' @importFrom purrr map
@@ -55,14 +55,48 @@ mod_aristocrats_results_table_server <- function(id, results_data){
       }
     })
 
-    # Render results as cards
+    # Render results as cards with risk analysis buttons
     output$results_cards <- renderUI({
       req(results_data())
 
-      results_data() %>%
-        split(seq_len(nrow(.))) %>%
-        purrr::map(create_opportunity_card) %>%
-        tags$div(class = "opportunity-cards-container", .)
+      results <- results_data()
+
+      # Create cards with risk analysis integration
+      cards <- lapply(seq_len(nrow(results)), function(i) {
+        row <- results[i, ]
+        create_opportunity_card_with_risk(row, ns, paste0("risk_", i))
+      })
+
+      tags$div(class = "opportunity-cards-container", cards)
+    })
+
+    # Setup risk analysis modules for each card
+    observe({
+      req(results_data())
+      results <- results_data()
+
+      lapply(seq_len(nrow(results)), function(i) {
+        row <- results[i, ]
+        risk_id <- paste0("risk_", i)
+
+        # Create reactive trigger for this card's button
+        trigger <- reactive({
+          input[[paste0("analyze_risk_btn_", i)]]
+        })
+
+        # Call risk analysis module
+        mod_position_risk_server(
+          id = risk_id,
+          trigger = trigger,
+          ticker = reactive(row$ticker),
+          strike = reactive(row$strike),
+          expiration = reactive(row$expiration),
+          premium_received = reactive(row$premium_received),
+          current_price = reactive(row$current_price),
+          is_aristocrat = reactive(TRUE),  # Aristocrats strategy
+          simulation_paths = reactive(10000)
+        )
+      })
     })
   })
 }
@@ -71,19 +105,23 @@ mod_aristocrats_results_table_server <- function(id, results_data){
 # CARD CONSTRUCTOR (Strategy-Specific)
 ################################################################################
 
-#' Create a complete opportunity card with all sections
+#' Create opportunity card with risk analysis button
 #'
 #' @param row Single-row tibble with all opportunity data
-#' @return A bslib card component with HTML5 details accordions
+#' @param ns Namespace function
+#' @param risk_id Risk module ID
+#' @return A bslib card component with risk analysis button
 #' @noRd
-create_opportunity_card <- function(row) {
-  # Calculate low dividend flag: dividend income < threshold of total profit
-  # Handle cases where dividend_income doesn't exist (e.g., dynamic strategy)
+create_opportunity_card_with_risk <- function(row, ns, risk_id) {
+  # Calculate low dividend flag
   low_div <- if ("dividend_income" %in% names(row) && "net_profit" %in% names(row)) {
     (row$dividend_income / row$net_profit) < ARISTOCRATS_CONFIG$low_dividend_threshold
   } else {
     FALSE
   }
+
+  # Extract row index from risk_id (e.g., "risk_1" -> 1)
+  idx <- as.integer(sub("risk_", "", risk_id))
 
   # Card header
   header <- create_generic_card_header(
@@ -93,6 +131,18 @@ create_opportunity_card <- function(row) {
 
   # Card body with sections
   body <- bslib::card_body(
+    # Risk Analysis Button (at top)
+    tags$div(
+      style = "margin-bottom: 15px;",
+      actionButton(
+        inputId = ns(paste0("analyze_risk_btn_", idx)),
+        label = "Analyze Risk",
+        icon = icon("chart-line"),
+        class = "btn btn-primary btn-sm",
+        style = "width: 100%;"
+      )
+    ),
+
     # Section 1: Quick Overview (OPEN by default)
     create_accordion_section(
       title = "Quick Overview",

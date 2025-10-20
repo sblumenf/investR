@@ -60,7 +60,7 @@ mod_zero_dividend_results_table_server <- function(id, results_data){
       }
     })
 
-    # Render results as cards
+    # Render results as cards with risk analysis integration
     output$results_cards <- renderUI({
       req(results_data())
 
@@ -72,11 +72,44 @@ mod_zero_dividend_results_table_server <- function(id, results_data){
         ))
       }
 
-      # Create cards for results
-      results_data() %>%
-        split(seq_len(nrow(.))) %>%
-        purrr::map(create_zero_dividend_opportunity_card) %>%
-        tags$div(class = "opportunity-cards-container", .)
+      results <- results_data()
+
+      # Create cards with risk analysis integration
+      cards <- lapply(seq_len(nrow(results)), function(i) {
+        row <- results[i, ]
+        create_zero_dividend_card_with_risk(row, ns, paste0("risk_", i))
+      })
+
+      tags$div(class = "opportunity-cards-container", cards)
+    })
+
+    # Setup risk analysis modules for each card
+    observe({
+      req(results_data())
+      results <- results_data()
+
+      lapply(seq_len(nrow(results)), function(i) {
+        row <- results[i, ]
+        risk_id <- paste0("risk_", i)
+
+        # Create reactive trigger for this card's button
+        trigger <- reactive({
+          input[[paste0("analyze_risk_btn_", i)]]
+        })
+
+        # Call risk analysis module
+        mod_position_risk_server(
+          id = risk_id,
+          trigger = trigger,
+          ticker = reactive(row$ticker),
+          strike = reactive(row$strike),
+          expiration = reactive(row$expiration),
+          premium_received = reactive(row$premium_received),
+          current_price = reactive(row$current_price),
+          is_aristocrat = reactive(FALSE),  # Zero dividend strategy
+          simulation_paths = reactive(10000)
+        )
+      })
     })
   })
 }
@@ -85,7 +118,96 @@ mod_zero_dividend_results_table_server <- function(id, results_data){
 # CARD CONSTRUCTOR (Strategy-Specific)
 ################################################################################
 
-#' Create a complete opportunity card for zero-dividend stock
+#' Create opportunity card with risk analysis button
+#'
+#' @param row Single-row tibble with all opportunity data
+#' @param ns Namespace function
+#' @param risk_id Risk module ID
+#' @return A bslib card component with risk analysis button
+#' @noRd
+create_zero_dividend_card_with_risk <- function(row, ns, risk_id) {
+  # Extract row index from risk_id (e.g., "risk_1" -> 1)
+  idx <- as.integer(sub("risk_", "", risk_id))
+
+  # Card header
+  header <- create_generic_card_header(
+    primary_text = paste0(row$company_name, " (", row$ticker, ")"),
+    secondary_text = format_currency(row$current_price)
+  )
+
+  # Card body with sections
+  body <- bslib::card_body(
+    # Risk Analysis Button (at top)
+    tags$div(
+      style = "margin-bottom: 15px;",
+      actionButton(
+        inputId = ns(paste0("analyze_risk_btn_", idx)),
+        label = "Analyze Risk",
+        icon = icon("chart-line"),
+        class = "btn btn-primary btn-sm",
+        style = "width: 100%;"
+      )
+    ),
+
+    # Section 1: Quick Overview (OPEN by default)
+    create_accordion_section(
+      title = "Quick Overview",
+      is_open = TRUE,
+      create_metric_row("Annualized Return", format_percentage(row$annualized_return), is_primary = TRUE),
+      create_metric_row("Total Return", format_percentage(row$total_return)),
+      create_metric_row("Net Profit", format_currency(row$net_profit / 100), is_primary = TRUE),
+      create_metric_row("Days to Expiry", as.character(row$days_to_expiry))
+    ),
+
+    # Section 2: Transaction (OPEN by default)
+    create_accordion_section(
+      title = "Transaction",
+      is_open = TRUE,
+      create_metric_row("Expiration Date", as.character(row$expiration)),
+      create_metric_row("Strike Price", format_currency(row$strike)),
+      create_metric_row("Strike / Current", format_percentage(row$strike / row$current_price)),
+      create_metric_row("Open Interest", format(row$open_interest, big.mark = ",")),
+      create_metric_row("Net Outlay", format_currency(row$net_outlay / 100))
+    ),
+
+    # Section 3: Cash Flow Details (collapsed)
+    create_accordion_section(
+      title = "Cash Flow Details",
+      is_open = FALSE,
+      create_metric_row("Investment", format_currency(row$investment / 100)),
+      create_metric_row("Premium Received", format_currency(row$premium_received / 100)),
+      create_metric_row("Dividend Income", format_currency(row$dividend_income / 100)),
+      create_metric_row("Reinvestment Income", format_currency(row$reinvestment_income / 100)),
+      create_metric_row("Exercise Proceeds", format_currency(row$exercise_proceeds / 100))
+    ),
+
+    # Section 4: Option Details (collapsed)
+    create_accordion_section(
+      title = "Option Details",
+      is_open = FALSE,
+      create_metric_row("Bid Price", format_currency(row$bid_price)),
+      create_metric_row("Intrinsic Value", format_currency(row$intrinsic_value)),
+      create_metric_row("Extrinsic Value", format_currency(row$extrinsic_value)),
+      create_metric_row("Time Value %", format_percentage(row$extrinsic_value / row$bid_price))
+    ),
+
+    # Section 5: Risk & Protection (collapsed)
+    create_accordion_section(
+      title = "Risk & Protection",
+      is_open = FALSE,
+      create_metric_row("Downside Protection", format_percentage(row$downside_protection_pct)),
+      create_metric_row("Breakeven Price", format_currency(row$breakeven_price)),
+      # Max Drawdown is negative - apply red styling
+      create_metric_row("Max Drawdown (5yr)", format_percentage(row$max_drawdown), is_negative = TRUE),
+      create_metric_row("Current Yield", format_percentage(row$current_yield))
+    )
+  )
+
+  # Always use standard card (no dividend warnings for zero-div stocks)
+  create_standard_card(header, body)
+}
+
+#' Create a complete opportunity card for zero-dividend stock (legacy, no risk button)
 #'
 #' @param row Single-row tibble with all opportunity data
 #' @return A bslib card component with HTML5 details accordions

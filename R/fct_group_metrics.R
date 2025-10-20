@@ -522,16 +522,32 @@ enrich_group_with_market_data <- function(group_id, members, activities, latest_
       filter(symbol == stock_symbol) %>%
       slice(1)
 
-    if (nrow(stock_position) == 0) {
-      log_debug("Market Data: Stock {stock_symbol} not found in current positions")
-      return(result)
+    # Try to get price from latest_positions first
+    current_price <- if (nrow(stock_position) > 0) {
+      stock_position$current_price
+    } else {
+      NULL
     }
 
-    current_price <- stock_position$current_price
-
+    # Fallback: fetch current price from market API if not in latest_positions
     if (is.null(current_price) || is.na(current_price)) {
-      log_debug("Market Data: Current price not available for {stock_symbol}")
-      return(result)
+      log_debug("Market Data: Stock {stock_symbol} not in latest_positions, fetching from market API")
+
+      quote_data <- tryCatch({
+        fetch_current_quote(stock_symbol)
+      }, error = function(e) {
+        log_warn("Market Data: Failed to fetch quote for {stock_symbol} - {e$message}")
+        NULL
+      })
+
+      # fetch_current_quote returns Yahoo-format dataframe with 'Last' column
+      if (!is.null(quote_data) && nrow(quote_data) > 0 && !is.na(quote_data$Last[1])) {
+        current_price <- quote_data$Last[1]
+        log_debug("Market Data: Fetched price for {stock_symbol} from API: ${current_price}")
+      } else {
+        log_debug("Market Data: Current price not available for {stock_symbol} from API")
+        return(result)
+      }
     }
 
     result$current_stock_price <- current_price

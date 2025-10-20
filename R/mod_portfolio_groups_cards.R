@@ -111,6 +111,66 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
       )
     })
 
+    # Handle Analyze Risk button clicks for portfolio groups
+    observeEvent(input$analyze_risk_group_clicked, {
+      group_id <- input$analyze_risk_group_clicked
+
+      log_info("Analyze Risk clicked for group: {group_id}")
+
+      # Get group data to extract position details
+      group_data <- get_group_by_id(group_id)
+      members <- get_group_members(group_id)
+      activities <- get_activities_by_group(group_id)
+
+      if (nrow(group_data) == 0) {
+        log_warn("Group {group_id} not found for risk analysis")
+        return()
+      }
+
+      # Extract ticker
+      ticker <- if (nrow(members) > 0) {
+        underlying <- members %>% filter(role == "underlying_stock")
+        if (nrow(underlying) > 0) {
+          underlying$symbol[1]
+        } else {
+          members$symbol[1]
+        }
+      } else {
+        NULL
+      }
+
+      # Extract option details from activities
+      option_activity <- activities %>%
+        filter(type == "Trades") %>%
+        filter(purrr::map_lgl(symbol, is_option_symbol)) %>%
+        arrange(desc(trade_date)) %>%
+        slice(1)
+
+      if (nrow(option_activity) == 0) {
+        showNotification("No option data found for this group", type = "warning")
+        return()
+      }
+
+      # Parse option symbol to get strike and expiration
+      option_details <- parse_option_details(option_activity$symbol)
+
+      # Trigger risk analysis module
+      mod_position_risk_server(
+        id = paste0("risk_group_", group_id),
+        trigger = reactive({ input$analyze_risk_group_clicked }),
+        ticker = reactive(ticker),
+        strike = reactive(option_details$strike),
+        expiration = reactive(option_details$expiry),
+        premium_received = reactive({
+          # Use net_amount from activity (already includes all multipliers)
+          abs(option_activity$net_amount)
+        }),
+        current_price = reactive(NULL),  # Will fetch live
+        is_aristocrat = reactive(FALSE),  # Unknown for portfolio positions
+        simulation_paths = reactive(10000)
+      )
+    })
+
     # Handle Close Group button clicks
     observeEvent(input$close_group_clicked, {
       group_id <- input$close_group_clicked

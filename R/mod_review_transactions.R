@@ -312,6 +312,27 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
         })
       )
 
+      # Validation: Check for data quality issues where option symbols might have wrong role
+      option_validation <- purrr::map_lgl(members$symbol, is_option_symbol)
+      mismatched <- members$symbol[option_validation & members$role == "underlying_stock"]
+      if (length(mismatched) > 0) {
+        log_warn(sprintf(
+          "Group Creation Validation: %d option symbols incorrectly assigned 'underlying_stock' role: %s. This indicates a data quality issue.",
+          length(mismatched),
+          paste(mismatched, collapse = ", ")
+        ))
+      }
+
+      # Also check reverse: non-option symbols with option roles
+      non_option_mismatched <- members$symbol[!option_validation & members$role == "short_call"]
+      if (length(non_option_mismatched) > 0) {
+        log_warn(sprintf(
+          "Group Creation Validation: %d non-option symbols incorrectly assigned 'short_call' role: %s. This indicates a data quality issue.",
+          length(non_option_mismatched),
+          paste(non_option_mismatched, collapse = ", ")
+        ))
+      }
+
       # Create the group
       success <- create_position_group(
         group_id = group_id,

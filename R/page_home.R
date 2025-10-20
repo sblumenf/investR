@@ -99,6 +99,15 @@ page_home <- function() {
         button_text = "View Groups"
       ),
       list(
+        title = "Portfolio Risk Analysis",
+        description = c(
+          "Analyze portfolio-level risk using correlated Monte Carlo simulation with Component VaR methodology.",
+          "Calculate VaR/CVaR, stress test scenarios, position risk contributions, and concentration metrics across all open positions."
+        ),
+        href = "/portfolio/risk",
+        button_text = "Analyze Risk"
+      ),
+      list(
         title = "Cash Flow Projection",
         description = c(
           "View projected and actual cash flows across all position groups.",

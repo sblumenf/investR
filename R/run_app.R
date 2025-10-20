@@ -121,6 +121,7 @@ run_app <- function(
       page_dividend_capture_monthly_high_yield(),
       page_dividend_capture_russell_2000(),
       page_portfolio_groups(),
+      page_portfolio_risk(),
       page_cash_flow_projection(),
       page_raw_activities(),
       page_about(),
