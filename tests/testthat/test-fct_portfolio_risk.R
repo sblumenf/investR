@@ -30,7 +30,7 @@ test_that("Component VaR calculation is mathematically correct", {
   # Test 1: Sum of Component VaRs should approximately equal Portfolio VaR
   # This is a fundamental property of Component VaR (Euler allocation)
   total_component_var <- sum(contributions$risk_contribution)
-  expect_equal(total_component_var, portfolio_var, tolerance = 0.01)
+  expect_equal(total_component_var, as.numeric(portfolio_var), tolerance = 0.01)
 
   # Test 2: All required columns should be present
   expect_true(all(c("group_id", "ticker", "expected_contribution", "risk_contribution",
@@ -134,16 +134,19 @@ test_that("Risk contribution formulas are academically rigorous", {
     portfolio_var = portfolio_var
   )
 
-  # Expected contribution should match mean P&L
-  expect_equal(contributions$expected_contribution[1], mean(pos1_pnl), tolerance = 0.1)
-  expect_equal(contributions$expected_contribution[2], mean(pos2_pnl), tolerance = 0.1)
+  # Expected contribution should match mean P&L (match by ticker, not row index)
+  safe_row <- contributions$ticker == "SAFE"
+  risky_row <- contributions$ticker == "RISKY"
+
+  expect_equal(as.numeric(contributions$expected_contribution[safe_row]), mean(pos1_pnl), tolerance = 0.1)
+  expect_equal(as.numeric(contributions$expected_contribution[risky_row]), mean(pos2_pnl), tolerance = 0.1)
 
   # Risk contribution should NOT just be expected contribution
   # (If it were, the function would be wrong)
-  expect_false(all.equal(contributions$expected_contribution, contributions$risk_contribution))
+  expect_false(isTRUE(all.equal(contributions$expected_contribution, contributions$risk_contribution)))
 
   # RISKY position should have higher risk contribution despite lower expected return
-  expect_gt(abs(contributions$risk_contribution[2]), abs(contributions$risk_contribution[1]))
+  expect_gt(abs(contributions$risk_contribution[risky_row]), abs(contributions$risk_contribution[safe_row]))
 })
 
 test_that("Cholesky decomposition fallback works", {

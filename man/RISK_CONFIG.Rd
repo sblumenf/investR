@@ -5,12 +5,15 @@
 \alias{RISK_CONFIG}
 \title{Risk Analysis Configuration List}
 \format{
-An object of class \code{list} of length 34.
+An object of class \code{list} of length 37.
 }
 \usage{
 RISK_CONFIG
 }
 \description{
-Risk Analysis Configuration List
+TIERED CONFIGURATION APPROACH (KISS + DRY):
+- Tier 1: Use presets (retail/professional/institutional) for 90% of users
+- Tier 2: Feature toggles for common customization
+- Tier 3: Advanced overrides for power users
 }
 \keyword{datasets}

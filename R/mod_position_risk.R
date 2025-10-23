@@ -270,11 +270,33 @@ create_summary_tab <- function(results) {
 
     tags$hr(),
 
+    # Market Regime (if enabled)
+    if (!is.null(mc$regime)) {
+      tags$div(
+        tags$h5("Market Regime"),
+        tags$div(
+          create_metric_row("Current Regime", mc$regime$name),
+          create_metric_row("Description", mc$regime$description),
+          create_metric_row("Risk Multiplier", sprintf("%.1fx", mc$regime$risk_multiplier)),
+          if (!is.null(mc$regime$vix_current) && !is.na(mc$regime$vix_current)) {
+            create_metric_row("VIX Level", sprintf("%.1f", mc$regime$vix_current))
+          } else {
+            NULL
+          }
+        ),
+        tags$hr()
+      )
+    } else {
+      NULL
+    },
+
     # Volatility & Simulation Details
     tags$h5("Volatility & Simulation Details"),
     if (!is.null(mc)) {
       tags$div(
-        create_metric_row("Implied Volatility", sprintf("%.1f%%", mc$implied_volatility * 100)),
+        create_metric_row("Volatility Used", sprintf("%.1f%%", mc$implied_volatility * 100)),
+        create_metric_row("Volatility Source",
+                        if (!is.null(mc$regime)) "Market-based (implied + historical blend)" else "Historical adaptive"),
         create_metric_row("Simulation Model", mc$model),
         create_metric_row("Number of Paths", format(results$simulation_paths, big.mark = ","))
       )

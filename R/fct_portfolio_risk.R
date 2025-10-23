@@ -90,6 +90,33 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
   # Each position gets correlation based on its ticker
   correlation_matrix <- expand_correlation_to_positions(positions, ticker_correlation_matrix)
 
+  # Apply regime-based adjustments if enabled
+  use_regime <- RISK_CONFIG$features$use_regime_adjustment %||% FALSE
+  regime_info <- NULL
+
+  if (use_regime) {
+    regime_params <- get_regime_adjusted_parameters()
+    regime_info <- list(
+      name = regime_params$regime_name,
+      description = regime_params$regime_description,
+      risk_multiplier = regime_params$risk_multiplier,
+      vix_current = regime_params$vix_current,
+      correlation_adj = regime_params$correlation_multiplier
+    )
+
+    # Adjust correlation matrix (increase correlations in crisis)
+    # Apply to off-diagonal elements only
+    diag_values <- diag(correlation_matrix)
+    correlation_matrix <- correlation_matrix * regime_params$correlation_multiplier
+    diag(correlation_matrix) <- diag_values  # Restore diagonal to 1.0
+
+    # Ensure still positive definite (correlations can't exceed 1)
+    correlation_matrix <- pmin(correlation_matrix, 1.0)
+    correlation_matrix <- pmax(correlation_matrix, -1.0)
+
+    log_info("Portfolio Risk: Regime adjustment applied - {regime_params$regime_name} (correlation multiplier: {round(regime_params$correlation_multiplier, 2)})")
+  }
+
   # Run correlated Monte Carlo simulation
   mc_results <- run_correlated_monte_carlo(
     positions = positions,
@@ -97,11 +124,12 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
     simulation_paths = simulation_paths
   )
 
-  # Calculate portfolio VaR and CVaR
-  var_95 <- quantile(mc_results$portfolio_pnl, 0.05, na.rm = TRUE)
-  var_99 <- quantile(mc_results$portfolio_pnl, 0.01, na.rm = TRUE)
-  cvar_95 <- mean(mc_results$portfolio_pnl[mc_results$portfolio_pnl <= var_95], na.rm = TRUE)
-  cvar_99 <- mean(mc_results$portfolio_pnl[mc_results$portfolio_pnl <= var_99], na.rm = TRUE)
+  # Calculate portfolio VaR and CVaR using PerformanceAnalytics
+  # This provides industry-standard calculations with proper handling
+  var_95 <- PerformanceAnalytics::VaR(mc_results$portfolio_pnl, p = 0.95, method = "historical")
+  var_99 <- PerformanceAnalytics::VaR(mc_results$portfolio_pnl, p = 0.99, method = "historical")
+  cvar_95 <- PerformanceAnalytics::ES(mc_results$portfolio_pnl, p = 0.95, method = "historical")
+  cvar_99 <- PerformanceAnalytics::ES(mc_results$portfolio_pnl, p = 0.99, method = "historical")
 
   # Calculate position contributions to risk and return
   position_contributions <- calculate_position_contributions(
@@ -164,7 +192,10 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
     percentile_5 = quantile(mc_results$portfolio_pnl, 0.05),
     percentile_25 = quantile(mc_results$portfolio_pnl, 0.25),
     percentile_75 = quantile(mc_results$portfolio_pnl, 0.75),
-    percentile_95 = quantile(mc_results$portfolio_pnl, 0.95)
+    percentile_95 = quantile(mc_results$portfolio_pnl, 0.95),
+
+    # Regime information (if enabled)
+    regime = regime_info
   )
 }
 
@@ -570,11 +601,16 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
   params <- lapply(seq_len(n_positions), function(i) {
     pos <- positions[i, ]
 
-    # Calculate adaptive volatility based on time horizon
+    # Get volatility (implied + historical blend, or fallback)
+    use_implied <- RISK_CONFIG$features$use_implied_volatility %||% TRUE
+
     sigma <- tryCatch({
-      calculate_adaptive_volatility(
+      get_volatility(
         ticker = pos$ticker,
-        days_to_expiry = pos$days_to_expiry
+        days_to_expiry = pos$days_to_expiry,
+        use_implied = use_implied,
+        fallback_to_historical = TRUE,
+        blend_weight = RISK_CONFIG$advanced$implied_vol_blend_weight %||% 0.70
       )
     }, error = function(e) {
       log_error("Portfolio Risk: Failed to calculate volatility for {pos$ticker} (days_to_expiry={pos$days_to_expiry}, class={class(pos$days_to_expiry)}): {e$message}")
@@ -595,15 +631,32 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
 
   log_info("Portfolio Risk: Running {simulation_paths} correlated simulation paths")
 
+  # Get jump parameters (regime-adjusted if enabled)
+  use_regime <- RISK_CONFIG$features$use_regime_adjustment %||% FALSE
+  if (use_regime && !is.null(regime_info)) {
+    jump_freq <- regime_info$correlation_adj * RISK_CONFIG$jump_frequency
+    jump_corr <- RISK_CONFIG$advanced$jump_correlation_factor %||% 0.70
+  } else {
+    jump_freq <- RISK_CONFIG$jump_frequency
+    jump_corr <- RISK_CONFIG$advanced$jump_correlation_factor %||% 0.50
+  }
+  jump_mean <- RISK_CONFIG$jump_mean
+  jump_vol <- RISK_CONFIG$jump_volatility
+
   # Initialize results matrices (dollar P&L, not returns)
   position_pnl_matrix <- matrix(0, nrow = simulation_paths, ncol = n_positions)
   portfolio_pnl <- numeric(simulation_paths)
 
   # Run simulation
   for (path in seq_len(simulation_paths)) {
-    # Generate correlated random shocks
+    # Generate correlated random shocks (for continuous component)
     z <- rnorm(n_positions)
     correlated_shocks <- t(L) %*% z
+
+    # Generate shared jump factor for correlated jumps
+    # During crises, jumps are more likely to occur simultaneously
+    shared_jump_draw <- runif(1)
+    shared_jump_occurred <- shared_jump_draw < jump_corr
 
     # Simulate each position
     for (i in seq_len(n_positions)) {
@@ -614,7 +667,6 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
         next
       }
 
-      # Simple price path: S_T = S_0 * exp((mu - 0.5*sigma^2)*T + sigma*sqrt(T)*Z)
       # Determine time horizon
       T <- if (!is.null(param$days_to_expiry) && !is.na(param$days_to_expiry)) {
         max(param$days_to_expiry, 1) / 365
@@ -629,7 +681,31 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
       r <- RISK_CONFIG$risk_free_rate
       shock <- correlated_shocks[i]
 
-      final_price <- param$current_price * exp((r - 0.5 * param$sigma^2) * T + param$sigma * sqrt(T) * shock)
+      # Jump-diffusion model: incorporate both continuous and jump components
+      # Continuous component (standard GBM)
+      continuous_component <- (r - 0.5 * param$sigma^2) * T + param$sigma * sqrt(T) * shock
+
+      # Jump component (Poisson process)
+      # For portfolio, use shared jump correlation
+      if (shared_jump_occurred) {
+        # Shared jump (systemic)
+        n_jumps <- rpois(1, jump_freq * T)
+      } else {
+        # Idiosyncratic jump
+        n_jumps <- rpois(1, jump_freq * T * (1 - jump_corr))
+      }
+
+      jump_component <- 0
+      if (n_jumps > 0) {
+        for (j in seq_len(n_jumps)) {
+          jump_size <- rnorm(1, mean = jump_mean, sd = jump_vol)
+          jump_component <- jump_component + jump_size
+        }
+      }
+
+      # Combine components
+      log_return <- continuous_component + jump_component
+      final_price <- param$current_price * exp(log_return)
 
       # Calculate covered call payoff
       # P&L is calculated from purchase_price (cost basis), not current_price
@@ -745,16 +821,17 @@ run_portfolio_stress_tests <- function(positions, correlation_matrix) {
 
       stressed_price <- pos$current_price * (1 + price_change_pct)
 
-      # Calculate P&L
+      # Calculate P&L (using purchase_price for consistency with position-level stress tests)
+      # This shows total profit/loss from cost basis, not just incremental change from current price
       if (!is.null(pos$strike) && !is.na(pos$strike)) {
         if (stressed_price >= pos$strike) {
-          stock_pnl <- (pos$strike - pos$current_price) * pos$shares
+          stock_pnl <- (pos$strike - pos$purchase_price) * pos$shares
         } else {
-          stock_pnl <- (stressed_price - pos$current_price) * pos$shares
+          stock_pnl <- (stressed_price - pos$purchase_price) * pos$shares
         }
         position_pnl <- stock_pnl + pos$premium_received
       } else {
-        position_pnl <- (stressed_price - pos$current_price) * pos$shares
+        position_pnl <- (stressed_price - pos$purchase_price) * pos$shares
       }
 
       total_pnl <- total_pnl + position_pnl

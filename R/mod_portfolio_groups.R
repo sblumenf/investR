@@ -270,16 +270,27 @@ mod_portfolio_groups_server <- function(id){
       if (!is.null(input$sort_by)) {
         if (input$sort_by == "annualized_desc") {
           # Join with pre-calculated metrics (DRY - no recalculation!)
-          groups <- groups %>%
-            left_join(
-              bind_rows(
-                metrics$open_groups_detail %>% select(group_id, projected_annualized_return_pct),
-                metrics$closed_groups_detail %>% select(group_id, annualized_return_pct) %>% rename(projected_annualized_return_pct = annualized_return_pct)
-              ),
-              by = "group_id"
-            ) %>%
-            arrange(desc(projected_annualized_return_pct)) %>%
-            select(-projected_annualized_return_pct)
+          # Only sort by annualized return if we have groups with metrics
+          if (nrow(groups) > 0 && !is.null(metrics$open_groups_detail) && !is.null(metrics$closed_groups_detail)) {
+            groups <- groups %>%
+              left_join(
+                bind_rows(
+                  if (nrow(metrics$open_groups_detail) > 0 && "group_id" %in% names(metrics$open_groups_detail)) {
+                    metrics$open_groups_detail %>% select(group_id, projected_annualized_return_pct)
+                  } else {
+                    tibble::tibble(group_id = character(), projected_annualized_return_pct = numeric())
+                  },
+                  if (nrow(metrics$closed_groups_detail) > 0 && "group_id" %in% names(metrics$closed_groups_detail)) {
+                    metrics$closed_groups_detail %>% select(group_id, annualized_return_pct) %>% rename(projected_annualized_return_pct = annualized_return_pct)
+                  } else {
+                    tibble::tibble(group_id = character(), projected_annualized_return_pct = numeric())
+                  }
+                ),
+                by = "group_id"
+              ) %>%
+              arrange(desc(projected_annualized_return_pct)) %>%
+              select(-projected_annualized_return_pct)
+          }
 
         } else if (input$sort_by == "created_desc") {
           groups <- groups %>%

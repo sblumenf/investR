@@ -12,8 +12,37 @@ NULL
 
 #' Risk Analysis Configuration List
 #'
+#' TIERED CONFIGURATION APPROACH (KISS + DRY):
+#' - Tier 1: Use presets (retail/professional/institutional) for 90% of users
+#' - Tier 2: Feature toggles for common customization
+#' - Tier 3: Advanced overrides for power users
+#'
 #' @export
 RISK_CONFIG <- list(
+
+  ################################################################################
+  # TIER 1: PRESET SELECTION (KISS - Simple for most users)
+  ################################################################################
+
+  # Default preset: "retail", "professional", or "institutional"
+  # See utils_risk_presets.R for full preset definitions
+  default_preset = "professional",
+
+  ################################################################################
+  # TIER 2: FEATURE TOGGLES (Common customizations)
+  ################################################################################
+
+  features = list(
+    use_lsm = TRUE,                 # Least Squares Monte Carlo for early exercise
+    use_implied_volatility = TRUE,  # Market-based vol vs. pure historical
+    use_regime_adjustment = TRUE,   # Dynamic parameter adjustment based on market
+    use_correlated_jumps = TRUE     # Correlated jumps at portfolio level
+  ),
+
+  ################################################################################
+  # TIER 3: SIMULATION PARAMETERS (Can be overridden, or use preset values)
+  ################################################################################
+
   # Monte Carlo simulation parameters
   default_simulation_paths = 10000,
   deep_analysis_paths = 50000,
@@ -70,7 +99,37 @@ RISK_CONFIG <- list(
   volatility_medium_term_lookback = 180,     # Days of data for medium-term positions
   volatility_long_term_lookback = 500,       # Days of data for long-term positions (2+ years)
   volatility_min_observations = 50,          # Minimum data points required for estimation
-  volatility_default = 0.30                  # Fallback if insufficient data (30% annual vol)
+  volatility_default = 0.30,                 # Fallback if insufficient data (30% annual vol)
+
+  ################################################################################
+  # ADVANCED CONFIGURATION (Power users only - most users won't touch these)
+  ################################################################################
+
+  advanced = list(
+    # LSM (Least Squares Monte Carlo) parameters
+    lsm_polynomial_degree = 3,        # Polynomial basis functions (2-5 reasonable)
+    lsm_min_itm_paths = 10,           # Minimum in-the-money paths to run regression
+    lsm_use_orthogonal_poly = TRUE,   # Use orthogonal polynomials (more stable)
+
+    # Jump correlation parameters
+    jump_correlation_factor = 0.70,   # How much jumps correlate (0-1)
+    systemic_jump_weight = 0.60,      # Weight of systemic vs idiosyncratic jumps
+
+    # Regime detection thresholds
+    regime_vix_thresholds = c(low = 15, high = 25),
+    regime_correlation_threshold = 0.70,
+    regime_lookback_days = 60,
+
+    # Implied volatility settings
+    implied_vol_atm_range = 0.10,     # Use strikes within 10% of ATM
+    implied_vol_outlier_threshold = 3.0,  # Reject vols > 300%
+    implied_vol_blend_weight = 0.70,  # Weight of implied vs historical (if using both)
+
+    # Performance tuning
+    enable_parallel = FALSE,          # Parallel processing (not implemented yet)
+    cache_volatility = TRUE,          # Cache volatility calculations
+    cache_correlation = TRUE          # Cache correlation matrices
+  )
 )
 
 ################################################################################

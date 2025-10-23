@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils_risk_helpers.R
 \name{calculate_adaptive_volatility}
 \alias{calculate_adaptive_volatility}
-\title{Calculate Adaptive Volatility Based on Time Horizon}
+\title{Calculate Adaptive Volatility Based on Time Horizon (Historical Only)}
 \usage{
 calculate_adaptive_volatility(ticker, days_to_expiry)
 }
@@ -15,21 +15,27 @@ calculate_adaptive_volatility(ticker, days_to_expiry)
 Numeric annualized volatility (e.g., 0.35 for 35%)
 }
 \description{
-Estimates annualized volatility using time-to-expiry adaptive methodology:
+**NOTE**: For new code, use `get_volatility()` from fct_implied_volatility.R instead.
+That function tries implied volatility first, then falls back to this method.
+}
+\details{
+This function estimates annualized volatility using HISTORICAL data only:
 - Short-term (≤90 days): EWMA with λ=0.94 on 60 days (reactive to recent volatility)
 - Medium-term (90-365 days): EWMA with λ=0.97 on 180 days (balanced approach)
 - Long-term (>365 days): Historical volatility on 500 days (full market cycles)
-}
-\details{
+
 This approach matches forecast horizon to lookback period, following academic
 best practices from volatility forecasting literature.
 }
 \examples{
 \dontrun{
-  # Short-term position
-  vol_smci <- calculate_adaptive_volatility("SMCI", days_to_expiry = 33)
+  # Prefer this (implied + historical):
+  vol <- get_volatility("AAPL", days_to_expiry = 30)
 
-  # Long-term position
-  vol_tgt <- calculate_adaptive_volatility("TGT", days_to_expiry = 800)
+  # Or historical only:
+  vol_historical <- calculate_adaptive_volatility("AAPL", days_to_expiry = 30)
 }
+}
+\seealso{
+[get_volatility()] for implied + historical blended approach
 }

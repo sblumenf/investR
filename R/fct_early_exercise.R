@@ -31,22 +31,17 @@ calculate_early_exercise_probability <- function(ticker,
                                                  dividend_schedule,
                                                  volatility = NULL) {
 
-  # Estimate volatility if not provided
+  # Estimate volatility if not provided - use integrated volatility function
   if (is.null(volatility)) {
-    hist_data <- fetch_price_history(
-      ticker,
-      from = Sys.Date() - lubridate::years(1),
-      auto_adjust = TRUE
-    )
+    use_implied <- RISK_CONFIG$features$use_implied_volatility %||% TRUE
 
-    if (!is.null(hist_data) && nrow(hist_data) >= 50) {
-      returns <- diff(log(Cl(hist_data)))
-      returns <- returns[!is.na(returns)]
-      volatility <- sd(returns) * sqrt(252)
-    } else {
-      # Default volatility if can't estimate
-      volatility <- 0.25
-    }
+    volatility <- get_volatility(
+      ticker = ticker,
+      days_to_expiry = days_to_expiry,
+      use_implied = use_implied,
+      fallback_to_historical = TRUE,
+      blend_weight = RISK_CONFIG$advanced$implied_vol_blend_weight %||% 0.70
+    )
   }
 
   # Get risk-free rate

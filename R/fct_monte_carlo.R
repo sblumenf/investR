@@ -329,10 +329,16 @@ run_monte_carlo_simulation <- function(ticker,
   # Build dividend schedule
   div_schedule <- build_dividend_schedule(ticker, days_to_expiry, is_aristocrat)
 
-  # Calculate adaptive volatility based on time horizon
-  sigma <- calculate_adaptive_volatility(
+  # Get volatility (implied + historical blend, or fallback)
+  # Uses get_volatility() which tries implied vol first, then historical adaptive
+  use_implied <- RISK_CONFIG$features$use_implied_volatility %||% TRUE
+
+  sigma <- get_volatility(
     ticker = ticker,
-    days_to_expiry = days_to_expiry
+    days_to_expiry = days_to_expiry,
+    use_implied = use_implied,
+    fallback_to_historical = TRUE,
+    blend_weight = RISK_CONFIG$advanced$implied_vol_blend_weight %||% 0.70
   )
 
   # Use risk-free rate from config (could fetch SOFR)
@@ -342,6 +348,26 @@ run_monte_carlo_simulation <- function(ticker,
   # Simulation parameters
   n_steps <- max(days_to_expiry, 252)  # At least daily steps
 
+  # Apply regime-based adjustments if enabled
+  use_regime <- RISK_CONFIG$features$use_regime_adjustment %||% FALSE
+  regime_info <- NULL
+
+  if (use_regime) {
+    regime_params <- get_regime_adjusted_parameters()
+    regime_info <- list(
+      name = regime_params$regime_name,
+      description = regime_params$regime_description,
+      risk_multiplier = regime_params$risk_multiplier,
+      vix_current = regime_params$vix_current
+    )
+
+    # Adjust jump frequency based on regime
+    adjusted_jump_freq <- regime_params$jump_frequency
+    log_info("Regime adjustment: {regime_params$regime_name} - jump freq = {round(adjusted_jump_freq, 3)}")
+  } else {
+    adjusted_jump_freq <- RISK_CONFIG$jump_frequency
+  }
+
   # Generate price paths
   if (model == "jump_diffusion") {
     price_paths <- simulate_jump_diffusion(
@@ -350,7 +376,8 @@ run_monte_carlo_simulation <- function(ticker,
       sigma = sigma,
       T = T,
       n_steps = n_steps,
-      n_paths = n_paths
+      n_paths = n_paths,
+      jump_freq = adjusted_jump_freq  # Use regime-adjusted frequency
     )
   } else if (model == "heston") {
     V0 <- sigma^2  # Initial variance
@@ -367,69 +394,131 @@ run_monte_carlo_simulation <- function(ticker,
     stop("Unknown model: ", model)
   }
 
-  # Evaluate each path
-  payoffs <- numeric(n_paths)
-  early_exercise_dates <- rep(NA, n_paths)
-  assigned_at_dividend <- integer(n_paths)  # Track which dividend (0 = held to expiry)
+  # Evaluate each path - use LSM or simple method based on config
+  use_lsm <- RISK_CONFIG$features$use_lsm %||% FALSE
 
-  for (path in seq_len(n_paths)) {
-    exercised <- FALSE
-    exercise_step <- NA
+  if (use_lsm && nrow(div_schedule) > 0) {
+    # Use Least Squares Monte Carlo for sophisticated early exercise
+    log_info("Using LSM for early exercise analysis")
 
-    # Check early exercise at each dividend date
-    if (nrow(div_schedule) > 0) {
+    lsm_result <- run_lsm_early_exercise(
+      price_paths = price_paths,
+      strike = strike,
+      dividend_schedule = div_schedule,
+      risk_free_rate = r,
+      days_to_expiry = days_to_expiry,
+      config = RISK_CONFIG
+    )
+
+    # Convert LSM exercise matrix to payoffs
+    payoffs <- numeric(n_paths)
+    early_exercise_dates <- rep(NA, n_paths)
+    assigned_at_dividend <- integer(n_paths)
+
+    for (path in seq_len(n_paths)) {
+      exercised <- FALSE
+
+      # Check if this path exercised at any dividend
       for (div_idx in seq_len(nrow(div_schedule))) {
-        div_date <- div_schedule$dividend_date[div_idx]
-        div_amount <- div_schedule$dividend_amount[div_idx]
-        days_to_div <- as.numeric(difftime(div_date, Sys.Date(), units = "days"))
-
-        # Find corresponding step in simulation
-        div_step <- round((days_to_div / days_to_expiry) * n_steps)
-        div_step <- max(1, min(div_step, n_steps))
-
-        stock_price_at_div <- price_paths[div_step, path]
-        time_remaining <- (days_to_expiry - days_to_div) / 365.25
-
-        # Check if early exercise optimal
-        if (is_early_exercise_optimal(
-          stock_price_at_div,
-          strike,
-          div_amount,
-          time_remaining,
-          sigma,
-          r
-        )) {
-          # Early exercise
+        if (lsm_result$exercise_matrix[div_idx, path]) {
+          # Exercised at this dividend
           exercised <- TRUE
-          exercise_step <- div_step
           assigned_at_dividend[path] <- div_idx
-          early_exercise_dates[path] <- as.character(div_date)
+          early_exercise_dates[path] <- as.character(div_schedule$dividend_date[div_idx])
 
-          # Calculate payoff (assigned at dividend date)
+          # Calculate payoff (called away at strike)
           payoffs[path] <- calculate_covered_call_payoff(
-            stock_price = strike,  # Called away at strike
+            stock_price = strike,
             strike = strike,
             premium_received = premium_received,
             entry_stock_price = entry_price,
             shares = 100
           )
-
-          break  # Exit dividend loop
+          break
         }
+      }
+
+      # If not exercised early, evaluate at expiration
+      if (!exercised) {
+        final_price <- price_paths[n_steps + 1, path]
+
+        payoffs[path] <- calculate_covered_call_payoff(
+          stock_price = final_price,
+          strike = strike,
+          premium_received = premium_received,
+          entry_stock_price = entry_price,
+          shares = 100
+        )
       }
     }
 
-    # If not exercised early, evaluate at expiration
-    if (!exercised) {
-      final_price <- price_paths[n_steps + 1, path]
+  } else {
+    # Use simple approximation (original method)
+    log_info("Using simple approximation for early exercise")
 
-      payoffs[path] <- calculate_covered_call_payoff(
-        stock_price = final_price,
-        strike = strike,
-        premium_received = premium_received,
-        entry_stock_price = entry_price,
-        shares = 100
-      )
+    payoffs <- numeric(n_paths)
+    early_exercise_dates <- rep(NA, n_paths)
+    assigned_at_dividend <- integer(n_paths)
+
+    for (path in seq_len(n_paths)) {
+      exercised <- FALSE
+      exercise_step <- NA
+
+      # Check early exercise at each dividend date
+      if (nrow(div_schedule) > 0) {
+        for (div_idx in seq_len(nrow(div_schedule))) {
+          div_date <- div_schedule$dividend_date[div_idx]
+          div_amount <- div_schedule$dividend_amount[div_idx]
+          days_to_div <- as.numeric(difftime(div_date, Sys.Date(), units = "days"))
+
+          # Find corresponding step in simulation
+          div_step <- round((days_to_div / days_to_expiry) * n_steps)
+          div_step <- max(1, min(div_step, n_steps))
+
+          stock_price_at_div <- price_paths[div_step, path]
+          time_remaining <- (days_to_expiry - days_to_div) / 365.25
+
+          # Check if early exercise optimal (simple method)
+          if (is_early_exercise_optimal(
+            stock_price_at_div,
+            strike,
+            div_amount,
+            time_remaining,
+            sigma,
+            r
+          )) {
+            # Early exercise
+            exercised <- TRUE
+            exercise_step <- div_step
+            assigned_at_dividend[path] <- div_idx
+            early_exercise_dates[path] <- as.character(div_date)
+
+            # Calculate payoff (assigned at dividend date)
+            payoffs[path] <- calculate_covered_call_payoff(
+              stock_price = strike,  # Called away at strike
+              strike = strike,
+              premium_received = premium_received,
+              entry_stock_price = entry_price,
+              shares = 100
+            )
+
+            break  # Exit dividend loop
+          }
+        }
+      }
+
+      # If not exercised early, evaluate at expiration
+      if (!exercised) {
+        final_price <- price_paths[n_steps + 1, path]
+
+        payoffs[path] <- calculate_covered_call_payoff(
+          stock_price = final_price,
+          strike = strike,
+          premium_received = premium_received,
+          entry_stock_price = entry_price,
+          shares = 100
+        )
+      }
     }
   }
 
@@ -483,6 +572,9 @@ run_monte_carlo_simulation <- function(ticker,
     sample_paths = price_paths[, sample(1:n_paths, min(100, n_paths))],
 
     # Volatility used
-    implied_volatility = sigma
+    implied_volatility = sigma,
+
+    # Regime information (if enabled)
+    regime = regime_info
   )
 }

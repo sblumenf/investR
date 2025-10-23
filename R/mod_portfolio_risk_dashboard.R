@@ -207,6 +207,43 @@ mod_portfolio_risk_dashboard_server <- function(id){
           )
         ),
 
+        # Market Regime (if enabled)
+        if (!is.null(results$regime)) {
+          fluidRow(
+            column(12,
+              card(
+                card_header(
+                  tags$div(
+                    icon("cloud"), " Current Market Regime"
+                  )
+                ),
+                card_body(
+                  fluidRow(
+                    column(3,
+                      create_metric_row("Regime", results$regime$name)
+                    ),
+                    column(5,
+                      create_metric_row("Description", results$regime$description)
+                    ),
+                    column(2,
+                      create_metric_row("Risk Multiplier", sprintf("%.1fx", results$regime$risk_multiplier))
+                    ),
+                    column(2,
+                      if (!is.null(results$regime$vix_current) && !is.na(results$regime$vix_current)) {
+                        create_metric_row("VIX Level", sprintf("%.1f", results$regime$vix_current))
+                      } else {
+                        NULL
+                      }
+                    )
+                  )
+                )
+              )
+            )
+          )
+        } else {
+          NULL
+        },
+
         # Additional metrics
         fluidRow(
           column(12,

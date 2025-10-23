@@ -53,11 +53,23 @@ initialize_activities_schema <- function(conn) {
     ")
 
     # Create unique constraint to prevent duplicates
+    # Uses description instead of symbol because Questrade API inconsistently returns
+    # symbol field (sometimes blank, sometimes populated) for the same transaction.
+    # Description field is always consistent across API calls.
     # Uses trade_date (when trade occurred) instead of transaction_date (settlement timestamp)
     # This prevents API timestamp inconsistencies from creating duplicate records
+
+    # Drop old index if it exists (using symbol)
+    tryCatch({
+      dbExecute(conn, "DROP INDEX IF EXISTS idx_activities_unique")
+    }, error = function(e) {
+      log_warn("Activities DB: Could not drop old index - {e$message}")
+    })
+
+    # Create new index using description instead of symbol
     dbExecute(conn, "
       CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_unique
-      ON account_activities(account_number, symbol, trade_date, action, quantity, net_amount)
+      ON account_activities(account_number, description, trade_date, action, quantity, net_amount)
     ")
 
     # Create indexes for performance
@@ -80,6 +92,18 @@ initialize_activities_schema <- function(conn) {
       CREATE INDEX IF NOT EXISTS idx_activities_type
       ON account_activities(type)
     ")
+
+    # Migration: Add ignore_for_grouping column if it doesn't exist
+    tryCatch({
+      dbExecute(conn, "
+        ALTER TABLE account_activities
+        ADD COLUMN IF NOT EXISTS ignore_for_grouping BOOLEAN DEFAULT FALSE
+      ")
+      log_info("Activities DB: Added ignore_for_grouping column (migration)")
+    }, error = function(e) {
+      # Column might already exist in older databases, that's okay
+      log_debug("Activities DB: ignore_for_grouping column already exists")
+    })
 
     log_info("Activities DB: Schema initialized successfully")
     return(TRUE)
@@ -123,18 +147,21 @@ save_activities_batch <- function(activities_df) {
       )
 
     # 2. Query existing keys using trade_date (business key, not settlement timestamp).
+    # Uses description instead of symbol for deduplication because Questrade API
+    # inconsistently returns symbol field for the same transaction.
     existing_keys <- dbGetQuery(conn, "
-      SELECT account_number, symbol, trade_date, action, quantity, net_amount
+      SELECT account_number, description, trade_date, action, quantity, net_amount
       FROM account_activities
     ") %>%
       as_tibble()
 
     # 3. Perform the anti_join on native data types for robust duplicate detection.
-    # Uses trade_date to match the unique constraint.
+    # Uses description instead of symbol to match the unique constraint.
+    # Description is consistent across Questrade API calls, symbol is not.
     new_activities <- activities_to_save %>%
       anti_join(
         existing_keys,
-        by = c("account_number", "symbol", "trade_date", "action", "quantity", "net_amount")
+        by = c("account_number", "description", "trade_date", "action", "quantity", "net_amount")
       )
 
     if (nrow(new_activities) == 0) {
@@ -166,6 +193,104 @@ save_activities_batch <- function(activities_df) {
   }, error = function(e) {
     log_error("Activities DB: Failed to save activities - {conditionMessage(e)}")
     return(list(inserted_count = 0, skipped_count = 0))
+  })
+}
+
+#' Enrich blank symbols for unlinked transactions
+#'
+#' Finds unlinked transactions with blank/missing symbol fields and enriches them
+#' by copying symbol data from matching transactions that have populated symbols.
+#' Only updates transactions that are NOT linked to groups (preserves manual work).
+#'
+#' Matching criteria: same account_number, description, trade_date, quantity, net_amount
+#'
+#' @return Integer count of transactions enriched
+#' @noRd
+enrich_blank_symbols_unlinked <- function() {
+  conn <- get_portfolio_db_connection()
+  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+
+  tryCatch({
+    # Find unlinked transactions with blank symbols
+    blank_symbols <- dbGetQuery(conn, "
+      SELECT
+        activity_id,
+        account_number,
+        description,
+        trade_date,
+        quantity,
+        net_amount,
+        symbol,
+        symbol_id
+      FROM account_activities
+      WHERE (symbol IS NULL OR symbol = '' OR symbol = 'NOSYMBOL')
+        AND (group_id IS NULL OR group_id = '')
+    ") %>% as_tibble()
+
+    if (nrow(blank_symbols) == 0) {
+      log_debug("Symbol Enrichment: No unlinked blank symbols to enrich")
+      return(0)
+    }
+
+    log_info("Symbol Enrichment: Found {nrow(blank_symbols)} unlinked transactions with blank symbols")
+
+    # For each blank symbol transaction, look for matching transaction with populated symbol
+    enriched_count <- 0
+
+    for (i in seq_len(nrow(blank_symbols))) {
+      blank_tx <- blank_symbols[i, ]
+
+      # Find matching transactions with populated symbols
+      # Match on: account, description, date, quantity, amount (same criteria as deduplication)
+      matching_tx <- dbGetQuery(conn, "
+        SELECT symbol, symbol_id
+        FROM account_activities
+        WHERE account_number = ?
+          AND description = ?
+          AND trade_date = ?
+          AND quantity = ?
+          AND net_amount = ?
+          AND symbol IS NOT NULL
+          AND symbol != ''
+          AND symbol != 'NOSYMBOL'
+        LIMIT 1
+      ", params = list(
+        blank_tx$account_number,
+        blank_tx$description,
+        blank_tx$trade_date,
+        blank_tx$quantity,
+        blank_tx$net_amount
+      ))
+
+      if (nrow(matching_tx) > 0) {
+        # Update the blank symbol transaction with enriched data
+        rows_updated <- dbExecute(conn, "
+          UPDATE account_activities
+          SET symbol = ?,
+              symbol_id = ?
+          WHERE activity_id = ?
+        ", params = list(
+          matching_tx$symbol[1],
+          matching_tx$symbol_id[1],
+          blank_tx$activity_id
+        ))
+
+        if (rows_updated > 0) {
+          enriched_count <- enriched_count + 1
+          log_debug("Symbol Enrichment: Updated {blank_tx$activity_id} with symbol '{matching_tx$symbol[1]}'")
+        }
+      }
+    }
+
+    if (enriched_count > 0) {
+      log_info("Symbol Enrichment: Enriched {enriched_count} unlinked transactions with symbol data")
+    }
+
+    return(enriched_count)
+
+  }, error = function(e) {
+    log_error("Symbol Enrichment: Failed - {e$message}")
+    return(0)
   })
 }
 

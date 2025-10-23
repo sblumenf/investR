@@ -547,6 +547,12 @@ fetch_all_activities <- function(days_back = 30) {
     save_result <- save_activities_batch(filtered_activities)
     log_info("Questrade API: Saved {save_result$inserted_count} new activities to database")
 
+    # Enrich blank symbols on unlinked transactions
+    enriched_count <- enrich_blank_symbols_unlinked()
+    if (enriched_count > 0) {
+      log_info("Questrade API: Enriched {enriched_count} blank symbols")
+    }
+
     # Get unprocessed activities for pattern matching
     unprocessed <- get_unprocessed_activities()
 
