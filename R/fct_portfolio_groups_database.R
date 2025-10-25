@@ -282,6 +282,13 @@ create_position_group <- function(group_id, group_name = NULL, strategy_type,
           select(group_id, account_number, symbol, role, added_at)
       }
 
+      # POINT D: Log members RIGHT BEFORE database write
+      log_info(sprintf("[POINT D] About to write %d members to database for group %s:", nrow(members_data), group_id))
+      for (i in seq_len(nrow(members_data))) {
+        log_info(sprintf("[POINT D]   %s → role: %s", members_data$symbol[i], members_data$role[i]))
+      }
+      log_info(sprintf("[POINT D] Members data structure: %s", paste(capture.output(str(members_data)), collapse = " | ")))
+
       dbWriteTable(conn, "position_group_members", members_data, append = TRUE)
       log_info("Portfolio Groups DB: Created group '{group_name}' with {nrow(members)} members")
     } else {
@@ -409,6 +416,80 @@ reopen_position_group <- function(group_id) {
 delete_position_group <- function(group_id) {
   log_error("Portfolio Groups DB: delete_position_group() is DEPRECATED - use close_position_group() instead")
   stop("delete_position_group() is deprecated. Use close_position_group() to soft-delete groups and preserve historical data.")
+}
+
+#' Unlink position group (hard delete for setup mistakes)
+#'
+#' Completely removes a position group and unlinks all activities, restoring
+#' them to their pre-linked state. Use this to undo mistakes during position
+#' setup, NOT for closing completed positions (use close_position_group instead).
+#'
+#' This function:
+#' - Deletes all cash flows (projected and actual)
+#' - Deletes all group members
+#' - Deletes the position group record
+#' - Unlinks all activities (sets group_id = NULL)
+#'
+#' Activities remain in the database and can be re-linked to new groups.
+#'
+#' @param group_id Group identifier
+#' @return Logical TRUE if successful, FALSE otherwise
+#' @export
+unlink_position_group <- function(group_id) {
+  conn <- get_portfolio_db_connection()
+  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+
+  tryCatch({
+    log_info("Unlink Group: Starting unlink operation for group {group_id}")
+
+    # Step 1: Delete all cash flows (projected and actual)
+    flows_deleted <- dbExecute(conn, "
+      DELETE FROM position_group_cash_flows
+      WHERE group_id = ?
+    ", params = list(group_id))
+    log_info("Unlink Group: Deleted {flows_deleted} cash flow projection(s)")
+
+    # Step 2: Delete group members
+    members_deleted <- dbExecute(conn, "
+      DELETE FROM position_group_members
+      WHERE group_id = ?
+    ", params = list(group_id))
+    log_info("Unlink Group: Deleted {members_deleted} group member(s)")
+
+    # Step 3: Delete position group
+    group_deleted <- dbExecute(conn, "
+      DELETE FROM position_groups
+      WHERE group_id = ?
+    ", params = list(group_id))
+    log_info("Unlink Group: Deleted {group_deleted} position group(s)")
+
+    # Step 4: Unlink activities
+    activities_unlinked <- dbExecute(conn, "
+      UPDATE account_activities
+      SET group_id = NULL
+      WHERE group_id = ?
+    ", params = list(group_id))
+    log_info("Unlink Group: Unlinked {activities_unlinked} activity/activities")
+
+    # Verification
+    remaining_groups <- dbGetQuery(conn, "
+      SELECT COUNT(*) as count
+      FROM position_groups
+      WHERE group_id = ?
+    ", params = list(group_id))
+
+    if (remaining_groups$count == 0) {
+      log_info("Unlink Group: Successfully unlinked group {group_id}")
+      return(TRUE)
+    } else {
+      log_warn("Unlink Group: Group {group_id} may not have been fully deleted")
+      return(FALSE)
+    }
+
+  }, error = function(e) {
+    log_error("Unlink Group: Failed to unlink group {group_id} - {e$message}")
+    return(FALSE)
+  })
 }
 
 ################################################################################

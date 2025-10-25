@@ -124,6 +124,7 @@ create_cash_flow_section <- function(cash_flows, is_open = TRUE) {
       event_label <- switch(event$event_type,
         "option_gain" = "Profit at Expiration",
         "dividend" = "Dividend Payment",
+        "option_premium" = "Option Premium",
         tools::toTitleCase(gsub("_", " ", event$event_type))  # fallback
       )
 
@@ -158,6 +159,7 @@ create_cash_flow_section <- function(cash_flows, is_open = TRUE) {
       event_label <- switch(event$event_type,
         "option_gain" = "Profit at Expiration",
         "dividend" = "Dividend Payment",
+        "option_premium" = "Option Premium",
         tools::toTitleCase(gsub("_", " ", event$event_type))  # fallback
       )
 
@@ -518,6 +520,18 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
                         group_data$group_id, edit_input_name, group_data$group_id),
       icon("edit"),
       " Edit Members"
+    ),
+    tags$button(
+      id = sprintf("delete_group_%s", group_data$group_id),
+      type = "button",
+      class = "btn btn-sm btn-danger",
+      style = "margin-left: 10px;",
+      onclick = sprintf("console.log('Delete clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                        group_data$group_id,
+                        if (!is.null(ns)) ns("delete_group_clicked") else "delete_group_clicked",
+                        group_data$group_id),
+      icon("trash"),
+      " Delete"
     )
   )
 

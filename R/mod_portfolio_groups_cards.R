@@ -83,7 +83,7 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
         group_cash_flows <- all_cash_flows %>% filter(group_id == gid)
 
         # Get pre-calculated metrics for this group (if available)
-        group_metrics <- if (!is.null(metrics_lookup)) {
+        group_metrics <- if (!is.null(metrics_lookup) && nrow(metrics_lookup) > 0 && "group_id" %in% names(metrics_lookup)) {
           metrics_lookup %>% filter(group_id == gid)
         } else {
           NULL
@@ -322,6 +322,112 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
           duration = 5
         )
       }
+    }, ignoreInit = TRUE)
+
+    # Handle Delete Group button clicks
+    observeEvent(input$delete_group_clicked, {
+      group_id <- input$delete_group_clicked
+
+      log_info("Delete Group clicked - group_id: {group_id}")
+
+      # Get group data to show in confirmation
+      group_data <- get_group_by_id(group_id)
+      if (nrow(group_data) == 0) {
+        showNotification(
+          "Group not found. Please refresh the page.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+
+      # Get details about what will be deleted
+      members <- get_group_members(group_id)
+      activities <- get_activities_by_group(group_id)
+      cash_flows <- get_cash_flows_for_groups(group_id)
+
+      # Show confirmation modal
+      showModal(modalDialog(
+        title = tags$span(
+          icon("exclamation-triangle", style = "color: #dc3545;"),
+          " Delete Position Group"
+        ),
+        tags$div(
+          tags$p(
+            style = "font-weight: bold; margin-bottom: 15px;",
+            sprintf("Are you sure you want to delete: %s?", group_data$group_name)
+          ),
+          tags$div(
+            class = "alert alert-warning",
+            style = "margin-bottom: 15px;",
+            tags$strong("This will PERMANENTLY:"),
+            tags$ul(
+              style = "margin-top: 10px; margin-bottom: 0;",
+              tags$li(sprintf("Unlink %d activity/activities (they will return to unlinked state)", nrow(activities))),
+              tags$li(sprintf("Delete %d group member(s)", nrow(members))),
+              tags$li(sprintf("Delete %d cash flow projection(s)", nrow(cash_flows))),
+              tags$li("Delete the position group")
+            )
+          ),
+          tags$p(
+            style = "color: #6c757d; font-size: 14px;",
+            "This cannot be undone. The activities will remain in your account but will be unlinked and available for re-grouping."
+          )
+        ),
+        footer = tagList(
+          modalButton("Cancel"),
+          tags$button(
+            id = ns(sprintf("confirm_delete_btn_%s", group_id)),
+            type = "button",
+            class = "btn btn-danger",
+            onclick = sprintf("console.log('Confirm delete: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                              group_id, ns("delete_group_confirmed"), group_id),
+            icon("trash"),
+            " Confirm Delete"
+          )
+        ),
+        easyClose = FALSE
+      ))
+    }, ignoreInit = TRUE)
+
+    # Handle confirmation of delete action
+    observeEvent(input$delete_group_confirmed, {
+      group_id <- input$delete_group_confirmed
+
+      log_info("Delete Group confirmed - group_id: {group_id}")
+
+      # Get group name for notification before deleting
+      group_data <- get_group_by_id(group_id)
+      group_name <- if (nrow(group_data) > 0) group_data$group_name else group_id
+
+      # Count activities before deletion for notification
+      activities <- get_activities_by_group(group_id)
+      activity_count <- nrow(activities)
+
+      # Delete the group
+      result <- unlink_position_group(group_id)
+
+      if (result) {
+        # Success
+        showNotification(
+          sprintf("Group deleted successfully. %d activity/activities unlinked.", activity_count),
+          type = "message",
+          duration = 5
+        )
+
+        # Increment card version to force re-render
+        card_version(card_version() + 1)
+      } else {
+        # Failure
+        showNotification(
+          "Failed to delete group. Please check logs.",
+          type = "error",
+          duration = 5
+        )
+      }
+
+      # Remove modal
+      removeModal()
     }, ignoreInit = TRUE)
 
     # Handle Edit Members button clicks
