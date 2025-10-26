@@ -373,6 +373,61 @@ update_position_group <- function(group_id, group_name = NULL,
 # The comprehensive version with P&L calculation is in fct_group_pnl.R.
 # Use that function instead - it handles status update + P&L calculation + cash flow cleanup.
 
+#' Update option member when a roll occurs
+#'
+#' When a covered call option is rolled (buy-to-close old option, sell-to-open new option),
+#' this function updates the position_group_members table to reflect the new option symbol.
+#' This ensures portfolio risk analysis sees the current active option, not the expired one.
+#'
+#' @param group_id Group identifier
+#' @param old_symbol Old option symbol being closed (e.g., "BAC24Oct25C51.00")
+#' @param new_symbol New option symbol being opened (e.g., "BAC21Nov25C52.00")
+#' @return Logical TRUE if successful, FALSE otherwise
+#' @noRd
+update_group_option_member <- function(group_id, old_symbol, new_symbol) {
+  conn <- get_portfolio_db_connection()
+  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+
+  tryCatch({
+    # Begin transaction for safety
+    dbExecute(conn, "BEGIN TRANSACTION")
+
+    # Verify old option exists in members table
+    old_member <- dbGetQuery(conn, "
+      SELECT * FROM position_group_members
+      WHERE group_id = ? AND symbol = ? AND role = 'short_call'
+    ", params = list(group_id, old_symbol))
+
+    if (nrow(old_member) == 0) {
+      log_warn("Portfolio Groups DB: Cannot roll - old option {old_symbol} not found in group {group_id} members")
+      dbExecute(conn, "ROLLBACK")
+      return(FALSE)
+    }
+
+    # Update the member symbol (keeps same role, account_number, just changes symbol and timestamp)
+    rows_affected <- dbExecute(conn, "
+      UPDATE position_group_members
+      SET symbol = ?, added_at = ?
+      WHERE group_id = ? AND symbol = ? AND role = 'short_call'
+    ", params = list(new_symbol, Sys.time(), group_id, old_symbol))
+
+    if (rows_affected > 0) {
+      dbExecute(conn, "COMMIT")
+      log_info("Portfolio Groups DB: Rolled option in group {group_id}: {old_symbol} → {new_symbol}")
+      return(TRUE)
+    } else {
+      dbExecute(conn, "ROLLBACK")
+      log_warn("Portfolio Groups DB: Failed to update member for group {group_id}")
+      return(FALSE)
+    }
+
+  }, error = function(e) {
+    tryCatch(dbExecute(conn, "ROLLBACK"), error = function(e2) NULL)
+    log_error("Portfolio Groups DB: Failed to roll option for group {group_id} - {e$message}")
+    return(FALSE)
+  })
+}
+
 #' Reopen a closed position group
 #'
 #' Changes a closed group back to open status.

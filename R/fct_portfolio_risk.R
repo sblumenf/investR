@@ -10,6 +10,9 @@
 #' @importFrom PerformanceAnalytics VaR ES
 NULL
 
+# Cash equivalent tickers for special handling in risk analysis
+CASH_EQUIVALENT_TICKERS <- c("ZMMK.TO", "SGOV")
+
 #' Analyze portfolio risk using correlated Monte Carlo
 #'
 #' Main function for portfolio-level risk analysis. Fetches all open positions,
@@ -20,7 +23,7 @@ NULL
 #'
 #' @return List with portfolio risk metrics
 #' @export
-analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252) {
+analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252, use_regime_detection = NULL) {
 
   # Validate inputs
   if (!is.numeric(simulation_paths) || simulation_paths < 100 || simulation_paths > 100000) {
@@ -61,18 +64,40 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
     ))
   }
 
-  # Filter out positions without expiration (except cash equivalents)
-  cash_equivalent_tickers <- c("ZMMK.TO", "SGOV")
-  positions_with_expiry <- positions %>%
-    filter(!is.na(days_to_expiry) | ticker %in% cash_equivalent_tickers)
+  # Filter out positions without expiration and expired positions (except cash equivalents)
+  cash_equivalent_tickers <- CASH_EQUIVALENT_TICKERS
 
-  excluded_count <- nrow(positions) - nrow(positions_with_expiry)
-  if (excluded_count > 0) {
-    excluded_tickers <- positions %>%
+  # Identify expired positions (negative days_to_expiry)
+  expired_positions <- positions %>%
+    filter(!is.na(days_to_expiry) & days_to_expiry < 0)
+
+  if (nrow(expired_positions) > 0) {
+    expired_list <- expired_positions %>%
+      select(ticker, expiration, days_to_expiry) %>%
+      mutate(expired_days_ago = abs(days_to_expiry)) %>%
+      arrange(desc(expired_days_ago))
+
+    log_warn("Portfolio Risk: Excluding {nrow(expired_positions)} expired position(s):")
+    for (i in 1:nrow(expired_list)) {
+      log_warn("  - {expired_list$ticker[i]}: expired on {expired_list$expiration[i]} ({expired_list$expired_days_ago[i]} day(s) ago)")
+    }
+  }
+
+  # Keep positions with valid future expiry OR cash equivalents
+  positions_with_expiry <- positions %>%
+    filter((!is.na(days_to_expiry) & days_to_expiry >= 0) | ticker %in% cash_equivalent_tickers)
+
+  # Also log positions without expiration dates (if any)
+  no_expiry_count <- positions %>%
+    filter(is.na(days_to_expiry) & !(ticker %in% cash_equivalent_tickers)) %>%
+    nrow()
+
+  if (no_expiry_count > 0) {
+    no_expiry_tickers <- positions %>%
       filter(is.na(days_to_expiry) & !(ticker %in% cash_equivalent_tickers)) %>%
       pull(ticker) %>%
       unique()
-    log_warn("Portfolio Risk: Excluding {excluded_count} positions without expiration: {paste(excluded_tickers, collapse=', ')}")
+    log_warn("Portfolio Risk: Excluding {no_expiry_count} position(s) without expiration: {paste(no_expiry_tickers, collapse=', ')}")
   }
 
   # Use filtered positions for analysis
@@ -91,7 +116,12 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
   correlation_matrix <- expand_correlation_to_positions(positions, ticker_correlation_matrix)
 
   # Apply regime-based adjustments if enabled
-  use_regime <- RISK_CONFIG$features$use_regime_adjustment %||% FALSE
+  # Use parameter if provided, otherwise fall back to config
+  if (is.null(use_regime_detection)) {
+    use_regime <- RISK_CONFIG$features$use_regime_adjustment %||% FALSE
+  } else {
+    use_regime <- use_regime_detection
+  }
   regime_info <- NULL
 
   if (use_regime) {
@@ -121,15 +151,29 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
   mc_results <- run_correlated_monte_carlo(
     positions = positions,
     correlation_matrix = correlation_matrix,
-    simulation_paths = simulation_paths
+    simulation_paths = simulation_paths,
+    regime_info = regime_info
   )
 
-  # Calculate portfolio VaR and CVaR using PerformanceAnalytics
-  # This provides industry-standard calculations with proper handling
-  var_95 <- PerformanceAnalytics::VaR(mc_results$portfolio_pnl, p = 0.95, method = "historical")
-  var_99 <- PerformanceAnalytics::VaR(mc_results$portfolio_pnl, p = 0.99, method = "historical")
-  cvar_95 <- PerformanceAnalytics::ES(mc_results$portfolio_pnl, p = 0.95, method = "historical")
-  cvar_99 <- PerformanceAnalytics::ES(mc_results$portfolio_pnl, p = 0.99, method = "historical")
+  # Calculate portfolio VaR and CVaR using quantile (since we have dollar P&L, not returns)
+  # VaR (Value at Risk) = the loss threshold at a given confidence level
+  # CVaR (Conditional VaR / Expected Shortfall) = expected loss given we're beyond the VaR threshold
+  #
+  # Note: We use quantile() instead of PerformanceAnalytics::VaR() because portfolio_pnl
+  # contains dollar amounts, not percentage returns. PerformanceAnalytics expects returns
+  # and produces incorrect results when given dollar values.
+
+  # VaR 95%: 5th percentile (worst 5% of outcomes)
+  var_95 <- quantile(mc_results$portfolio_pnl, probs = 0.05, names = FALSE)
+
+  # VaR 99%: 1st percentile (worst 1% of outcomes)
+  var_99 <- quantile(mc_results$portfolio_pnl, probs = 0.01, names = FALSE)
+
+  # CVaR 95%: Expected Shortfall = mean of all outcomes worse than or equal to VaR 95%
+  cvar_95 <- mean(mc_results$portfolio_pnl[mc_results$portfolio_pnl <= var_95])
+
+  # CVaR 99%: Expected Shortfall at 99% confidence
+  cvar_99 <- mean(mc_results$portfolio_pnl[mc_results$portfolio_pnl <= var_99])
 
   # Calculate position contributions to risk and return
   position_contributions <- calculate_position_contributions(
@@ -236,9 +280,10 @@ extract_portfolio_positions <- function(open_groups) {
       members <- all_members %>% filter(group_id == !!group_id)
       activities <- all_activities %>% filter(group_id == !!group_id)
 
-      # Extract ticker (underlying stock symbol, not option)
+      # Extract ticker (underlying stock symbol, cash equivalent, or parse from option)
       ticker <- NULL
       if (nrow(members) > 0) {
+        # Try underlying stock first
         underlying <- members %>% filter(role == "underlying_stock")
         if (nrow(underlying) > 0) {
           ticker <- underlying$symbol[1]
@@ -247,9 +292,16 @@ extract_portfolio_positions <- function(open_groups) {
             ticker <- parse_option_symbol(ticker)
           }
         } else {
-          # No underlying stock member, try to parse from first member
-          if (nrow(members) > 0) {
-            ticker <- parse_option_symbol(members$symbol[1])
+          # Try cash equivalent
+          cash_eq <- members %>% filter(role == "cash_equivalent")
+          if (nrow(cash_eq) > 0) {
+            ticker <- cash_eq$symbol[1]
+            log_info("Portfolio Risk: Group {group_id} is cash equivalent ({ticker})")
+          } else {
+            # No underlying or cash, try to parse from first member
+            if (nrow(members) > 0) {
+              ticker <- parse_option_symbol(members$symbol[1])
+            }
           }
         }
       }
@@ -257,7 +309,7 @@ extract_portfolio_positions <- function(open_groups) {
       # Skip if we couldn't determine ticker
       if (is.null(ticker) || is.na(ticker) || ticker == "") {
         log_warn("Portfolio Risk: Skipping group {group_id} - could not determine ticker")
-        return(NULL)
+        NULL
       }
 
       # Get current price and value from market data
@@ -267,7 +319,7 @@ extract_portfolio_positions <- function(open_groups) {
       # Skip if no current price available
       if (is.null(current_price) || is.na(current_price)) {
         log_warn("Portfolio Risk: Skipping group {group_id} ({ticker}) - no current price available")
-        return(NULL)
+        NULL
       }
 
       # Extract option details
@@ -350,7 +402,7 @@ extract_portfolio_positions <- function(open_groups) {
       # Log the error and skip this position
       log_warn("Portfolio Risk: Failed to extract position for group {group_id}: {e$message}")
       failed_count <<- failed_count + 1
-      return(NULL)
+      NULL
     })
 
     # Add to successful list if not NULL
@@ -578,9 +630,10 @@ expand_correlation_to_positions <- function(positions, ticker_correlation_matrix
 #' @param positions Tibble of position details
 #' @param correlation_matrix Correlation matrix for positions (not tickers)
 #' @param simulation_paths Number of simulation paths
+#' @param regime_info List with regime information (NULL if regime detection disabled)
 #' @return List with portfolio and position P&L (in dollars, not percentages)
 #' @noRd
-run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation_paths = 10000) {
+run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation_paths = 10000, regime_info = NULL) {
 
   n_positions <- nrow(positions)
 
@@ -670,7 +723,7 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
       # Determine time horizon
       T <- if (!is.null(param$days_to_expiry) && !is.na(param$days_to_expiry)) {
         max(param$days_to_expiry, 1) / 365
-      } else if (param$ticker %in% c("ZMMK.TO", "SGOV")) {
+      } else if (param$ticker %in% CASH_EQUIVALENT_TICKERS) {
         0.001  # Cash equivalents - minimal time horizon (near-zero volatility impact)
       } else {
         # This shouldn't happen after filtering, but log if it does
@@ -781,6 +834,10 @@ calculate_position_contributions <- function(positions, portfolio_pnl, position_
     expected_contribution = expected_contributions,
     risk_contribution = risk_contributions,
     pct_of_portfolio_risk = abs(risk_contributions) / total_abs_risk,
+    # Risk/Return Ratio: how much risk per dollar of expected return
+    # Lower is better (taking less risk for same return)
+    # Formula: |Risk Contribution| / |Expected Contribution|
+    # Example: 0.5 means taking $0.50 of risk for every $1.00 of expected return
     risk_return_ratio = ifelse(expected_contributions != 0,
                                abs(risk_contributions) / abs(expected_contributions),
                                NA_real_)

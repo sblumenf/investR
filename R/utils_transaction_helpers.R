@@ -75,3 +75,63 @@ is_overnight_hold <- function(buy_activity, sell_activity) {
   # Overnight hold: sold 1 or 2 business days after purchase
   return(days_diff >= 1 && days_diff <= 2)
 }
+
+#' Detect if an option sale is part of a roll transaction
+#'
+#' A roll occurs when you buy-to-close an existing option and sell-to-open
+#' a new option (different strike/expiry) on the same underlying stock on the same day.
+#' This function checks if a sell-to-open option transaction has a matching
+#' buy-to-close transaction in the same group.
+#'
+#' @param activity Single row tibble with columns: symbol, action, trade_date, type
+#' @param group_activities Tibble of all activities in the same group
+#' @return List with is_roll (logical), old_symbol (character), new_symbol (character)
+#' @noRd
+detect_option_roll <- function(activity, group_activities) {
+  # Default: not a roll
+  no_roll <- list(is_roll = FALSE, old_symbol = NULL, new_symbol = NULL)
+
+  # Must be a sell option transaction
+  if (nrow(activity) == 0 || !is_option_sale(activity)) {
+    return(no_roll)
+  }
+
+  new_symbol <- activity$symbol[1]
+  trade_date <- as.Date(activity$trade_date[1])
+
+  # Extract underlying ticker from the new option
+  underlying <- parse_option_symbol(new_symbol)
+  if (is.na(underlying)) {
+    return(no_roll)
+  }
+
+  # Look for buy-to-close on same date, same underlying, different option symbol
+  buy_to_close <- group_activities %>%
+    filter(
+      !is.na(action),
+      action == "Buy",
+      !is.na(symbol),
+      is_option_symbol(symbol),
+      as.Date(trade_date) == !!trade_date,
+      symbol != new_symbol  # Different option symbol (different strike/expiry)
+    )
+
+  # Check if any of the buy transactions are for the same underlying
+  if (nrow(buy_to_close) > 0) {
+    for (i in seq_len(nrow(buy_to_close))) {
+      old_symbol <- buy_to_close$symbol[i]
+      old_underlying <- parse_option_symbol(old_symbol)
+
+      if (!is.na(old_underlying) && old_underlying == underlying) {
+        # Found a roll: buying old option, selling new option, same underlying, same day
+        return(list(
+          is_roll = TRUE,
+          old_symbol = old_symbol,
+          new_symbol = new_symbol
+        ))
+      }
+    }
+  }
+
+  return(no_roll)
+}

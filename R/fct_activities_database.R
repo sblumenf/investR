@@ -555,6 +555,35 @@ link_activity_to_group <- function(activity_id, group_id) {
         )
       }
 
+      # Detect and process option rolls
+      # When a sell-to-open option transaction is linked, check if it's part of a roll
+      if (activity$type[1] == "Trades") {
+        # Get full activity details including symbol and action
+        full_activity <- dbGetQuery(conn, "
+          SELECT * FROM account_activities WHERE activity_id = ?
+        ", params = list(activity_id))
+
+        if (nrow(full_activity) > 0 && !is.na(full_activity$action[1]) && full_activity$action[1] == "Sell") {
+          if (!is.na(full_activity$symbol[1]) && is_option_symbol(full_activity$symbol[1])) {
+            # Get all activities in this group to check for roll pattern
+            group_activities <- get_activities_by_group(group_id)
+
+            # Detect if this is a roll
+            roll_info <- detect_option_roll(full_activity, group_activities)
+
+            if (roll_info$is_roll) {
+              log_info("Activities DB: Detected option roll in group {group_id}")
+              # Update the group member to reflect the new option
+              update_group_option_member(
+                group_id = group_id,
+                old_symbol = roll_info$old_symbol,
+                new_symbol = roll_info$new_symbol
+              )
+            }
+          }
+        }
+      }
+
       return(TRUE)
     } else {
       log_warn("Activities DB: Failed to update activity {activity_id}")
