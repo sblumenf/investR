@@ -78,10 +78,10 @@ is_overnight_hold <- function(buy_activity, sell_activity) {
 
 #' Detect if an option sale is part of a roll transaction
 #'
-#' A roll occurs when you buy-to-close an existing option and sell-to-open
-#' a new option (different strike/expiry) on the same underlying stock on the same day.
-#' This function checks if a sell-to-open option transaction has a matching
-#' buy-to-close transaction in the same group.
+#' A roll occurs when you close an existing option (via buy-to-close OR expiration)
+#' and sell-to-open a new option (different strike/expiry) on the same underlying
+#' stock on the same day. This function checks if a sell-to-open option transaction
+#' has a matching closing transaction in the same group.
 #'
 #' @param activity Single row tibble with columns: symbol, action, trade_date, type
 #' @param group_activities Tibble of all activities in the same group
@@ -105,25 +105,26 @@ detect_option_roll <- function(activity, group_activities) {
     return(no_roll)
   }
 
-  # Look for buy-to-close on same date, same underlying, different option symbol
-  buy_to_close <- group_activities %>%
+  # Look for closing event on same date: buy-to-close OR expiration
+  # Closing events: Buy action (buy-to-close) or EXP action (expired worthless)
+  close_activity <- group_activities %>%
     filter(
       !is.na(action),
-      action == "Buy",
+      action %in% c("Buy", "EXP"),  # Handle both buy-to-close and expirations
       !is.na(symbol),
       is_option_symbol(symbol),
       as.Date(trade_date) == !!trade_date,
       symbol != new_symbol  # Different option symbol (different strike/expiry)
     )
 
-  # Check if any of the buy transactions are for the same underlying
-  if (nrow(buy_to_close) > 0) {
-    for (i in seq_len(nrow(buy_to_close))) {
-      old_symbol <- buy_to_close$symbol[i]
+  # Check if any of the closing transactions are for the same underlying
+  if (nrow(close_activity) > 0) {
+    for (i in seq_len(nrow(close_activity))) {
+      old_symbol <- close_activity$symbol[i]
       old_underlying <- parse_option_symbol(old_symbol)
 
       if (!is.na(old_underlying) && old_underlying == underlying) {
-        # Found a roll: buying old option, selling new option, same underlying, same day
+        # Found a roll: closing old option (buy OR exp), selling new option, same underlying, same day
         return(list(
           is_roll = TRUE,
           old_symbol = old_symbol,

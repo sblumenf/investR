@@ -40,8 +40,10 @@ generate_initial_projections <- function(group_id, members, account_number) {
     }
 
     # Strategies that should NOT have projections (short-term or unstructured)
+    # Legacy Covered Call: only track actual cash flows from activities
     no_projection_strategies <- c(
       "Other",
+      "Legacy Covered Call",
       "Weekly Dividend Capture",
       "Monthly Dividend Capture",
       "Dividend Capture"
@@ -96,6 +98,11 @@ generate_initial_projections <- function(group_id, members, account_number) {
         # Premium received from activities (using gross_amount)
         premium_received <- sum(abs(option_activities$gross_amount), na.rm = TRUE)
       }
+    } else {
+      # Warning: covered call strategies should have an option
+      if (grepl("covered call", group_info$strategy_type[1], ignore.case = TRUE)) {
+        log_warn("Income Projection: Covered call group {group_id} has no short_call member - check member roles")
+      }
     }
 
     # Generate dividend projections
@@ -106,8 +113,10 @@ generate_initial_projections <- function(group_id, members, account_number) {
     )
 
     # Generate option gain projection (if option exists)
+    # Skip for Legacy Covered Call - option assignment is return of capital, not cash flow
     option_events <- tibble::tibble()
-    if (!is.null(expiry_date) && !is.null(strike_price)) {
+    strategy_type <- group_info$strategy_type[1]
+    if (!is.null(expiry_date) && !is.null(strike_price) && strategy_type != "Legacy Covered Call") {
       option_events <- generate_option_gain_event(
         expiry_date = expiry_date,
         strike_price = strike_price,
@@ -279,6 +288,151 @@ generate_option_gain_event <- function(expiry_date, strike_price, shares,
     amount = gain,
     confidence = "high"
   )
+}
+
+################################################################################
+# PROJECTION RECALCULATION AFTER ROLLS
+################################################################################
+
+#' Regenerate income projections after an option roll
+#'
+#' When an option is rolled (closed via buy-to-close or expiration, and a new
+#' option is sold), this function recalculates projected cash flows by:
+#' 1. Accumulating ALL option premiums received across all sells
+#' 2. Parsing the new option symbol for updated strike/expiry
+#' 3. Deleting old projected option_gain events
+#' 4. Calculating and saving new projected option_gain based on accumulated data
+#'
+#' This ensures projections reflect the total premium collected and current position.
+#'
+#' @param group_id Group identifier
+#' @param new_option_symbol The new option symbol after the roll (for parsing strike/expiry)
+#' @param conn Optional DBI connection (for transaction support)
+#' @return Logical TRUE if successful, FALSE otherwise
+#' @noRd
+regenerate_projections_after_roll <- function(group_id, new_option_symbol, conn = NULL) {
+
+  tryCatch({
+    log_info("Income Projection: Regenerating projections after roll for group {group_id}")
+
+    # Get group info and validate strategy type
+    group_info <- get_group_by_id(group_id)
+
+    if (nrow(group_info) == 0) {
+      log_warn("Income Projection: Group {group_id} not found")
+      return(FALSE)
+    }
+
+    # Strategies that skip projections
+    no_projection_strategies <- c(
+      "Other",
+      "Legacy Covered Call",
+      "Weekly Dividend Capture",
+      "Monthly Dividend Capture",
+      "Dividend Capture"
+    )
+
+    if (group_info$strategy_type[1] %in% no_projection_strategies) {
+      log_info("Income Projection: Strategy '{group_info$strategy_type[1]}' does not use projections - skipping regeneration")
+      return(TRUE)
+    }
+
+    # Get all activities for this group
+    activities <- get_activities_by_group(group_id)
+
+    if (nrow(activities) == 0) {
+      log_warn("Income Projection: No activities found for group {group_id}")
+      return(FALSE)
+    }
+
+    # Calculate stock cost from all stock purchase activities
+    stock_activities <- activities %>%
+      filter(type == "Trades", action == "Buy", !purrr::map_lgl(symbol, is_option_symbol))
+
+    if (nrow(stock_activities) == 0) {
+      log_warn("Income Projection: No stock purchase activities found for group {group_id}")
+      return(FALSE)
+    }
+
+    shares <- sum(abs(stock_activities$quantity), na.rm = TRUE)
+    stock_cost <- sum(abs(stock_activities$gross_amount), na.rm = TRUE)
+
+    # Calculate ACCUMULATED option premiums from ALL option sell activities
+    # This is the key difference from initial projection - we sum ALL sells, not just the current option
+    option_activities <- activities %>%
+      filter(
+        type == "Trades",
+        action == "Sell",
+        purrr::map_lgl(symbol, is_option_symbol)
+      )
+
+    if (nrow(option_activities) == 0) {
+      log_warn("Income Projection: No option sell activities found for group {group_id}")
+      return(FALSE)
+    }
+
+    # Accumulate ALL premiums received (original + rolls)
+    premium_received <- sum(abs(option_activities$gross_amount), na.rm = TRUE)
+
+    # Parse new option symbol for strike and expiry
+    option_info <- parse_option_details(new_option_symbol)
+    strike_price <- option_info$strike
+    expiry_date <- option_info$expiry
+
+    if (is.null(strike_price) || is.null(expiry_date)) {
+      log_warn("Income Projection: Could not parse option details from symbol {new_option_symbol}")
+      return(FALSE)
+    }
+
+    # Count old projections before deletion
+    old_projections <- get_group_cash_flows(group_id) %>%
+      filter(event_type == "option_gain", status == "projected")
+    old_count <- nrow(old_projections)
+
+    # Delete old projected option gains (pass connection if provided)
+    delete_projected_option_gains(group_id, conn = conn)
+
+    # Generate new option gain projection with accumulated data
+    option_events <- generate_option_gain_event(
+      expiry_date = expiry_date,
+      strike_price = strike_price,
+      shares = shares,
+      stock_cost = stock_cost,
+      premium_received = premium_received  # Accumulated from ALL sells
+    )
+
+    if (nrow(option_events) == 0) {
+      log_info("Income Projection: No positive option gain to project after roll for group {group_id}")
+      log_projection_recalculation(group_id, "option_roll", old_count, 0)
+      return(TRUE)
+    }
+
+    # Save new projected event (pass connection if provided)
+    event_id <- save_cash_flow_event(
+      group_id = group_id,
+      event_date = option_events$event_date[1],
+      event_type = option_events$event_type[1],
+      amount = option_events$amount[1],
+      status = "projected",
+      confidence = option_events$confidence[1],
+      conn = conn
+    )
+
+    # Log recalculation
+    log_projection_recalculation(
+      group_id = group_id,
+      reason = "option_roll",
+      old_count = old_count,
+      new_count = 1
+    )
+
+    log_info("Income Projection: Regenerated projections after roll - new projected gain: ${option_events$amount[1]}")
+    return(TRUE)
+
+  }, error = function(e) {
+    log_warn("Income Projection: Failed to regenerate projections after roll for {group_id} - {e$message}")
+    return(FALSE)
+  })
 }
 
 ################################################################################

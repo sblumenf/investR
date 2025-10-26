@@ -95,13 +95,22 @@ initialize_income_projection_schema <- function(conn) {
 #' @param amount Dollar amount of the event
 #' @param status "projected" or "actual"
 #' @param confidence "high", "medium", or "low"
+#' @param conn Optional DBI connection (for transaction support)
 #' @return Character event_id if successful, NULL if failed
 #' @noRd
 save_cash_flow_event <- function(group_id, event_date, event_type, amount,
-                                 status = "projected", confidence = "high") {
+                                 status = "projected", confidence = "high", conn = NULL) {
 
-  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  # Connection management - use provided conn or create new one
+  should_close <- FALSE
+  if (is.null(conn)) {
+    conn <- get_portfolio_db_connection()
+    should_close <- TRUE
+  }
+
+  if (should_close) {
+    on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  }
 
   tryCatch({
     # Ensure schema exists
@@ -224,6 +233,52 @@ delete_projected_cash_flows_by_month <- function(group_id, event_type, event_dat
 
   }, error = function(e) {
     log_error("Income Projection DB: Failed to delete projected events by month - {e$message}")
+    return(0L)
+  })
+}
+
+#' Delete all projected option gain events for a group
+#'
+#' Removes all projected option_gain events for a group. Used when recalculating
+#' projections after an option roll - all old projected gains are deleted and
+#' new ones are calculated based on the accumulated premiums and new strike/expiry.
+#'
+#' @param group_id Group identifier
+#' @param conn Optional DBI connection (for transaction support)
+#' @return Integer count of rows deleted
+#' @noRd
+delete_projected_option_gains <- function(group_id, conn = NULL) {
+
+  # Connection management - use provided conn or create new one
+  should_close <- FALSE
+  if (is.null(conn)) {
+    conn <- get_portfolio_db_connection()
+    should_close <- TRUE
+  }
+
+  if (should_close) {
+    on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  }
+
+  tryCatch({
+    # Delete all projected option_gain events for this group
+    sql <- "
+      DELETE FROM position_group_cash_flows
+      WHERE group_id = ?
+        AND event_type = 'option_gain'
+        AND status = 'projected'
+    "
+
+    rows_affected <- dbExecute(conn, sql, params = list(group_id))
+
+    if (rows_affected > 0) {
+      log_debug("Income Projection DB: Deleted {rows_affected} projected option_gain event(s) for group {group_id}")
+    }
+
+    return(rows_affected)
+
+  }, error = function(e) {
+    log_error("Income Projection DB: Failed to delete projected option gains - {e$message}")
     return(0L)
   })
 }

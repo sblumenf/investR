@@ -382,11 +382,20 @@ update_position_group <- function(group_id, group_name = NULL,
 #' @param group_id Group identifier
 #' @param old_symbol Old option symbol being closed (e.g., "BAC24Oct25C51.00")
 #' @param new_symbol New option symbol being opened (e.g., "BAC21Nov25C52.00")
+#' @param conn Optional DBI connection (for transaction support)
 #' @return Logical TRUE if successful, FALSE otherwise
 #' @noRd
-update_group_option_member <- function(group_id, old_symbol, new_symbol) {
-  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+update_group_option_member <- function(group_id, old_symbol, new_symbol, conn = NULL) {
+  # Connection management - use provided conn or create new one
+  should_close <- FALSE
+  if (is.null(conn)) {
+    conn <- get_portfolio_db_connection()
+    should_close <- TRUE
+  }
+
+  if (should_close) {
+    on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  }
 
   tryCatch({
     # Begin transaction for safety

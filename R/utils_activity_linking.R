@@ -192,7 +192,149 @@ link_activities_to_group <- function(activity_ids, group_id) {
       }
 
       log_info("Reconciled projected dividends for {nrow(dividend_months)} month(s) in group {group_id}")
+
+      # Create actual cash flow records for linked dividends
+      # Get full dividend data including amounts
+      placeholders_full <- paste(rep("?", length(activity_ids)), collapse = ", ")
+      div_sql_full <- sprintf("
+        SELECT activity_id, group_id, transaction_date, net_amount
+        FROM account_activities
+        WHERE activity_id IN (%s)
+          AND type = 'Dividends'
+      ", placeholders_full)
+      dividend_details <- dbGetQuery(con, div_sql_full, params = as.list(activity_ids))
+
+      if (nrow(dividend_details) > 0) {
+        for (i in seq_len(nrow(dividend_details))) {
+          div <- dividend_details[i, ]
+          save_cash_flow_event(
+            group_id = div$group_id,
+            event_date = as.Date(div$transaction_date),
+            event_type = "dividend",
+            amount = abs(div$net_amount),
+            status = "actual",
+            confidence = "high"
+          )
+        }
+        log_info("Created {nrow(dividend_details)} actual cash flow record(s) for linked dividends")
+      }
     }
+
+    # Create cash flow records for option trades in all covered call strategies
+    # Get group strategy type
+    group_info <- dbGetQuery(con, "SELECT strategy_type FROM position_groups WHERE group_id = ?", params = list(group_id))
+
+    # Strategies that track option premiums as cash flows
+    covered_call_strategies <- c(
+      "Legacy Covered Call",
+      "Zero-Dividend Stocks",
+      "Dividend Aristocrats",
+      "Dynamic Covered Calls",
+      "Collar Strategy"
+    )
+
+    if (nrow(group_info) > 0 && group_info$strategy_type[1] %in% covered_call_strategies) {
+      # Query option trades from linked activities
+      placeholders_opt <- paste(rep("?", length(activity_ids)), collapse = ", ")
+      opt_sql <- sprintf("
+        SELECT activity_id, group_id, trade_date, action, symbol, net_amount
+        FROM account_activities
+        WHERE activity_id IN (%s)
+          AND type = 'Trades'
+      ", placeholders_opt)
+      option_trades <- dbGetQuery(con, opt_sql, params = as.list(activity_ids))
+
+      # Filter to only option symbols
+      if (nrow(option_trades) > 0) {
+        option_trades <- option_trades %>%
+          as_tibble() %>%
+          filter(purrr::map_lgl(symbol, is_option_symbol))
+
+        if (nrow(option_trades) > 0) {
+          for (i in seq_len(nrow(option_trades))) {
+            opt <- option_trades[i, ]
+            # Sell = positive income, Buy = negative cost
+            amount <- if (opt$action == "Sell") {
+              abs(opt$net_amount)
+            } else {
+              -abs(opt$net_amount)
+            }
+
+            save_cash_flow_event(
+              group_id = opt$group_id,
+              event_date = as.Date(opt$trade_date),
+              event_type = "option_premium",
+              amount = amount,
+              status = "actual",
+              confidence = "high"
+            )
+          }
+          log_info("Created {nrow(option_trades)} actual cash flow record(s) for option premiums")
+        }
+      }
+    }
+
+    # Detect option rolls in the batch of linked activities
+    # After all activities are linked and cash flows created, check if any form roll patterns
+    tryCatch({
+      # Get ALL activities in the group (both newly linked and previously linked)
+      # This is critical because a roll pattern might involve:
+      # - An old activity already in the group (e.g., EXP from a previous link)
+      # - A new activity just linked (e.g., new option Sell)
+      group_activities <- dbGetQuery(con, "
+        SELECT * FROM account_activities
+        WHERE group_id = ?
+        ORDER BY trade_date
+      ", params = list(group_id)) %>% as_tibble()
+
+      # Get just the activities we linked in this batch (to know which are "new")
+      newly_linked <- dbGetQuery(con, sprintf("
+        SELECT * FROM account_activities
+        WHERE activity_id IN (%s)
+      ", placeholders), params = activity_ids) %>% as_tibble()
+
+      # Find option sell activities in the newly linked batch (potential new options in a roll)
+      option_sells <- newly_linked %>%
+        filter(
+          type == "Trades",
+          action == "Sell",
+          purrr::map_lgl(symbol, is_option_symbol)
+        )
+
+      # For each newly linked option sell, check if there's a closing event in the ENTIRE group
+      if (nrow(option_sells) > 0) {
+        for (i in seq_len(nrow(option_sells))) {
+          sell_activity <- option_sells[i, ]
+
+          # Check for roll pattern with this sell against ALL group activities
+          roll_info <- detect_option_roll(sell_activity, group_activities)
+
+          if (roll_info$is_roll) {
+            log_info("Activity Linking: Detected option roll in batch - {roll_info$old_symbol} → {roll_info$new_symbol}")
+
+            # Update the group member to reflect the new option (pass parent connection)
+            update_result <- update_group_option_member(
+              group_id = group_id,
+              old_symbol = roll_info$old_symbol,
+              new_symbol = roll_info$new_symbol,
+              conn = con
+            )
+
+            # Regenerate projections if member update succeeded (pass parent connection)
+            if (update_result) {
+              regenerate_projections_after_roll(
+                group_id = group_id,
+                new_option_symbol = roll_info$new_symbol,
+                conn = con
+              )
+            }
+          }
+        }
+      }
+    }, error = function(e) {
+      log_warn("Activity Linking: Roll detection failed in batch linking - {e$message}")
+      # Don't fail the entire linking operation if roll detection fails
+    })
 
     return(TRUE)
 

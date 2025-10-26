@@ -573,12 +573,22 @@ link_activity_to_group <- function(activity_id, group_id) {
 
             if (roll_info$is_roll) {
               log_info("Activities DB: Detected option roll in group {group_id}")
-              # Update the group member to reflect the new option
-              update_group_option_member(
+              # Update the group member to reflect the new option (pass parent connection)
+              update_result <- update_group_option_member(
                 group_id = group_id,
                 old_symbol = roll_info$old_symbol,
-                new_symbol = roll_info$new_symbol
+                new_symbol = roll_info$new_symbol,
+                conn = conn
               )
+
+              # Regenerate projections if member update succeeded (pass parent connection)
+              if (update_result) {
+                regenerate_projections_after_roll(
+                  group_id = group_id,
+                  new_option_symbol = roll_info$new_symbol,
+                  conn = conn
+                )
+              }
             }
           }
         }
