@@ -245,6 +245,31 @@ close_position_group <- function(group_id) {
     # Delete all projected cash flows (future dividends no longer relevant)
     delete_group_cash_flows(group_id, status_filter = "projected")
 
+    # Create actual cash flow event for final realized P&L
+    # Get latest activity date (liquidation/close date)
+    latest_activity <- dbGetQuery(conn, "
+      SELECT MAX(trade_date) as close_date
+      FROM account_activities
+      WHERE group_id = ?
+    ", params = list(group_id))
+
+    if (nrow(latest_activity) > 0 && !is.na(latest_activity$close_date[1])) {
+      close_date <- as.Date(latest_activity$close_date[1])
+
+      # Create actual cash flow event for the realized gain/loss
+      save_cash_flow_event(
+        group_id = group_id,
+        event_date = close_date,
+        event_type = "option_gain",
+        amount = pnl$net_pnl,
+        status = "actual",
+        confidence = "high",
+        conn = conn
+      )
+
+      log_info("Close Group: Created actual cash flow event for final P&L: ${round(pnl$net_pnl, 2)} on {close_date}")
+    }
+
     # Update group status to closed and save P&L
     rows_affected <- dbExecute(conn, "
       UPDATE position_groups
@@ -326,6 +351,29 @@ auto_close_group <- function(group_id) {
     if (nrow(pnl) == 0) {
       log_warn("Auto-Close: Cannot close group {group_id} - P&L calculation failed")
       return(tibble::tibble())
+    }
+
+    # Create actual cash flow event for final realized P&L
+    latest_activity <- dbGetQuery(conn, "
+      SELECT MAX(trade_date) as close_date
+      FROM account_activities
+      WHERE group_id = ?
+    ", params = list(group_id))
+
+    if (nrow(latest_activity) > 0 && !is.na(latest_activity$close_date[1])) {
+      close_date <- as.Date(latest_activity$close_date[1])
+
+      save_cash_flow_event(
+        group_id = group_id,
+        event_date = close_date,
+        event_type = "option_gain",
+        amount = pnl$net_pnl,
+        status = "actual",
+        confidence = "high",
+        conn = conn
+      )
+
+      log_info("Auto-Close: Created actual cash flow event for final P&L: ${round(pnl$net_pnl, 2)} on {close_date}")
     }
 
     # Update group status to closed and save P&L

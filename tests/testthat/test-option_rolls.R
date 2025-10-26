@@ -215,7 +215,7 @@ test_that("detect_option_roll handles expiration as closing event", {
   expect_equal(result$new_symbol, "CZR31Oct25C22.00")
 })
 
-test_that("cash flows created for Zero-Dividend Stocks strategy", {
+test_that("Zero-Dividend Stocks: initial premium is NOT a cash flow, roll premium IS", {
   skip_on_cran()
 
   # Create test group
@@ -247,19 +247,44 @@ test_that("cash flows created for Zero-Dividend Stocks strategy", {
 
   skip_if(!create_result, "Failed to create test group")
 
-  # Create mock option sell activity
+  # Create stock buy and initial option sell (same day)
   conn <- get_portfolio_db_connection()
-  activity_df <- tibble::tibble(
-    activity_id = paste0("TEST_ACT_", format(Sys.time(), "%Y%m%d%H%M%S")),
+
+  stock_buy <- tibble::tibble(
+    activity_id = paste0("TEST_STOCK_", format(Sys.time(), "%Y%m%d%H%M%S")),
     account_number = "TEST123",
     account_type = "LIRA",
     trade_date = as.POSIXct("2025-08-29"),
     transaction_date = as.POSIXct("2025-08-29"),
     settlement_date = as.POSIXct("2025-09-02"),
+    action = "Buy",
+    symbol = "CZR",
+    symbol_id = NA_integer_,
+    description = "Test stock buy",
+    currency = "USD",
+    quantity = 300,
+    price = 26.69,
+    gross_amount = 8007.00,
+    commission = -1.98,
+    net_amount = -8008.98,
+    type = "Trades",
+    group_id = group_id,
+    is_processed = TRUE,
+    ignore_for_grouping = FALSE,
+    fetched_at = Sys.time()
+  )
+
+  initial_option <- tibble::tibble(
+    activity_id = paste0("TEST_OPT1_", format(Sys.time(), "%Y%m%d%H%M%S")),
+    account_number = "TEST123",
+    account_type = "LIRA",
+    trade_date = as.POSIXct("2025-08-29"),  # Same day as stock buy
+    transaction_date = as.POSIXct("2025-08-29"),
+    settlement_date = as.POSIXct("2025-09-02"),
     action = "Sell",
     symbol = "CZR17Oct25C22.00",
     symbol_id = NA_integer_,
-    description = "Test option sell",
+    description = "Test initial option sell",
     currency = "USD",
     quantity = -3,
     price = 5.11,
@@ -273,23 +298,57 @@ test_that("cash flows created for Zero-Dividend Stocks strategy", {
     fetched_at = Sys.time()
   )
 
-  DBI::dbWriteTable(conn, "account_activities", activity_df, append = TRUE)
-  DBI::dbDisconnect(conn, shutdown = TRUE)
-
-  # Link activity to group
-  link_result <- link_activities_to_group(
-    activity_ids = activity_df$activity_id,
-    group_id = group_id
+  roll_option <- tibble::tibble(
+    activity_id = paste0("TEST_OPT2_", format(Sys.time(), "%Y%m%d%H%M%S")),
+    account_number = "TEST123",
+    account_type = "LIRA",
+    trade_date = as.POSIXct("2025-10-20"),  # Different day (roll)
+    transaction_date = as.POSIXct("2025-10-20"),
+    settlement_date = as.POSIXct("2025-10-22"),
+    action = "Sell",
+    symbol = "CZR31Oct25C22.00",
+    symbol_id = NA_integer_,
+    description = "Test roll option sell",
+    currency = "USD",
+    quantity = -3,
+    price = 1.19,
+    gross_amount = 357.00,
+    commission = -0.97,
+    net_amount = 356.03,
+    type = "Trades",
+    group_id = NA_character_,
+    is_processed = TRUE,
+    ignore_for_grouping = FALSE,
+    fetched_at = Sys.time()
   )
 
-  expect_true(link_result)
+  DBI::dbWriteTable(conn, "account_activities", stock_buy, append = TRUE)
+  DBI::dbWriteTable(conn, "account_activities", initial_option, append = TRUE)
+  DBI::dbWriteTable(conn, "account_activities", roll_option, append = TRUE)
+  DBI::dbDisconnect(conn, shutdown = TRUE)
 
-  # Verify cash flow was created
-  cash_flows <- get_group_cash_flows(group_id)
-  option_premiums <- cash_flows %>% filter(event_type == "option_premium", status == "actual")
+  # Link initial option (should NOT create cash flow)
+  link_result1 <- link_activities_to_group(
+    activity_ids = initial_option$activity_id,
+    group_id = group_id
+  )
+  expect_true(link_result1)
 
-  expect_gt(nrow(option_premiums), 0)
-  expect_equal(option_premiums$amount[1], 1530.03)
+  cash_flows_after_initial <- get_group_cash_flows(group_id)
+  initial_premiums <- cash_flows_after_initial %>% filter(event_type == "option_premium", status == "actual")
+  expect_equal(nrow(initial_premiums), 0)  # Should be ZERO (initial premium is cost reduction)
+
+  # Link roll option (should CREATE cash flow)
+  link_result2 <- link_activities_to_group(
+    activity_ids = roll_option$activity_id,
+    group_id = group_id
+  )
+  expect_true(link_result2)
+
+  cash_flows_after_roll <- get_group_cash_flows(group_id)
+  roll_premiums <- cash_flows_after_roll %>% filter(event_type == "option_premium", status == "actual")
+  expect_equal(nrow(roll_premiums), 1)  # Should be ONE (roll premium is income)
+  expect_equal(roll_premiums$amount[1], 356.03)
 
   # Clean up
   tryCatch({

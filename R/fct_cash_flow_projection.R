@@ -85,10 +85,10 @@ get_actual_cash_flows_from_activities <- function() {
         }),
         # Determine cash flow type based on strategy
         cash_flow_type = case_when(
-          # Dividends count for ALL groups
-          type == "Dividends" ~ "dividend",
-          # Option premiums ONLY count for "Other" strategy groups
-          type %in% c("Trades", "Other") & action == "Sell" & is_option_symbol(symbol) & strategy_type == "Other" ~ "option_premium",
+          # Dividends count ONLY for "Other" and "Legacy Covered Call" (named strategies use position_group_cash_flows)
+          type == "Dividends" & strategy_type %in% c("Other", "Legacy Covered Call") ~ "dividend",
+          # Option premiums count for "Other" and "Legacy Covered Call" strategy groups
+          type %in% c("Trades", "Other") & is_option_symbol(symbol) & strategy_type %in% c("Other", "Legacy Covered Call") ~ "option_premium",
           TRUE ~ NA_character_
         )
       ) %>%
@@ -99,7 +99,8 @@ get_actual_cash_flows_from_activities <- function() {
         event_date = as.Date(trade_date),
         ticker = ticker,
         type = cash_flow_type,
-        amount = abs(net_amount),  # Ensure positive amounts
+        # Use net_amount as-is (already has correct sign)
+        amount = net_amount,
         group_id = group_id,
         group_name = group_name,
         source = "actual",
@@ -143,19 +144,23 @@ get_projected_cash_flows_from_database <- function() {
     # Ensure schema exists
     initialize_income_projection_schema(conn)
 
-    # Query projected cash flows with group info
+    # Query projected and actual cash flows with group info
+    # Actual cash flows from this table represent:
+    # 1. Roll premiums for long-term covered call strategies
+    # 2. Final P&L for closed positions
     result <- dbGetQuery(conn, "
       SELECT
         cf.event_date,
         cf.event_type,
         cf.amount,
         cf.confidence,
+        cf.status,
         cf.group_id,
         pg.group_name,
         pg.strategy_type
       FROM position_group_cash_flows cf
       INNER JOIN position_groups pg ON cf.group_id = pg.group_id
-      WHERE cf.status = 'projected'
+      WHERE cf.status IN ('projected', 'actual')
       ORDER BY cf.event_date ASC
     ") %>% as_tibble()
 
@@ -198,11 +203,11 @@ get_projected_cash_flows_from_database <- function() {
         amount = amount,
         group_id = group_id,
         group_name = group_name,
-        source = "projected",
+        source = status,  # Use status from database (projected or actual)
         confidence = confidence
       )
 
-    log_debug("Cash Flow Projection: Retrieved {nrow(cash_flows)} projected cash flow events")
+    log_debug("Cash Flow Projection: Retrieved {nrow(cash_flows)} cash flow events ({sum(result$status == 'actual')} actual, {sum(result$status == 'projected')} projected)")
     return(cash_flows)
 
   }, error = function(e) {

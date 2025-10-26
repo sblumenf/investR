@@ -194,33 +194,41 @@ link_activities_to_group <- function(activity_ids, group_id) {
       log_info("Reconciled projected dividends for {nrow(dividend_months)} month(s) in group {group_id}")
 
       # Create actual cash flow records for linked dividends
-      # Get full dividend data including amounts
-      placeholders_full <- paste(rep("?", length(activity_ids)), collapse = ", ")
-      div_sql_full <- sprintf("
-        SELECT activity_id, group_id, transaction_date, net_amount
-        FROM account_activities
-        WHERE activity_id IN (%s)
-          AND type = 'Dividends'
-      ", placeholders_full)
-      dividend_details <- dbGetQuery(con, div_sql_full, params = as.list(activity_ids))
+      # ONLY for named strategies (not "Other" or "Legacy Covered Call")
+      # "Other" and "Legacy Covered Call" pull dividends directly from account_activities
+      group_info <- dbGetQuery(con, "SELECT strategy_type FROM position_groups WHERE group_id = ?", params = list(group_id))
 
-      if (nrow(dividend_details) > 0) {
-        for (i in seq_len(nrow(dividend_details))) {
-          div <- dividend_details[i, ]
-          save_cash_flow_event(
-            group_id = div$group_id,
-            event_date = as.Date(div$transaction_date),
-            event_type = "dividend",
-            amount = abs(div$net_amount),
-            status = "actual",
-            confidence = "high"
-          )
+      if (nrow(group_info) > 0 && !group_info$strategy_type[1] %in% c("Other", "Legacy Covered Call")) {
+        # Get full dividend data including amounts
+        placeholders_full <- paste(rep("?", length(activity_ids)), collapse = ", ")
+        div_sql_full <- sprintf("
+          SELECT activity_id, group_id, transaction_date, net_amount
+          FROM account_activities
+          WHERE activity_id IN (%s)
+            AND type = 'Dividends'
+        ", placeholders_full)
+        dividend_details <- dbGetQuery(con, div_sql_full, params = as.list(activity_ids))
+
+        if (nrow(dividend_details) > 0) {
+          for (i in seq_len(nrow(dividend_details))) {
+            div <- dividend_details[i, ]
+            save_cash_flow_event(
+              group_id = div$group_id,
+              event_date = as.Date(div$transaction_date),
+              event_type = "dividend",
+              amount = abs(div$net_amount),
+              status = "actual",
+              confidence = "high"
+            )
+          }
+          log_info("Created {nrow(dividend_details)} actual cash flow record(s) for linked dividends")
         }
-        log_info("Created {nrow(dividend_details)} actual cash flow record(s) for linked dividends")
+      } else {
+        log_debug("Activity Linking: Skipping dividend cash flow creation for Other/Legacy Covered Call strategy (pulled from account_activities)")
       }
     }
 
-    # Create cash flow records for option trades in all covered call strategies
+    # Create cash flow records for option trades in covered call strategies
     # Get group strategy type
     group_info <- dbGetQuery(con, "SELECT strategy_type FROM position_groups WHERE group_id = ?", params = list(group_id))
 
@@ -251,8 +259,40 @@ link_activities_to_group <- function(activity_ids, group_id) {
           filter(purrr::map_lgl(symbol, is_option_symbol))
 
         if (nrow(option_trades) > 0) {
+          # For Zero-Dividend Stocks, need to detect initial vs roll premiums
+          earliest_stock_buy_date <- NULL
+          if (group_info$strategy_type[1] == "Zero-Dividend Stocks") {
+            # Get earliest stock buy date for this group (filter out options properly)
+            stock_buys <- dbGetQuery(con, "
+              SELECT trade_date, symbol
+              FROM account_activities
+              WHERE group_id = ?
+                AND type = 'Trades'
+                AND action = 'Buy'
+            ", params = list(group_id)) %>%
+              as_tibble() %>%
+              filter(!purrr::map_lgl(symbol, is_option_symbol))
+
+            if (nrow(stock_buys) > 0) {
+              earliest_stock_buy_date <- as.Date(min(stock_buys$trade_date))
+            }
+          }
+
           for (i in seq_len(nrow(option_trades))) {
             opt <- option_trades[i, ]
+
+            # For Zero-Dividend Stocks, skip initial premium (cost reduction, not cash flow)
+            if (group_info$strategy_type[1] == "Zero-Dividend Stocks" &&
+                opt$action == "Sell" &&
+                !is.null(earliest_stock_buy_date)) {
+              option_sell_date <- as.Date(opt$trade_date)
+              if (option_sell_date == earliest_stock_buy_date) {
+                # Initial premium - skip creating cash flow
+                log_debug("Activity Linking: Skipping initial premium cash flow for Zero-Dividend Stocks (cost reduction)")
+                next
+              }
+            }
+
             # Sell = positive income, Buy = negative cost
             amount <- if (opt$action == "Sell") {
               abs(opt$net_amount)
@@ -266,10 +306,11 @@ link_activities_to_group <- function(activity_ids, group_id) {
               event_type = "option_premium",
               amount = amount,
               status = "actual",
-              confidence = "high"
+              confidence = "high",
+              conn = con
             )
           }
-          log_info("Created {nrow(option_trades)} actual cash flow record(s) for option premiums")
+          log_info("Created actual cash flow record(s) for option premiums")
         }
       }
     }
