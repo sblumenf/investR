@@ -155,28 +155,21 @@ create_risk_results_modal <- function(results, ns) {
         create_summary_tab(results)
       ),
 
-      # Tab 2: Monte Carlo Results
-      tabPanel(
-        "Distribution",
-        value = "distribution",
-        create_distribution_tab(results)
-      ),
-
-      # Tab 3: Dividend Timeline
+      # Tab 2: Dividend Timeline
       tabPanel(
         "Dividend Timeline",
         value = "timeline",
         create_timeline_tab(results)
       ),
 
-      # Tab 4: Stress Tests
+      # Tab 3: Stress Tests
       tabPanel(
         "Stress Tests",
         value = "stress",
         create_stress_tab(results)
       ),
 
-      # Tab 5: Greeks & Details
+      # Tab 4: Greeks & Details
       tabPanel(
         "Greeks & Details",
         value = "details",
@@ -303,58 +296,6 @@ create_summary_tab <- function(results) {
     } else {
       tags$p(class = "text-muted", "Simulation details not available")
     }
-  )
-}
-
-#' Create distribution tab content
-#'
-#' @param results Analysis results
-#' @return HTML tags
-#' @noRd
-create_distribution_tab <- function(results) {
-
-  if (is.null(results$monte_carlo)) {
-    return(tags$div(
-      class = "alert alert-info",
-      "Monte Carlo simulation data not available"
-    ))
-  }
-
-  mc <- results$monte_carlo
-
-  tags$div(
-    style = "padding: 20px;",
-
-    tags$h5("Return Distribution from Monte Carlo Simulation"),
-    tags$p("Distribution of possible returns across ", format(mc$n_paths, big.mark = ","), " simulated scenarios:"),
-
-    # Simple histogram using plotly
-    tags$div(
-      create_return_distribution_plot(mc)
-    ),
-
-    tags$hr(),
-
-    tags$div(
-      class = "row",
-      tags$div(
-        class = "col-md-6",
-        tags$h6("Scenarios Breakdown"),
-        create_metric_row("Held to Expiration", sprintf("%.1f%% of paths", (1 - mc$early_exercise_prob) * 100)),
-        create_metric_row("Assigned Early", sprintf("%.1f%% of paths", mc$early_exercise_prob * 100)),
-        create_metric_row("Profitable Scenarios", sprintf("%.1f%% of paths", mc$prob_profit * 100))
-      ),
-      tags$div(
-        class = "col-md-6",
-        tags$h6("Expected Payoffs"),
-        if (!is.na(mc$avg_payoff_if_held)) {
-          create_metric_row("Average if Held", sprintf("$%.2f", mc$avg_payoff_if_held))
-        },
-        if (!is.na(mc$avg_payoff_if_exercised)) {
-          create_metric_row("Average if Assigned Early", sprintf("$%.2f", mc$avg_payoff_if_exercised))
-        }
-      )
-    )
   )
 }
 
@@ -555,67 +496,6 @@ create_details_tab <- function(results) {
       create_metric_row("Risk-Free Rate", sprintf("%.2f%%", RISK_CONFIG$risk_free_rate * 100))
     )
   )
-}
-
-#' Create return distribution plot
-#'
-#' @param mc Monte Carlo results
-#' @return Plotly widget
-#' @noRd
-#' @importFrom plotly plot_ly layout add_trace
-create_return_distribution_plot <- function(mc) {
-
-  # Create histogram data
-  returns_pct <- mc$returns * 100
-
-  # Create plotly histogram
-  p <- plotly::plot_ly() %>%
-    plotly::add_histogram(
-      x = returns_pct,
-      nbinsx = 50,
-      name = "Return Distribution",
-      marker = list(color = "#007bff", line = list(color = "white", width = 1))
-    ) %>%
-    plotly::add_trace(
-      x = rep(mc$percentile_5 * 100, 2),
-      y = c(0, 1),
-      type = "scatter",
-      mode = "lines",
-      name = "5th %ile",
-      line = list(color = "red", width = 2, dash = "dash"),
-      yaxis = "y2",
-      showlegend = TRUE
-    ) %>%
-    plotly::add_trace(
-      x = rep(mc$median_return * 100, 2),
-      y = c(0, 1),
-      type = "scatter",
-      mode = "lines",
-      name = "Median",
-      line = list(color = "green", width = 2),
-      yaxis = "y2",
-      showlegend = TRUE
-    ) %>%
-    plotly::add_trace(
-      x = rep(mc$percentile_95 * 100, 2),
-      y = c(0, 1),
-      type = "scatter",
-      mode = "lines",
-      name = "95th %ile",
-      line = list(color = "red", width = 2, dash = "dash"),
-      yaxis = "y2",
-      showlegend = TRUE
-    ) %>%
-    plotly::layout(
-      xaxis = list(title = "Return (%)"),
-      yaxis = list(title = "Frequency"),
-      yaxis2 = list(overlaying = "y", side = "right", showticklabels = FALSE, showgrid = FALSE),
-      showlegend = TRUE,
-      hovermode = "x",
-      height = 400
-    )
-
-  p
 }
 
 ## To be copied in the UI
