@@ -186,6 +186,7 @@ default:
         - "Dividend Aristocrats"
         - "Zero-Dividend Stocks"
         - "Dynamic Covered Calls"
+        - "Legacy Covered Call"
         - "Collar Strategy"
         - "Weekly Dividend Capture"
         - "Monthly Dividend Capture"

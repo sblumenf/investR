@@ -125,6 +125,17 @@ page_home <- function() {
         href = "/portfolio/raw-activities",
         button_text = "View Raw Log"
       )
+    ),
+    settings = list(
+      list(
+        title = "Questrade Token",
+        description = c(
+          "Update your Questrade API refresh token weekly to maintain data sync.",
+          "Simple interface to paste new tokens from Questrade and keep your connection active."
+        ),
+        href = "/settings/token",
+        button_text = "Manage Token"
+      )
     )
   )
 
@@ -155,6 +166,11 @@ page_home <- function() {
           create_home_accordion_section(
             title = "Portfolio Management",
             strategies = strategies_data$portfolio_management,
+            is_open = FALSE
+          ),
+          create_home_accordion_section(
+            title = "Settings",
+            strategies = strategies_data$settings,
             is_open = FALSE
           )
         )

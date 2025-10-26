@@ -8,3 +8,14 @@
 inst/doc
 .Renviron
 investR/
+
+# Database files (too large for GitHub, backup separately)
+*.duckdb
+inst/portfolio*.duckdb
+
+# Temporary files and logs
+*.log
+*_backup_*.duckdb
+backup_databases_*/
+*.csv
+Screenshot*.png

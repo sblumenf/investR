@@ -4,7 +4,11 @@
 \alias{analyze_portfolio_risk}
 \title{Analyze portfolio risk using correlated Monte Carlo}
 \usage{
-analyze_portfolio_risk(simulation_paths = 10000, lookback_days = 252)
+analyze_portfolio_risk(
+  simulation_paths = 10000,
+  lookback_days = 252,
+  use_regime_detection = NULL
+)
 }
 \arguments{
 \item{simulation_paths}{Number of Monte Carlo paths (default 10000, min 100, max 100000)}

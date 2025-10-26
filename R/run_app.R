@@ -124,6 +124,7 @@ run_app <- function(
       page_portfolio_risk(),
       page_cash_flow_projection(),
       page_raw_activities(),
+      page_token_settings(),
       page_about(),
 
       # Brochure configuration

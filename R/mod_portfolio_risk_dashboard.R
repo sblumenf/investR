@@ -35,6 +35,22 @@ mod_portfolio_risk_dashboard_ui <- function(id){
         )
       ),
 
+      # Analysis settings
+      wellPanel(
+        style = "background-color: #f8f9fa;",
+        h5(icon("cog"), " Analysis Settings"),
+        checkboxInput(
+          ns("enable_regime_detection"),
+          "Enable Regime Detection (requires market data access)",
+          value = TRUE
+        ),
+        tags$p(
+          style = "color: #666; font-size: 0.85em; margin-top: -10px;",
+          "Regime detection adjusts risk parameters based on current market conditions (VIX, correlations).
+           Disable if market data is unavailable."
+        )
+      ),
+
       # Analyze button
       actionButton(
         ns("analyze_portfolio"),
@@ -76,6 +92,10 @@ mod_portfolio_risk_dashboard_server <- function(id){
     observeEvent(input$analyze_portfolio, {
       log_info("Portfolio Risk Dashboard: Analyze button clicked")
 
+      # Capture the regime detection setting
+      enable_regime <- input$enable_regime_detection
+      log_info("Portfolio Risk Dashboard: Regime detection = {enable_regime}")
+
       is_loading(TRUE)
 
       # Run analysis asynchronously with 90-second timeout
@@ -86,7 +106,8 @@ mod_portfolio_risk_dashboard_server <- function(id){
 
         investR::analyze_portfolio_risk(
           simulation_paths = 10000,
-          lookback_days = 252
+          lookback_days = 252,
+          use_regime_detection = enable_regime
         )
       }, seed = TRUE, timeout = 90)
 

@@ -47,6 +47,41 @@ parse_option_symbol <- function(option_symbol) {
   return(ticker)
 }
 
+#' Extract ticker from transaction description (fallback)
+#'
+#' When symbol field is empty/NULL, parse ticker from description text.
+#' Handles Questrade descriptions like "CALL PYPL 12/19/25 55 PAYPAL..."
+#'
+#' @param description Transaction description string
+#' @return Character ticker or NA if not parseable
+#' @noRd
+#'
+#' @examples
+#' extract_ticker_from_description("CALL PYPL 12/19/25 55 PAYPAL HOLDINGS INC...")  # Returns "PYPL"
+#' extract_ticker_from_description("PUT AAPL 1/15/26 150 APPLE INC...")              # Returns "AAPL"
+extract_ticker_from_description <- function(description) {
+  if (is.na(description) || description == "") {
+    return(NA_character_)
+  }
+
+  # Pattern: (CALL|PUT) followed by whitespace, then ticker (letters/dots), then whitespace and date
+  # Examples:
+  # "CALL PYPL 12/19/25 55..."    -> PYPL
+  # "PUT AAPL 1/15/26 150..."     -> AAPL
+  # "CALL BRK.B 3/21/25 400..."   -> BRK.B
+  match <- str_extract(description, "(?<=CALL\\s)([A-Z\\.]+)(?=\\s+\\d{1,2}/)")
+  if (!is.na(match)) {
+    return(match)
+  }
+
+  match <- str_extract(description, "(?<=PUT\\s)([A-Z\\.]+)(?=\\s+\\d{1,2}/)")
+  if (!is.na(match)) {
+    return(match)
+  }
+
+  return(NA_character_)
+}
+
 #' Detect if symbol is likely an option
 #'
 #' @param symbol Position symbol (vectorized)

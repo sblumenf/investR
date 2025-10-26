@@ -145,17 +145,27 @@ mod_portfolio_groups_server <- function(id){
 
       # Add ticker column (extract underlying ticker from option symbols)
       unlinked <- unlinked %>%
-        mutate(ticker = purrr::map_chr(symbol, function(sym) {
+        mutate(ticker = purrr::map2_chr(symbol, description, function(sym, desc) {
+          # FALLBACK: If symbol is empty/NULL, try parsing description
+          if (is.null(sym) || is.na(sym) || sym == "") {
+            ticker <- extract_ticker_from_description(desc)
+            if (!is.na(ticker)) return(ticker)
+            return("UNKNOWN")  # Last resort if description parsing fails
+          }
+
+          # Normal logic: symbol exists
           if (grepl("\\d{2}[A-Z][a-z]{2}\\d{2}[CP]", sym)) {
             result <- parse_option_symbol(sym)
             if (is.na(result)) sym else result
           } else {
             sym
           }
-        }))
+        })) %>%
+        # Create composite key: ticker + account
+        mutate(ticker_account_key = paste(ticker, account_number, sep = "_"))
 
-      # Group by ticker (combines all symbols for same underlying)
-      split(unlinked, unlinked$ticker)
+      # Group by ticker AND account (not just ticker)
+      split(unlinked, unlinked$ticker_account_key)
     })
 
     # Initialize review transactions module (returns reactive that tracks actions)

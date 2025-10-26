@@ -41,8 +41,8 @@ get_strategy_types <- function() {
   get_groups_config(
     "strategy_types",
     c("Dividend Aristocrats", "Zero-Dividend Stocks", "Dynamic Covered Calls",
-      "Collar Strategy", "Weekly Dividend Capture", "Monthly Dividend Capture",
-      "Russell 2000 High-Yield", "Other")
+      "Legacy Covered Call", "Collar Strategy", "Weekly Dividend Capture",
+      "Monthly Dividend Capture", "Russell 2000 High-Yield", "Other")
   )
 }
 
