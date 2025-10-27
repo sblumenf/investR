@@ -484,7 +484,7 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
 
   action_buttons <- tags$div(
     class = "card-actions",
-    style = "margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;",
+    style = "margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; flex-wrap: nowrap; gap: 5px;",
 
     # Add Analyze Risk button if option data exists
     if (has_option_data) {
@@ -505,7 +505,6 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
       id = close_btn_id,
       type = "button",
       class = "btn btn-sm btn-warning",
-      style = if (has_option_data) "margin-left: 10px;" else "",
       onclick = sprintf("console.log('Close clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
                         group_data$group_id, close_input_name, group_data$group_id),
       icon("times-circle"),
@@ -515,7 +514,6 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
       id = edit_btn_id,
       type = "button",
       class = "btn btn-sm btn-default",
-      style = "margin-left: 10px;",
       onclick = sprintf("console.log('Edit clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
                         group_data$group_id, edit_input_name, group_data$group_id),
       icon("edit"),
@@ -525,7 +523,6 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
       id = sprintf("delete_group_%s", group_data$group_id),
       type = "button",
       class = "btn btn-sm btn-danger",
-      style = "margin-left: 10px;",
       onclick = sprintf("console.log('Delete clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
                         group_data$group_id,
                         if (!is.null(ns)) ns("delete_group_clicked") else "delete_group_clicked",
@@ -676,7 +673,7 @@ create_closed_group_card <- function(group_data, pnl, members, cash_flows, activ
 
   action_buttons <- tags$div(
     class = "card-actions",
-    style = "margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;",
+    style = "margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; flex-wrap: nowrap; gap: 5px;",
     tags$button(
       id = reopen_btn_id,
       type = "button",
