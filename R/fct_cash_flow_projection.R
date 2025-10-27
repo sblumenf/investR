@@ -85,9 +85,9 @@ get_actual_cash_flows_from_activities <- function() {
         }),
         # Determine cash flow type based on strategy
         cash_flow_type = case_when(
-          # Dividends count ONLY for "Other" and "Legacy Covered Call" (named strategies use position_group_cash_flows)
+          # Dividends count for "Other" and "Legacy Covered Call" strategies (named strategies use position_group_cash_flows)
           type == "Dividends" & strategy_type %in% c("Other", "Legacy Covered Call") ~ "dividend",
-          # Option premiums count for "Other" and "Legacy Covered Call" strategy groups
+          # Option premiums count for "Other" and "Legacy Covered Call" strategy groups only
           type %in% c("Trades", "Other") & is_option_symbol(symbol) & strategy_type %in% c("Other", "Legacy Covered Call") ~ "option_premium",
           TRUE ~ NA_character_
         )

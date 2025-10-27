@@ -65,6 +65,17 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
       parts[2]
     }
 
+    # Normalize ticker by stripping exchange suffixes for grouping purposes
+    # Examples: LB.TO -> LB, AAPL.MX -> AAPL, BRK.B -> BRK.B (preserves ticker dots)
+    normalize_ticker_for_grouping <- function(ticker) {
+      if (is.na(ticker) || ticker == "") return(ticker)
+
+      # Strip common exchange suffixes: dot followed by 1-3 uppercase letters at end
+      # Matches: .TO (Toronto), .V (TSX Venture), .MX (Mexico), .L (London), etc.
+      # Won't match: BRK.B (has lowercase after), ticker internal dots
+      gsub("\\.[A-Z]{1,3}$", "", ticker)
+    }
+
     # Parse option symbol from description text when symbol is empty
     # Example: "CALL PESI   12/19/25    10  ..." -> "PESI19Dec25C10.00"
     parse_option_symbol_from_description <- function(description, underlying_ticker) {
@@ -110,16 +121,20 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
           # FALLBACK: If symbol is empty/NULL, try parsing description
           if (is.null(sym) || is.na(sym) || sym == "") {
             ticker <- extract_ticker_from_description(desc)
-            if (!is.na(ticker)) return(ticker)
+            if (!is.na(ticker)) return(normalize_ticker_for_grouping(ticker))
             return("UNKNOWN")  # Last resort if description parsing fails
           }
 
           # Normal logic: symbol exists
           if (grepl("\\d{2}[A-Z][a-z]{2}\\d{2}[CP]", sym)) {
             result <- parse_option_symbol(sym)
-            if (is.na(result)) sym else result
+            if (is.na(result)) {
+              return(normalize_ticker_for_grouping(sym))
+            } else {
+              return(normalize_ticker_for_grouping(result))
+            }
           } else {
-            sym
+            return(normalize_ticker_for_grouping(sym))
           }
         }))
 
@@ -280,11 +295,23 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
       }
 
       # Find groups that contain the current ticker (or options on that ticker)
+      # Normalize current ticker for comparison
+      current_ticker_norm <- normalize_ticker_for_grouping(current_ticker)
+
       ticker_groups <- members %>%
-        filter(
-          symbol == current_ticker |
-          grepl(paste0("^", current_ticker, "\\d{2}[A-Z][a-z]{2}\\d{2}[CP]"), symbol)
+        mutate(
+          # Extract and normalize ticker from each group member symbol
+          member_ticker = purrr::map_chr(symbol, function(sym) {
+            if (is_option_symbol(sym)) {
+              underlying <- parse_option_symbol(sym)
+              if (!is.na(underlying)) {
+                return(normalize_ticker_for_grouping(underlying))
+              }
+            }
+            return(normalize_ticker_for_grouping(sym))
+          })
         ) %>%
+        filter(member_ticker == current_ticker_norm) %>%
         pull(group_id) %>%
         unique()
 
