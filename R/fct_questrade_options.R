@@ -47,22 +47,27 @@ fetch_questrade_options_chain <- function(ticker, expiration = NULL) {
     record_fallback(ticker, "Options: Symbol not found")
     return(fetch_options_chain_yahoo(ticker, expiration))
   }
+  log_info("Questrade Options: Step 2 complete - Found symbolId {symbol_id} for '{ticker}'")
 
   # Step 3: Fetch options structure (expirations, strikes, option IDs)
+  log_info("Questrade Options: Step 3 starting - Fetching options structure for '{ticker}'")
   structure <- fetch_questrade_options_structure(symbol_id, auth)
   if (is.null(structure)) {
-    log_warn("Questrade Options: Structure fetch failed for '{ticker}', falling back to Yahoo")
+    log_warn("Questrade Options: Step 3 FAILED - Structure is NULL for '{ticker}', falling back to Yahoo")
     record_fallback(ticker, "Options: Structure fetch failed")
     return(fetch_options_chain_yahoo(ticker, expiration))
   }
+  log_info("Questrade Options: Step 3 complete - Structure has {length(structure)} expiration dates for '{ticker}'")
 
   # Step 4: Extract all option IDs from structure
+  log_info("Questrade Options: Step 4 starting - Extracting option IDs for '{ticker}'")
   option_ids <- extract_option_ids(structure)
   if (length(option_ids) == 0) {
-    log_warn("Questrade Options: No option IDs found for '{ticker}', falling back to Yahoo")
+    log_warn("Questrade Options: Step 4 FAILED - No option IDs extracted for '{ticker}', falling back to Yahoo")
     record_fallback(ticker, "Options: No options available")
     return(fetch_options_chain_yahoo(ticker, expiration))
   }
+  log_info("Questrade Options: Step 4 complete - Extracted {length(option_ids)} option IDs for '{ticker}'")
 
   log_debug("Questrade Options: Found {length(option_ids)} option contracts for '{ticker}'")
 
@@ -124,10 +129,27 @@ fetch_questrade_options_structure <- function(symbol_id, auth) {
       return(NULL)
     }
 
-    options_data <- content(response)$options
+    # Log the raw response structure for debugging
+    full_response <- content(response)
+    response_fields <- names(full_response)
+    log_info("Questrade API Response fields for symbolId {symbol_id}: {paste(response_fields, collapse=', ')}")
 
-    if (is.null(options_data) || length(options_data) == 0) {
-      log_warn("Questrade Options: No options data returned for symbolId {symbol_id}")
+    # Check for error field
+    if (!is.null(full_response$error)) {
+      log_error("Questrade API returned error for symbolId {symbol_id}: {full_response$error}")
+    }
+
+    # Questrade returns 'optionChain' not 'options'
+    options_data <- full_response$optionChain
+
+    if (is.null(options_data)) {
+      log_warn("Questrade Options: 'optionChain' field is NULL for symbolId {symbol_id}")
+      log_info("Questrade API full response: {paste(capture.output(str(full_response)), collapse=' ')}")
+      return(NULL)
+    }
+
+    if (length(options_data) == 0) {
+      log_warn("Questrade Options: 'optionChain' array is EMPTY (length=0) for symbolId {symbol_id}")
       return(NULL)
     }
 
@@ -143,13 +165,15 @@ fetch_questrade_options_structure <- function(symbol_id, auth) {
 #' Fetch option quotes from Questrade API
 #'
 #' Calls POST markets/quotes/options to retrieve pricing data (bid, ask, volume,
-#' open interest) for a batch of option symbol IDs.
+#' open interest) for a batch of option symbol IDs. Implements batching to handle
+#' large option ID arrays that exceed API limits.
 #'
 #' @param option_ids Integer vector of Questrade option symbol IDs
 #' @param auth List with access_token and api_server from get_questrade_auth()
+#' @param batch_size Integer, number of option IDs to fetch per request (default: 100)
 #' @return List of option quote data, or NULL on failure
 #' @noRd
-fetch_questrade_option_quotes <- function(option_ids, auth) {
+fetch_questrade_option_quotes <- function(option_ids, auth, batch_size = 100) {
   if (is.null(auth)) {
     log_error("Questrade Options: No authentication provided for quotes fetch")
     return(NULL)
@@ -162,30 +186,59 @@ fetch_questrade_option_quotes <- function(option_ids, auth) {
 
   tryCatch({
     url <- paste0(auth$api_server, "v1/markets/quotes/options")
-    log_debug("Questrade Options: Fetching quotes for {length(option_ids)} options")
+    total_ids <- length(option_ids)
+    log_info("Questrade Options: Fetching quotes for {total_ids} options in batches of {batch_size}")
 
-    # Questrade expects optionIds array in POST body
-    response <- POST(
-      url,
-      add_headers(Authorization = paste("Bearer", auth$access_token)),
-      body = list(optionIds = option_ids),
-      encode = "json"
-    )
+    # Split option IDs into batches
+    num_batches <- ceiling(total_ids / batch_size)
+    all_quotes <- list()
 
-    if (status_code(response) != 200) {
-      log_error("Questrade Options: Quotes fetch failed with status {status_code(response)}")
+    for (batch_num in seq_len(num_batches)) {
+      start_idx <- (batch_num - 1) * batch_size + 1
+      end_idx <- min(batch_num * batch_size, total_ids)
+      batch_ids <- option_ids[start_idx:end_idx]
+
+      log_debug("Questrade Options: Fetching batch {batch_num}/{num_batches} ({length(batch_ids)} IDs)")
+
+      # Questrade expects optionIds array in POST body
+      response <- POST(
+        url,
+        add_headers(Authorization = paste("Bearer", auth$access_token)),
+        body = list(optionIds = batch_ids),
+        encode = "json"
+      )
+
+      if (status_code(response) != 200) {
+        # Log the actual error response for debugging
+        error_content <- tryCatch({
+          content(response, as = "text", encoding = "UTF-8")
+        }, error = function(e) {
+          "Could not parse error response"
+        })
+        log_error("Questrade Options: Batch {batch_num} fetch failed with status {status_code(response)}")
+        log_error("Questrade Options: Error response: {error_content}")
+        # Continue with other batches instead of failing completely
+        next
+      }
+
+      batch_quotes <- content(response)$optionQuotes
+
+      if (is.null(batch_quotes) || length(batch_quotes) == 0) {
+        log_warn("Questrade Options: Batch {batch_num} returned no quote data")
+        next
+      }
+
+      log_debug("Questrade Options: Batch {batch_num} retrieved {length(batch_quotes)} quotes")
+      all_quotes <- c(all_quotes, batch_quotes)
+    }
+
+    if (length(all_quotes) == 0) {
+      log_warn("Questrade Options: No quote data returned from any batch")
       return(NULL)
     }
 
-    quotes_data <- content(response)$optionQuotes
-
-    if (is.null(quotes_data) || length(quotes_data) == 0) {
-      log_warn("Questrade Options: No quote data returned")
-      return(NULL)
-    }
-
-    log_debug("Questrade Options: Retrieved quotes for {length(quotes_data)} options")
-    return(quotes_data)
+    log_info("Questrade Options: Successfully retrieved {length(all_quotes)} total quotes across {num_batches} batches")
+    return(all_quotes)
 
   }, error = function(e) {
     log_error("Questrade Options: Quotes fetch error - {e$message}")
@@ -209,14 +262,25 @@ extract_option_ids <- function(structure) {
   option_ids <- c()
 
   for (expiry in structure) {
-    if (is.null(expiry$chainPerStrikePrice)) next
+    # Questrade API has chainPerRoot layer containing chainPerStrikePrice
+    if (is.null(expiry$chainPerRoot)) next
 
-    for (strike_data in expiry$chainPerStrikePrice) {
-      if (!is.null(strike_data$callSymbolId)) {
-        option_ids <- c(option_ids, strike_data$callSymbolId)
-      }
-      if (!is.null(strike_data$putSymbolId)) {
-        option_ids <- c(option_ids, strike_data$putSymbolId)
+    for (root in expiry$chainPerRoot) {
+      root_symbol <- root$root %||% "unknown"
+      log_debug("Questrade Options: Processing root '{root_symbol}' for expiry {expiry$expiryDate}")
+
+      if (is.null(root$chainPerStrikePrice)) next
+
+      strike_count <- length(root$chainPerStrikePrice)
+      log_debug("Questrade Options: Found {strike_count} strikes for root '{root_symbol}'")
+
+      for (strike_data in root$chainPerStrikePrice) {
+        if (!is.null(strike_data$callSymbolId)) {
+          option_ids <- c(option_ids, strike_data$callSymbolId)
+        }
+        if (!is.null(strike_data$putSymbolId)) {
+          option_ids <- c(option_ids, strike_data$putSymbolId)
+        }
       }
     }
   }
@@ -261,15 +325,30 @@ convert_options_to_yahoo_format <- function(structure, quotes, expiration = NULL
       next
     }
 
+    # Flatten chainPerRoot structure - combine all strikes from all roots
+    all_strikes <- list()
+    if (!is.null(expiry$chainPerRoot)) {
+      for (root in expiry$chainPerRoot) {
+        root_symbol <- root$root %||% "unknown"
+        if (!is.null(root$chainPerStrikePrice)) {
+          strike_count <- length(root$chainPerStrikePrice)
+          log_debug("Questrade Options: Flattening {strike_count} strikes from root '{root_symbol}' for expiry {yahoo_date_str}")
+          all_strikes <- c(all_strikes, root$chainPerStrikePrice)
+        }
+      }
+    }
+
+    log_debug("Questrade Options: Total {length(all_strikes)} strikes for expiry {yahoo_date_str}")
+
     # Build calls and puts data frames for this expiration
     calls_df <- build_options_dataframe(
-      expiry$chainPerStrikePrice,
+      all_strikes,
       quotes_lookup,
       type = "call"
     )
 
     puts_df <- build_options_dataframe(
-      expiry$chainPerStrikePrice,
+      all_strikes,
       quotes_lookup,
       type = "put"
     )
