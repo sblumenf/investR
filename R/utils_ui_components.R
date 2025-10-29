@@ -340,3 +340,122 @@ create_groups_summary_alert <- function(broken_count = 0, incomplete_count = 0) 
     )
   )
 }
+
+################################################################################
+# GENERIC CARD BUILDER
+################################################################################
+
+#' Create a generic strategy opportunity card
+#'
+#' Reusable card builder for all strategy opportunity displays. Provides
+#' consistent structure across strategies while allowing strategy-specific
+#' content through section configuration.
+#'
+#' @param row Single-row data frame with opportunity data
+#' @param primary_text Card header primary text (e.g., "Company Name (TICKER)")
+#' @param secondary_text Card header secondary text (e.g., "$XX.XX")
+#' @param sections List of section configurations. Each section is a list with:
+#'   - title: Section title string
+#'   - is_open: Logical, should section be open by default
+#'   - metrics: List of metric specifications, each with:
+#'     - label: Metric label string
+#'     - value: Formatted value string
+#'     - is_primary: Logical, use primary styling (default FALSE)
+#'     - is_negative: Logical, use negative/red styling (default FALSE)
+#' @param ns Optional namespace function for risk button (from module)
+#' @param risk_id Optional risk module ID for risk analysis button
+#' @param include_risk_button Logical, whether to include risk analysis button (default TRUE)
+#' @param card_class CSS class for card styling (default "opportunity-card")
+#'
+#' @return A bslib card component with standardized structure
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#'   sections <- list(
+#'     list(
+#'       title = "Quick Overview",
+#'       is_open = TRUE,
+#'       metrics = list(
+#'         list(label = "Return", value = "10.5%", is_primary = TRUE),
+#'         list(label = "Days", value = "45")
+#'       )
+#'     )
+#'   )
+#'   create_strategy_opportunity_card(
+#'     row = opportunity_data,
+#'     primary_text = "Apple Inc. (AAPL)",
+#'     secondary_text = "$150.00",
+#'     sections = sections
+#'   )
+#' }
+create_strategy_opportunity_card <- function(
+  row,
+  primary_text,
+  secondary_text,
+  sections,
+  ns = NULL,
+  risk_id = NULL,
+  include_risk_button = TRUE,
+  card_class = "opportunity-card"
+) {
+  # Create card header using generic header builder
+  header <- create_generic_card_header(
+    primary_text = primary_text,
+    secondary_text = secondary_text
+  )
+
+  # Build card body content
+  body_content <- list()
+
+  # Add risk analysis button if requested
+  if (include_risk_button && !is.null(ns) && !is.null(risk_id)) {
+    # Extract row index from risk_id (e.g., "risk_1" -> 1)
+    idx <- as.integer(sub("risk_", "", risk_id))
+
+    body_content[[length(body_content) + 1]] <- tags$div(
+      style = "margin-bottom: 15px;",
+      actionButton(
+        inputId = ns(paste0("analyze_risk_btn_", idx)),
+        label = "Analyze Risk",
+        icon = icon("chart-line"),
+        class = "btn btn-primary btn-sm",
+        style = "width: 100%;"
+      )
+    )
+  }
+
+  # Build accordion sections
+  for (section in sections) {
+    # Build metric rows for this section
+    metric_rows <- purrr::map(section$metrics, function(metric) {
+      create_metric_row(
+        label = metric$label,
+        value = metric$value,
+        is_primary = metric$is_primary %||% FALSE,
+        is_negative = metric$is_negative %||% FALSE
+      )
+    })
+
+    # Create accordion section using do.call to unpack metric_rows list
+    accordion <- do.call(
+      create_accordion_section,
+      c(
+        list(title = section$title, is_open = section$is_open),
+        metric_rows
+      )
+    )
+
+    body_content[[length(body_content) + 1]] <- accordion
+  }
+
+  # Create card body with all content
+  body <- do.call(bslib::card_body, body_content)
+
+  # Combine into final card
+  bslib::card(
+    header,
+    body,
+    class = card_class
+  )
+}

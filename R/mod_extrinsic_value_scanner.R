@@ -121,6 +121,12 @@ mod_extrinsic_value_scanner_server <- function(id){
             log_warn("Current stock price is empty or NA for {stock_symbol}.")
             next # Skip if stock price is empty
           }
+          # Extract company name if available
+          company_name <- if (!is.null(current_quote$Name) && length(current_quote$Name) > 0) {
+            current_quote$Name
+          } else {
+            NULL
+          }
           log_debug("{stock_symbol}: Stock price = ${stock_price}") # nolint
 
           # Fetch option chain (returns Yahoo format - nested list)
@@ -216,13 +222,34 @@ mod_extrinsic_value_scanner_server <- function(id){
 
           if (nrow(atm_puts_with_metrics) > 0) {
             # Select the best opportunity (highest annualized return) for this stock
+            # Ensure all fields needed for card display are included
             best_opportunity <- atm_puts_with_metrics %>%
               dplyr::arrange(desc(annualized_return_pct)) %>% # nolint
               dplyr::slice(1) %>% # nolint
               dplyr::mutate(
                 symbol = stock_symbol,
-                current_stock_price = stock_price
-              )
+                current_stock_price = stock_price,
+                company_name = company_name
+              ) %>% # nolint
+              dplyr::select(
+                symbol,
+                company_name,
+                current_stock_price,
+                strikePrice,
+                expirationDate,
+                optionType,
+                lastPrice,
+                bidPrice,
+                askPrice,
+                volume,
+                openInterest,
+                impliedVolatility,
+                days_to_expiry,
+                intrinsic_value,
+                extrinsic_value,
+                estimated_margin,
+                annualized_return_pct
+              ) # nolint
             opportunities <- append(opportunities, list(best_opportunity))
           }
         } # End for loop

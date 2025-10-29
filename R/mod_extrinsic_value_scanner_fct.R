@@ -178,49 +178,171 @@ calculate_scanner_annualized_return <- function(extrinsic_value, estimated_margi
   return(annualized_return)
 }
 
-#' Create a card for a scanned opportunity
+#' Build section configuration for extrinsic value scanner cards
 #'
-#' @param opportunity_data A single-row tibble containing opportunity details.
-#' @return A bslib card component.
-#' @importFrom shiny tags div
-#' @importFrom bslib card card_header card_body
+#' Defines the accordion section structure specific to the extrinsic value
+#' scanner strategy following the standardized card pattern.
+#'
+#' @param row Single-row tibble with opportunity data
+#' @return List of section configurations for create_strategy_opportunity_card()
 #' @noRd
-create_scanner_opportunity_card <- function(opportunity_data) {
-  # Assuming format_currency, format_percentage are available globally or sourced
-  # from utils_formatting.R
+build_scanner_card_sections <- function(row) {
+  # Calculate bid-ask spread
+  bid_ask_spread <- if (!is.null(row$askPrice) && !is.null(row$bidPrice)) {
+    row$askPrice - row$bidPrice
+  } else {
+    NA_real_
+  }
 
-  # Card Header
-  header_primary <- tags$div(
-    opportunity_data$symbol,
-    tags$span(
-      class = "badge badge-primary pull-right",
-      style = "font-size: 14px; margin-left: 10px;",
-      format_percentage(opportunity_data$annualized_return_pct)
+  # Calculate time value percentage
+  time_value_pct <- if (!is.null(row$extrinsic_value) && !is.null(row$lastPrice) && row$lastPrice > 0) {
+    row$extrinsic_value / row$lastPrice
+  } else {
+    NA_real_
+  }
+
+  list(
+    # Section 1: Quick Overview (open by default)
+    list(
+      title = "Quick Overview",
+      is_open = TRUE,
+      metrics = list(
+        list(
+          label = "Annualized Return",
+          value = format_percentage(row$annualized_return_pct),
+          is_primary = TRUE
+        ),
+        list(
+          label = "Extrinsic Value",
+          value = format_currency(row$extrinsic_value),
+          is_primary = TRUE
+        ),
+        list(
+          label = "Estimated Margin",
+          value = format_currency(row$estimated_margin)
+        ),
+        list(
+          label = "Days to Expiry",
+          value = as.character(row$days_to_expiry)
+        )
+      )
+    ),
+
+    # Section 2: Position Details (open by default)
+    list(
+      title = "Position Details",
+      is_open = TRUE,
+      metrics = list(
+        list(
+          label = "Current Stock Price",
+          value = format_currency(row$current_stock_price)
+        ),
+        list(
+          label = "Strike Price",
+          value = format_currency(row$strikePrice)
+        ),
+        list(
+          label = "Option Premium",
+          value = format_currency(row$lastPrice)
+        ),
+        list(
+          label = "Expiration Date",
+          value = as.character(format(row$expirationDate, "%b %d, %Y"))
+        )
+      )
+    ),
+
+    # Section 3: Value Breakdown (collapsed)
+    list(
+      title = "Value Breakdown",
+      is_open = FALSE,
+      metrics = list(
+        list(
+          label = "Intrinsic Value",
+          value = format_currency(row$intrinsic_value)
+        ),
+        list(
+          label = "Extrinsic Value",
+          value = format_currency(row$extrinsic_value)
+        ),
+        list(
+          label = "Time Value %",
+          value = if (!is.na(time_value_pct)) format_percentage(time_value_pct) else "N/A"
+        ),
+        list(
+          label = "Bid-Ask Spread",
+          value = if (!is.na(bid_ask_spread)) format_currency(bid_ask_spread) else "N/A"
+        )
+      )
+    ),
+
+    # Section 4: Option Details (collapsed)
+    list(
+      title = "Option Details",
+      is_open = FALSE,
+      metrics = list(
+        list(
+          label = "Bid Price",
+          value = if (!is.null(row$bidPrice)) format_currency(row$bidPrice) else "N/A"
+        ),
+        list(
+          label = "Ask Price",
+          value = if (!is.null(row$askPrice)) format_currency(row$askPrice) else "N/A"
+        ),
+        list(
+          label = "Last Trade Price",
+          value = format_currency(row$lastPrice)
+        ),
+        list(
+          label = "Volume",
+          value = if (!is.null(row$volume)) format(row$volume, big.mark = ",") else "N/A"
+        ),
+        list(
+          label = "Open Interest",
+          value = if (!is.null(row$openInterest)) format(row$openInterest, big.mark = ",") else "N/A"
+        ),
+        list(
+          label = "Implied Volatility",
+          value = if (!is.null(row$impliedVolatility) && !is.na(row$impliedVolatility)) {
+            format_percentage(row$impliedVolatility)
+          } else {
+            "N/A"
+          }
+        )
+      )
     )
   )
+}
 
-  header_secondary <- sprintf(
-    "%s | Strike: %s | Expiry: %s (%d days)",
-    opportunity_data$optionType,
-    format_currency(opportunity_data$strikePrice),
-    format(opportunity_data$expirationDate, "%b %d, %Y"),
-    opportunity_data$days_to_expiry
+#' Create a card for a scanned opportunity
+#'
+#' Creates a standardized opportunity card for the extrinsic value scanner
+#' using the generic card builder pattern.
+#'
+#' @param opportunity_data A single-row tibble containing opportunity details.
+#' @return A bslib card component with accordion sections.
+#' @noRd
+create_scanner_opportunity_card <- function(opportunity_data) {
+  # Build primary header text
+  primary_text <- if (!is.null(opportunity_data$company_name)) {
+    paste0(opportunity_data$company_name, " (", opportunity_data$symbol, ")")
+  } else {
+    opportunity_data$symbol
+  }
+
+  # Build secondary header text
+  secondary_text <- format_currency(opportunity_data$current_stock_price)
+
+  # Build sections using strategy-specific configuration
+  sections <- build_scanner_card_sections(opportunity_data)
+
+  # Use generic card builder
+  create_strategy_opportunity_card(
+    row = opportunity_data,
+    primary_text = primary_text,
+    secondary_text = secondary_text,
+    sections = sections,
+    include_risk_button = FALSE,  # No risk button for now
+    card_class = "opportunity-card"
   )
-
-  header <- bslib::card_header(
-    tags$h4(header_primary),
-    tags$p(header_secondary, class = "text-muted")
-  )
-
-  # Card Body
-  body <- bslib::card_body(
-    create_metric_row("Current Stock Price", format_currency(opportunity_data$current_stock_price)),
-    create_metric_row("Option Premium", format_currency(opportunity_data$lastPrice)),
-    create_metric_row("Intrinsic Value", format_currency(opportunity_data$intrinsic_value)),
-    create_metric_row("Extrinsic Value", format_currency(opportunity_data$extrinsic_value)),
-    create_metric_row("Estimated Margin", format_currency(opportunity_data$estimated_margin)),
-    create_metric_row("Annualized Return", format_percentage(opportunity_data$annualized_return_pct), is_primary = TRUE)
-  )
-
-  bslib::card(header, body)
 }
