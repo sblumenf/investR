@@ -153,6 +153,13 @@ calculate_extrinsic_value <- function(option_premium, stock_price, strike_price,
 #' @return Tibble with complete position metrics
 #' @noRd
 calculate_reverse_collar_metrics <- function(stock_price, strike, put_option, call_option) {
+  # Validate inputs - ensure we have the required price data
+  if (is.null(put_option$bidPrice) || is.na(put_option$bidPrice) ||
+      is.null(call_option$askPrice) || is.na(call_option$askPrice)) {
+    log_warn("Missing bid/ask prices for options - skipping")
+    return(NULL)
+  }
+
   # CASH FLOWS
   # Money IN:
   short_stock_proceeds <- stock_price * 100  # Selling 100 shares
@@ -179,12 +186,15 @@ calculate_reverse_collar_metrics <- function(stock_price, strike, put_option, ca
   # RETURNS
   # Return on margin
   days_to_expiry <- as.numeric(difftime(put_option$expirationDate, Sys.Date(), units = "days"))
-  return_on_margin <- if (estimated_margin > 0) net_credit / estimated_margin else 0
-  annualized_return <- if (days_to_expiry > 0) {
-    return_on_margin * (365 / days_to_expiry)
-  } else {
-    0
+
+  # Handle edge cases for days_to_expiry
+  if (is.na(days_to_expiry) || days_to_expiry <= 0) {
+    log_debug("Invalid days_to_expiry: {days_to_expiry} - skipping")
+    return(NULL)
   }
+
+  return_on_margin <- if (estimated_margin > 0) net_credit / estimated_margin else 0
+  annualized_return <- return_on_margin * (365 / days_to_expiry)
 
   # Return tibble with all fields needed for card display
   tibble::tibble(

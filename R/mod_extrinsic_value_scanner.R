@@ -218,9 +218,16 @@ mod_extrinsic_value_scanner_server <- function(id){
               call_option = call_option
             )
 
-            # Only include if net credit is positive
-            if (reverse_collar$net_credit > 0 && reverse_collar$annualized_return > 0) {
-              reverse_collar_opportunities[[length(reverse_collar_opportunities) + 1]] <- reverse_collar
+            # Only include if net credit is positive and annualized return is positive
+            # Check for NA and ensure values are valid
+            if (!is.null(reverse_collar) && nrow(reverse_collar) > 0) {
+              net_credit_val <- reverse_collar$net_credit[1]
+              ann_return_val <- reverse_collar$annualized_return[1]
+
+              if (!is.na(net_credit_val) && !is.na(ann_return_val) &&
+                  net_credit_val > 0 && ann_return_val > 0) {
+                reverse_collar_opportunities[[length(reverse_collar_opportunities) + 1]] <- reverse_collar
+              }
             }
           }
 
