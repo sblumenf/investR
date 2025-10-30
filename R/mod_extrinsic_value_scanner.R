@@ -261,7 +261,7 @@ mod_extrinsic_value_scanner_server <- function(id){
           return(tibble()) # nolint
         } else {
           final_results <- dplyr::bind_rows(opportunities) %>%
-            dplyr::arrange(desc(annualized_return_pct)) # nolint
+            dplyr::arrange(desc(annualized_return)) # nolint
           showNotification(sprintf("Found %d opportunities.", nrow(final_results)), type = "message") # nolint
           return(final_results) # nolint
         }
