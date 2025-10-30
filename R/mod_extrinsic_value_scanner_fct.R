@@ -160,7 +160,7 @@ calculate_reverse_collar_metrics <- function(stock_price, strike, put_option, ca
     return(NULL)
   }
 
-  # CASH FLOWS
+  # CASH FLOWS AT ENTRY
   # Money IN:
   short_stock_proceeds <- stock_price * 100  # Selling 100 shares
   put_premium_received <- put_option$bidPrice * 100  # Selling put at bid
@@ -168,23 +168,30 @@ calculate_reverse_collar_metrics <- function(stock_price, strike, put_option, ca
   # Money OUT:
   call_premium_paid <- call_option$askPrice * 100  # Buying call at ask
 
-  # NET POSITION
-  net_credit <- short_stock_proceeds + put_premium_received - call_premium_paid
+  # CASH FLOWS AT EXPIRY
+  # Regardless of stock price, position closes at strike price
+  # (Either call exercised or put assigned - one will be ITM)
+  stock_buyback_cost <- strike * 100  # Must buy back stock at strike
+
+  # TRUE PROFIT CALCULATION
+  # Profit = Cash in - Cash out
+  # Cash in: Short proceeds + Put premium
+  # Cash out: Call premium + Stock buyback at strike
+  profit <- short_stock_proceeds + put_premium_received - call_premium_paid - stock_buyback_cost
+
+  # Alternative formula (equivalent):
+  # profit <- (stock_price - strike) * 100 + put_premium_received - call_premium_paid
 
   # MARGIN CALCULATION
-  # For reverse collar (short stock + long call + short put):
-  # - Short stock margin: typically 50% of stock value
-  # - Long call: paid for, no margin (already deducted from net credit)
-  # - Short put: covered by short stock position
-  # Simplified: Use short stock margin requirement
-  estimated_margin <- 0.5 * stock_price * 100
+  # Broker holds: Short proceeds + Put premium as collateral
+  # This is the capital tied up in the position
+  margin_required <- short_stock_proceeds + put_premium_received
 
   # EXTRINSIC VALUE (from the put we're selling)
   put_intrinsic <- max(0, strike - stock_price)
   put_extrinsic <- max(0, put_premium_received / 100 - put_intrinsic)
 
   # RETURNS
-  # Return on margin
   days_to_expiry <- as.numeric(difftime(put_option$expirationDate, Sys.Date(), units = "days"))
 
   # Handle edge cases for days_to_expiry
@@ -193,7 +200,8 @@ calculate_reverse_collar_metrics <- function(stock_price, strike, put_option, ca
     return(NULL)
   }
 
-  return_on_margin <- if (estimated_margin > 0) net_credit / estimated_margin else 0
+  # Return on margin (the capital tied up)
+  return_on_margin <- if (margin_required > 0) profit / margin_required else 0
   annualized_return <- return_on_margin * (365 / days_to_expiry)
 
   # Return tibble with all fields needed for card display
@@ -219,15 +227,20 @@ calculate_reverse_collar_metrics <- function(stock_price, strike, put_option, ca
     call_oi = call_option$openInterest,
     call_iv = call_option$impliedVolatility,
 
-    # Cash flows
+    # Cash flows at entry
     short_stock_proceeds = short_stock_proceeds,
     put_premium_received = put_premium_received,
     call_premium_paid = call_premium_paid,
-    net_credit = net_credit,
+
+    # Cash flows at expiry
+    stock_buyback_cost = stock_buyback_cost,
+
+    # Profit & Margin
+    profit = profit,
+    margin_required = margin_required,
 
     # Metrics
     put_extrinsic_value = put_extrinsic,
-    estimated_margin = estimated_margin,
     return_on_margin = return_on_margin,
     annualized_return = annualized_return
   )
@@ -254,28 +267,36 @@ calculate_scanner_annualized_return <- function(extrinsic_value, estimated_margi
 
 #' Build section configuration for reverse collar scanner cards
 #'
-#' Defines clear, human-readable accordion sections showing complete
-#' cash flows for reverse collar positions (short stock + short put + long call).
+#' Redesigned for clarity - shows profit, margin, and returns without repetition.
+#' Focused on decision-making, not teaching.
 #'
 #' @param row Single-row tibble with opportunity data
 #' @return List of section configurations for create_strategy_opportunity_card()
 #' @noRd
 build_scanner_card_sections <- function(row) {
   list(
-    # Section 1: Quick Overview (open by default)
+    # Section 1: Quick Overview (OPEN) - Everything needed for go/no-go decision
     list(
       title = "Quick Overview",
       is_open = TRUE,
       metrics = list(
         list(
-          label = "Net Credit Received",
-          value = format_currency(row$net_credit / 100),
+          label = "Net Profit at Expiry",
+          value = format_currency(row$profit / 100),
+          is_primary = TRUE
+        ),
+        list(
+          label = "Capital Tied Up (Margin)",
+          value = format_currency(row$margin_required / 100)
+        ),
+        list(
+          label = "Return on Margin",
+          value = format_percentage(row$return_on_margin),
           is_primary = TRUE
         ),
         list(
           label = "Annualized Return",
-          value = format_percentage(row$annualized_return),
-          is_primary = TRUE
+          value = format_percentage(row$annualized_return)
         ),
         list(
           label = "Days to Expiry",
@@ -284,138 +305,126 @@ build_scanner_card_sections <- function(row) {
       )
     ),
 
-    # Section 2: Cash Flow Breakdown (open by default) - THE KEY SECTION!
+    # Section 2: Position Breakdown (OPEN) - Cash flow tables showing entry & exit
     list(
-      title = "Cash Flow Breakdown",
+      title = "Position Breakdown",
       is_open = TRUE,
       metrics = list(
         list(
-          label = "💰 Short 100 Shares → Receive",
-          value = format_currency(row$short_stock_proceeds / 100)
+          label = "═══ At Entry ═══",
+          value = ""
         ),
         list(
-          label = "💰 Sell ATM Put → Receive",
-          value = format_currency(row$put_premium_received / 100)
+          label = "Short 100 shares @ current price",
+          value = paste0("+", format_currency(row$short_stock_proceeds / 100))
         ),
         list(
-          label = "💸 Buy ATM Call → Pay",
+          label = paste0("Sell Put @ $", format(row$strike, nsmall = 2)),
+          value = paste0("+", format_currency(row$put_premium_received / 100))
+        ),
+        list(
+          label = paste0("Buy Call @ $", format(row$strike, nsmall = 2)),
           value = paste0("-", format_currency(row$call_premium_paid / 100))
         ),
         list(
-          label = "➡️ Net Cash In Hand",
-          value = format_currency(row$net_credit / 100),
+          label = "Total Capital Tied Up",
+          value = format_currency(row$margin_required / 100),
+          is_primary = TRUE
+        ),
+        list(
+          label = "═══ At Expiry ═══",
+          value = ""
+        ),
+        list(
+          label = paste0("Buy back stock @ $", format(row$strike, nsmall = 2)),
+          value = paste0("-", format_currency(row$stock_buyback_cost / 100))
+        ),
+        list(
+          label = "Options settle (one ITM)",
+          value = "(included above)"
+        ),
+        list(
+          label = "Net Profit",
+          value = format_currency(row$profit / 100),
           is_primary = TRUE
         )
       )
     ),
 
-    # Section 3: Position Structure (open by default)
+    # Section 3: Strategy Explanation (COLLAPSED) - Educational content
     list(
-      title = "Position Structure",
-      is_open = TRUE,
+      title = "How This Position Works",
+      is_open = FALSE,
       metrics = list(
         list(
-          label = "Stock Price",
-          value = format_currency(row$current_stock_price)
+          label = "Position closes at strike price",
+          value = paste0("$", format(row$strike, nsmall = 2))
         ),
         list(
-          label = "Strike Price (ATM)",
-          value = format_currency(row$strike)
+          label = "If stock rises",
+          value = "Call exercised → buy @ strike"
         ),
         list(
-          label = "Expiration Date",
-          value = as.character(format(row$expirationDate, "%b %d, %Y"))
+          label = "If stock falls",
+          value = "Put assigned → buy @ strike"
+        ),
+        list(
+          label = "Profit is locked in at entry",
+          value = format_currency(row$profit / 100)
+        ),
+        list(
+          label = "⚠ Key Risk: Stock borrow cost",
+          value = "Not calculated - verify with broker"
+        ),
+        list(
+          label = "⚠ Margin is estimated",
+          value = "Verify actual requirement with broker"
         )
       )
     ),
 
-    # Section 4: Put Option Details (collapsed)
+    # Section 4: Option Details (COLLAPSED) - Due diligence data
     list(
-      title = "Put Option (Sold for Income)",
+      title = "Option Details",
       is_open = FALSE,
       metrics = list(
+        list(
+          label = paste0("Put Sold ($", format(row$strike, nsmall = 2), " Strike)"),
+          value = ""
+        ),
         list(
           label = "Bid (You Receive)",
           value = format_currency(row$put_bid),
           is_primary = TRUE
         ),
         list(
-          label = "Ask",
-          value = format_currency(row$put_ask)
+          label = "Ask / Last",
+          value = paste0(format_currency(row$put_ask), " / ", format_currency(row$put_last))
         ),
         list(
-          label = "Last Trade",
-          value = format_currency(row$put_last)
+          label = "Volume / OI",
+          value = paste0(format(row$put_volume, big.mark = ","), " / ", format(row$put_oi, big.mark = ","))
         ),
         list(
-          label = "Volume",
-          value = format(row$put_volume, big.mark = ",")
+          label = "Extrinsic Value",
+          value = format_currency(row$put_extrinsic_value)
         ),
         list(
-          label = "Open Interest",
-          value = format(row$put_oi, big.mark = ",")
+          label = paste0("Call Bought ($", format(row$strike, nsmall = 2), " Strike)"),
+          value = ""
         ),
-        list(
-          label = "Implied Volatility",
-          value = if (!is.na(row$put_iv)) format_percentage(row$put_iv) else "N/A"
-        )
-      )
-    ),
-
-    # Section 5: Call Option Details (collapsed)
-    list(
-      title = "Call Option (Bought for Protection)",
-      is_open = FALSE,
-      metrics = list(
         list(
           label = "Ask (You Pay)",
           value = format_currency(row$call_ask),
           is_primary = TRUE
         ),
         list(
-          label = "Bid",
-          value = format_currency(row$call_bid)
+          label = "Bid / Last",
+          value = paste0(format_currency(row$call_bid), " / ", format_currency(row$call_last))
         ),
         list(
-          label = "Last Trade",
-          value = format_currency(row$call_last)
-        ),
-        list(
-          label = "Volume",
-          value = format(row$call_volume, big.mark = ",")
-        ),
-        list(
-          label = "Open Interest",
-          value = format(row$call_oi, big.mark = ",")
-        ),
-        list(
-          label = "Implied Volatility",
-          value = if (!is.na(row$call_iv)) format_percentage(row$call_iv) else "N/A"
-        )
-      )
-    ),
-
-    # Section 6: Margin & Returns (collapsed)
-    list(
-      title = "Margin & Returns Analysis",
-      is_open = FALSE,
-      metrics = list(
-        list(
-          label = "Estimated Margin Required",
-          value = format_currency(row$estimated_margin / 100)
-        ),
-        list(
-          label = "Net Credit / Margin Ratio",
-          value = format_percentage(row$return_on_margin)
-        ),
-        list(
-          label = "Annualized Return on Margin",
-          value = format_percentage(row$annualized_return),
-          is_primary = TRUE
-        ),
-        list(
-          label = "Put Extrinsic Value",
-          value = format_currency(row$put_extrinsic_value)
+          label = "Volume / OI",
+          value = paste0(format(row$call_volume, big.mark = ","), " / ", format(row$call_oi, big.mark = ","))
         )
       )
     )
