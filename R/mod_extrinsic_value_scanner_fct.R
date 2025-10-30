@@ -141,22 +141,86 @@ calculate_extrinsic_value <- function(option_premium, stock_price, strike_price,
   return(extrinsic_value)
 }
 
-#' Estimate Margin Required for a Reverse Collar Position
+#' Calculate Reverse Collar Position Metrics
 #'
-#' This is a simplified estimation. Actual margin requirements are complex and
-#' broker-specific.
+#' Computes complete cash flows and returns for a reverse collar position:
+#' Short stock + Sell ATM put + Buy ATM call
 #'
-#' @param stock_price Numeric, the current price of the underlying stock.
-#' @param strike_price Numeric, the strike price of the options (assuming ATM).
-#' @param option_type Character, 'call' or 'put' (not directly used in this simplified margin,
-#'   but kept for consistency if logic expands).
-#' @return Numeric, estimated margin required for 100 shares.
+#' @param stock_price Numeric, current stock price
+#' @param strike Numeric, ATM strike price (same for put and call)
+#' @param put_option Single-row tibble with put option data
+#' @param call_option Single-row tibble with call option data
+#' @return Tibble with complete position metrics
 #' @noRd
-estimate_reverse_collar_margin <- function(stock_price, strike_price, option_type) {
-  # Assuming 50% initial margin for short stock position for 100 shares
-  # This is a placeholder and should be refined with actual broker rules.
+calculate_reverse_collar_metrics <- function(stock_price, strike, put_option, call_option) {
+  # CASH FLOWS
+  # Money IN:
+  short_stock_proceeds <- stock_price * 100  # Selling 100 shares
+  put_premium_received <- put_option$bidPrice * 100  # Selling put at bid
+
+  # Money OUT:
+  call_premium_paid <- call_option$askPrice * 100  # Buying call at ask
+
+  # NET POSITION
+  net_credit <- short_stock_proceeds + put_premium_received - call_premium_paid
+
+  # MARGIN CALCULATION
+  # For reverse collar (short stock + long call + short put):
+  # - Short stock margin: typically 50% of stock value
+  # - Long call: paid for, no margin (already deducted from net credit)
+  # - Short put: covered by short stock position
+  # Simplified: Use short stock margin requirement
   estimated_margin <- 0.5 * stock_price * 100
-  return(estimated_margin)
+
+  # EXTRINSIC VALUE (from the put we're selling)
+  put_intrinsic <- max(0, strike - stock_price)
+  put_extrinsic <- max(0, put_premium_received / 100 - put_intrinsic)
+
+  # RETURNS
+  # Return on margin
+  days_to_expiry <- as.numeric(difftime(put_option$expirationDate, Sys.Date(), units = "days"))
+  return_on_margin <- if (estimated_margin > 0) net_credit / estimated_margin else 0
+  annualized_return <- if (days_to_expiry > 0) {
+    return_on_margin * (365 / days_to_expiry)
+  } else {
+    0
+  }
+
+  # Return tibble with all fields needed for card display
+  tibble::tibble(
+    # Position structure
+    strike = strike,
+    expirationDate = put_option$expirationDate,
+    days_to_expiry = days_to_expiry,
+
+    # Put option details
+    put_bid = put_option$bidPrice,
+    put_ask = put_option$askPrice,
+    put_last = put_option$lastPrice,
+    put_volume = put_option$volume,
+    put_oi = put_option$openInterest,
+    put_iv = put_option$impliedVolatility,
+
+    # Call option details
+    call_bid = call_option$bidPrice,
+    call_ask = call_option$askPrice,
+    call_last = call_option$lastPrice,
+    call_volume = call_option$volume,
+    call_oi = call_option$openInterest,
+    call_iv = call_option$impliedVolatility,
+
+    # Cash flows
+    short_stock_proceeds = short_stock_proceeds,
+    put_premium_received = put_premium_received,
+    call_premium_paid = call_premium_paid,
+    net_credit = net_credit,
+
+    # Metrics
+    put_extrinsic_value = put_extrinsic,
+    estimated_margin = estimated_margin,
+    return_on_margin = return_on_margin,
+    annualized_return = annualized_return
+  )
 }
 
 #' Calculate Annualized Return for Extrinsic Value Scanner
@@ -178,29 +242,15 @@ calculate_scanner_annualized_return <- function(extrinsic_value, estimated_margi
   return(annualized_return)
 }
 
-#' Build section configuration for extrinsic value scanner cards
+#' Build section configuration for reverse collar scanner cards
 #'
-#' Defines the accordion section structure specific to the extrinsic value
-#' scanner strategy following the standardized card pattern.
+#' Defines clear, human-readable accordion sections showing complete
+#' cash flows for reverse collar positions (short stock + short put + long call).
 #'
 #' @param row Single-row tibble with opportunity data
 #' @return List of section configurations for create_strategy_opportunity_card()
 #' @noRd
 build_scanner_card_sections <- function(row) {
-  # Calculate bid-ask spread
-  bid_ask_spread <- if (!is.null(row$askPrice) && !is.null(row$bidPrice)) {
-    row$askPrice - row$bidPrice
-  } else {
-    NA_real_
-  }
-
-  # Calculate time value percentage
-  time_value_pct <- if (!is.null(row$extrinsic_value) && !is.null(row$lastPrice) && row$lastPrice > 0) {
-    row$extrinsic_value / row$lastPrice
-  } else {
-    NA_real_
-  }
-
   list(
     # Section 1: Quick Overview (open by default)
     list(
@@ -208,18 +258,14 @@ build_scanner_card_sections <- function(row) {
       is_open = TRUE,
       metrics = list(
         list(
+          label = "Net Credit Received",
+          value = format_currency(row$net_credit / 100),
+          is_primary = TRUE
+        ),
+        list(
           label = "Annualized Return",
-          value = format_percentage(row$annualized_return_pct),
+          value = format_percentage(row$annualized_return),
           is_primary = TRUE
-        ),
-        list(
-          label = "Extrinsic Value",
-          value = format_currency(row$extrinsic_value),
-          is_primary = TRUE
-        ),
-        list(
-          label = "Estimated Margin",
-          value = format_currency(row$estimated_margin)
         ),
         list(
           label = "Days to Expiry",
@@ -228,22 +274,43 @@ build_scanner_card_sections <- function(row) {
       )
     ),
 
-    # Section 2: Position Details (open by default)
+    # Section 2: Cash Flow Breakdown (open by default) - THE KEY SECTION!
     list(
-      title = "Position Details",
+      title = "Cash Flow Breakdown",
       is_open = TRUE,
       metrics = list(
         list(
-          label = "Current Stock Price",
+          label = "💰 Short 100 Shares → Receive",
+          value = format_currency(row$short_stock_proceeds / 100)
+        ),
+        list(
+          label = "💰 Sell ATM Put → Receive",
+          value = format_currency(row$put_premium_received / 100)
+        ),
+        list(
+          label = "💸 Buy ATM Call → Pay",
+          value = paste0("-", format_currency(row$call_premium_paid / 100))
+        ),
+        list(
+          label = "➡️ Net Cash In Hand",
+          value = format_currency(row$net_credit / 100),
+          is_primary = TRUE
+        )
+      )
+    ),
+
+    # Section 3: Position Structure (open by default)
+    list(
+      title = "Position Structure",
+      is_open = TRUE,
+      metrics = list(
+        list(
+          label = "Stock Price",
           value = format_currency(row$current_stock_price)
         ),
         list(
-          label = "Strike Price",
-          value = format_currency(row$strikePrice)
-        ),
-        list(
-          label = "Option Premium",
-          value = format_currency(row$lastPrice)
+          label = "Strike Price (ATM)",
+          value = format_currency(row$strike)
         ),
         list(
           label = "Expiration Date",
@@ -252,62 +319,93 @@ build_scanner_card_sections <- function(row) {
       )
     ),
 
-    # Section 3: Value Breakdown (collapsed)
+    # Section 4: Put Option Details (collapsed)
     list(
-      title = "Value Breakdown",
+      title = "Put Option (Sold for Income)",
       is_open = FALSE,
       metrics = list(
         list(
-          label = "Intrinsic Value",
-          value = format_currency(row$intrinsic_value)
+          label = "Bid (You Receive)",
+          value = format_currency(row$put_bid),
+          is_primary = TRUE
         ),
         list(
-          label = "Extrinsic Value",
-          value = format_currency(row$extrinsic_value)
+          label = "Ask",
+          value = format_currency(row$put_ask)
         ),
         list(
-          label = "Time Value %",
-          value = if (!is.na(time_value_pct)) format_percentage(time_value_pct) else "N/A"
+          label = "Last Trade",
+          value = format_currency(row$put_last)
         ),
         list(
-          label = "Bid-Ask Spread",
-          value = if (!is.na(bid_ask_spread)) format_currency(bid_ask_spread) else "N/A"
+          label = "Volume",
+          value = format(row$put_volume, big.mark = ",")
+        ),
+        list(
+          label = "Open Interest",
+          value = format(row$put_oi, big.mark = ",")
+        ),
+        list(
+          label = "Implied Volatility",
+          value = if (!is.na(row$put_iv)) format_percentage(row$put_iv) else "N/A"
         )
       )
     ),
 
-    # Section 4: Option Details (collapsed)
+    # Section 5: Call Option Details (collapsed)
     list(
-      title = "Option Details",
+      title = "Call Option (Bought for Protection)",
       is_open = FALSE,
       metrics = list(
         list(
-          label = "Bid Price",
-          value = if (!is.null(row$bidPrice)) format_currency(row$bidPrice) else "N/A"
+          label = "Ask (You Pay)",
+          value = format_currency(row$call_ask),
+          is_primary = TRUE
         ),
         list(
-          label = "Ask Price",
-          value = if (!is.null(row$askPrice)) format_currency(row$askPrice) else "N/A"
+          label = "Bid",
+          value = format_currency(row$call_bid)
         ),
         list(
-          label = "Last Trade Price",
-          value = format_currency(row$lastPrice)
+          label = "Last Trade",
+          value = format_currency(row$call_last)
         ),
         list(
           label = "Volume",
-          value = if (!is.null(row$volume)) format(row$volume, big.mark = ",") else "N/A"
+          value = format(row$call_volume, big.mark = ",")
         ),
         list(
           label = "Open Interest",
-          value = if (!is.null(row$openInterest)) format(row$openInterest, big.mark = ",") else "N/A"
+          value = format(row$call_oi, big.mark = ",")
         ),
         list(
           label = "Implied Volatility",
-          value = if (!is.null(row$impliedVolatility) && !is.na(row$impliedVolatility)) {
-            format_percentage(row$impliedVolatility)
-          } else {
-            "N/A"
-          }
+          value = if (!is.na(row$call_iv)) format_percentage(row$call_iv) else "N/A"
+        )
+      )
+    ),
+
+    # Section 6: Margin & Returns (collapsed)
+    list(
+      title = "Margin & Returns Analysis",
+      is_open = FALSE,
+      metrics = list(
+        list(
+          label = "Estimated Margin Required",
+          value = format_currency(row$estimated_margin / 100)
+        ),
+        list(
+          label = "Net Credit / Margin Ratio",
+          value = format_percentage(row$return_on_margin)
+        ),
+        list(
+          label = "Annualized Return on Margin",
+          value = format_percentage(row$annualized_return),
+          is_primary = TRUE
+        ),
+        list(
+          label = "Put Extrinsic Value",
+          value = format_currency(row$put_extrinsic_value)
         )
       )
     )

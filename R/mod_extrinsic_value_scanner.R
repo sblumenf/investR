@@ -162,94 +162,89 @@ mod_extrinsic_value_scanner_server <- function(id){
           }
           log_debug("{stock_symbol}: After expiry filter: {nrow(option_chain)} contracts remain") # nolint
 
-          # Identify ATM options for each expiry
-          # For simplicity, we'll look for the ATM put with highest extrinsic value
-          # The user's strategy is a reverse collar (short stock + long call + short put)
-          # and they want to find the highest extrinsic value, likely from the short put.
-          # We'll focus on the short put for extrinsic value harvesting.
-          # The long call would be chosen to cap risk, but for scanning opportunities,
-          # we're looking for the best 'income' from the short put.
+          # Identify ATM reverse collar opportunities
+          # Strategy: Short stock + Sell ATM put + Buy ATM call
+          # For each expiration, find the ATM strike and get both put and call
 
-          # Group by expiration and find ATM put for each
-          atm_puts <- option_chain %>%
-            dplyr::filter(optionType == "Put") %>% # nolint
+          # Group by expiration and find ATM strike (closest to stock price)
+          atm_strikes_by_expiry <- option_chain %>%
             dplyr::group_by(expirationDate) %>% # nolint
-            dplyr::mutate(
-              strike_diff = abs(strikePrice - stock_price),
-              rank = rank(strike_diff, ties.method = "first")
-            ) %>% # nolint
-            dplyr::filter(rank == 1) %>% # Select the closest strike # nolint
-            dplyr::ungroup() # nolint
+            dplyr::summarise(
+              atm_strike = strikePrice[which.min(abs(strikePrice - stock_price))],
+              .groups = "drop"
+            ) # nolint
 
-          if (nrow(atm_puts) == 0) {
-            log_debug("{stock_symbol}: Skipped - no puts found in option chain") # nolint
+          if (nrow(atm_strikes_by_expiry) == 0) {
+            log_debug("{stock_symbol}: Skipped - no strikes found") # nolint
             next # nolint
           }
-          log_debug("{stock_symbol}: Found {nrow(atm_puts)} ATM puts across different expirations") # nolint
 
-          # Calculate metrics for ATM puts
-          atm_puts_with_metrics <- atm_puts %>%
-            dplyr::rowwise() %>% # nolint
-            dplyr::mutate(
-              intrinsic_value = if (optionType == "Put") {
-                max(0, strikePrice - stock_price)
-              } else {
-                max(0, stock_price - strikePrice)
-              },
-              extrinsic_value = calculate_extrinsic_value(
-                option_premium = lastPrice, # Assuming lastPrice is the premium # nolint
-                stock_price = stock_price,
-                strike_price = strikePrice,
-                option_type = "put"
-              ),
-              estimated_margin = estimate_reverse_collar_margin(
-                stock_price = stock_price,
-                strike_price = strikePrice,
-                option_type = "put"
-              )
-            ) %>% # nolint
-            dplyr::mutate(
-              annualized_return_pct = calculate_scanner_annualized_return(
-                extrinsic_value = extrinsic_value,
-                estimated_margin = estimated_margin,
-                days_to_expiry = days_to_expiry
-              )
-            ) %>% # nolint
-            dplyr::ungroup() %>% # nolint
-            dplyr::filter(extrinsic_value > 0, annualized_return_pct > 0) # Only positive extrinsic value and return # nolint
+          # For each expiration, get both the put and call at ATM strike
+          reverse_collar_opportunities <- list()
 
-          log_debug("{stock_symbol}: After metrics filter (extrinsic > 0, return > 0): {nrow(atm_puts_with_metrics)} opportunities") # nolint
+          for (i in seq_len(nrow(atm_strikes_by_expiry))) {
+            expiry <- atm_strikes_by_expiry$expirationDate[i]
+            strike <- atm_strikes_by_expiry$atm_strike[i]
 
-          if (nrow(atm_puts_with_metrics) > 0) {
-            # Select the best opportunity (highest annualized return) for this stock
-            # Ensure all fields needed for card display are included
-            best_opportunity <- atm_puts_with_metrics %>%
-              dplyr::arrange(desc(annualized_return_pct)) %>% # nolint
+            # Get the put at this strike
+            put_option <- option_chain %>%
+              dplyr::filter(
+                expirationDate == expiry,
+                strikePrice == strike,
+                optionType == "Put"
+              ) %>% # nolint
+              dplyr::slice(1) # nolint
+
+            # Get the call at this strike
+            call_option <- option_chain %>%
+              dplyr::filter(
+                expirationDate == expiry,
+                strikePrice == strike,
+                optionType == "Call"
+              ) %>% # nolint
+              dplyr::slice(1) # nolint
+
+            # Skip if either option is missing
+            if (nrow(put_option) == 0 || nrow(call_option) == 0) {
+              log_debug("{stock_symbol}: Skipped expiry {expiry} - missing put or call at strike {strike}") # nolint
+              next
+            }
+
+            # Calculate reverse collar cash flows
+            reverse_collar <- calculate_reverse_collar_metrics(
+              stock_price = stock_price,
+              strike = strike,
+              put_option = put_option,
+              call_option = call_option
+            )
+
+            # Only include if net credit is positive
+            if (reverse_collar$net_credit > 0 && reverse_collar$annualized_return > 0) {
+              reverse_collar_opportunities[[length(reverse_collar_opportunities) + 1]] <- reverse_collar
+            }
+          }
+
+          if (length(reverse_collar_opportunities) == 0) {
+            log_debug("{stock_symbol}: Skipped - no positive net credit reverse collars found") # nolint
+            next # nolint
+          }
+
+          log_debug("{stock_symbol}: Found {length(reverse_collar_opportunities)} reverse collar opportunities") # nolint
+
+          # Select the best opportunity (highest annualized return or net credit)
+          if (length(reverse_collar_opportunities) > 0) {
+            # Convert to tibble and sort
+            opportunities_df <- dplyr::bind_rows(reverse_collar_opportunities)
+
+            best_opportunity <- opportunities_df %>%
+              dplyr::arrange(desc(annualized_return)) %>% # nolint
               dplyr::slice(1) %>% # nolint
               dplyr::mutate(
                 symbol = stock_symbol,
                 current_stock_price = stock_price,
                 company_name = company_name
-              ) %>% # nolint
-              dplyr::select(
-                symbol,
-                company_name,
-                current_stock_price,
-                strikePrice,
-                expirationDate,
-                optionType,
-                lastPrice,
-                bidPrice,
-                askPrice,
-                volume,
-                openInterest,
-                impliedVolatility,
-                days_to_expiry,
-                intrinsic_value,
-                extrinsic_value,
-                estimated_margin,
-                annualized_return_pct
               ) # nolint
+
             opportunities <- append(opportunities, list(best_opportunity))
           }
         } # End for loop
