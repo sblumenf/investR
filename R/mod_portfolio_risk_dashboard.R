@@ -386,86 +386,76 @@ mod_portfolio_risk_dashboard_server <- function(id){
 #' @param positions Tibble of position details
 #' @param contributions Tibble of risk contributions (with expected_contribution and risk_contribution)
 #' @param ns Namespace function
-#' @return HTML table
+#' @return DT datatable widget
 #' @noRd
+#' @importFrom DT datatable formatCurrency formatPercentage formatStyle styleInterval
 create_positions_risk_table <- function(positions, contributions, ns) {
 
   # Merge positions with contributions
   data <- positions %>%
-    left_join(contributions, by = c("group_id", "ticker"))
+    left_join(contributions, by = c("group_id", "ticker")) %>%
+    mutate(
+      # Add warning icon for high risk positions (>10% of portfolio risk)
+      ticker_display = ifelse(
+        !is.na(pct_of_portfolio_risk) & pct_of_portfolio_risk > 0.10,
+        paste0("⚠️ ", ticker),
+        ticker
+      ),
+      strike_display = ifelse(!is.na(strike), strike, NA_real_),
+      expiration_display = ifelse(!is.na(expiration), as.character(expiration), "—"),
+      prob_assignment_display = ifelse(!is.na(prob_assignment), prob_assignment, NA_real_),
+      risk_return_display = ifelse(!is.na(risk_return_ratio), risk_return_ratio, NA_real_)
+    ) %>%
+    select(
+      Ticker = ticker_display,
+      Strike = strike_display,
+      Expiration = expiration_display,
+      `Current Value` = current_value,
+      `Expected Contribution` = expected_contribution,
+      `Prob Assignment` = prob_assignment_display,
+      `Risk Contribution` = risk_contribution,
+      `% of Portfolio Risk` = pct_of_portfolio_risk,
+      `Risk/Return Ratio` = risk_return_display
+    )
 
-  # Create sortable table
-  tags$table(
-    class = "table table-striped table-hover",
-    tags$thead(
-      tags$tr(
-        tags$th("Ticker"),
-        tags$th("Strike"),
-        tags$th("Expiration"),
-        tags$th("Current Value"),
-        tags$th(
-          tags$span(
-            "Expected Contribution",
-            tags$br(),
-            tags$small(style = "font-weight: normal; color: #666;", "(Return Attribution)")
-          )
-        ),
-        tags$th(
-          tags$span(
-            "Risk Contribution",
-            tags$br(),
-            tags$small(style = "font-weight: normal; color: #666;", "(Component VaR)")
-          )
-        ),
-        tags$th("% of Portfolio Risk"),
-        tags$th(
-          tags$span(
-            "Risk/Return Ratio",
-            tags$br(),
-            tags$small(style = "font-weight: normal; color: #666;", "(Lower is Better)")
-          )
-        )
+  # Create DT table with formatting
+  DT::datatable(
+    data,
+    options = list(
+      pageLength = 25,
+      order = list(list(7, 'desc')),  # Sort by Risk Contribution descending by default
+      dom = 't',  # Only show table (no search box or pagination controls for cleaner look)
+      scrollX = TRUE,
+      columnDefs = list(
+        list(targets = 1, visible = TRUE, className = 'dt-right'),  # Strike
+        list(targets = 3, className = 'dt-right'),  # Current Value
+        list(targets = 4, className = 'dt-right'),  # Expected Contribution
+        list(targets = 5, className = 'dt-right'),  # Prob Assignment
+        list(targets = 6, className = 'dt-right'),  # Risk Contribution
+        list(targets = 7, className = 'dt-right'),  # % of Portfolio Risk
+        list(targets = 8, className = 'dt-right')   # Risk/Return Ratio
       )
     ),
-    tags$tbody(
-      purrr::map(seq_len(nrow(data)), function(i) {
-        row <- data[i, ]
-
-        # Color-code risk contribution if >10% of portfolio risk
-        is_high_risk <- !is.na(row$pct_of_portfolio_risk) && row$pct_of_portfolio_risk > 0.10
-
-        # Color-code based on expected contribution (green for positive, red for negative)
-        exp_contrib_color <- if (!is.na(row$expected_contribution)) {
-          if (row$expected_contribution > 0) "#28a745" else "#dc3545"
-        } else {
-          "#000"
-        }
-
-        tags$tr(
-          style = if (is_high_risk) "background-color: #fff3cd;" else "",
-          tags$td(
-            if (is_high_risk) {
-              tags$span(icon("exclamation-triangle"), " ", row$ticker)
-            } else {
-              row$ticker
-            }
-          ),
-          tags$td(if (!is.na(row$strike)) format_currency(row$strike) else "—"),
-          tags$td(if (!is.na(row$expiration)) as.character(row$expiration) else "—"),
-          tags$td(format_currency(row$current_value)),
-          tags$td(
-            style = paste0("color: ", exp_contrib_color, ";"),
-            format_currency(row$expected_contribution)
-          ),
-          tags$td(format_currency(row$risk_contribution)),
-          tags$td(format_percentage(row$pct_of_portfolio_risk)),
-          tags$td(
-            if (!is.na(row$risk_return_ratio)) sprintf("%.2f", row$risk_return_ratio) else "—"
-          )
-        )
-      })
+    rownames = FALSE,
+    class = 'table table-striped table-hover compact',
+    escape = FALSE  # Allow HTML in Ticker column for warning icon
+  ) %>%
+    # Format currency columns
+    DT::formatCurrency(c('Strike', 'Current Value', 'Expected Contribution', 'Risk Contribution'), '$') %>%
+    # Format percentage columns
+    DT::formatPercentage(c('Prob Assignment', '% of Portfolio Risk'), digits = 1) %>%
+    # Format Risk/Return Ratio
+    DT::formatRound('Risk/Return Ratio', digits = 2) %>%
+    # Color code Expected Contribution (green for positive, red for negative)
+    DT::formatStyle(
+      'Expected Contribution',
+      color = DT::styleInterval(c(0), c('#dc3545', '#28a745'))
+    ) %>%
+    # Highlight high risk positions (>10% of portfolio risk)
+    DT::formatStyle(
+      '% of Portfolio Risk',
+      backgroundColor = DT::styleInterval(c(0.10), c('white', '#fff3cd'))
     )
-  )
 }
 
 #' Create stress test results table
