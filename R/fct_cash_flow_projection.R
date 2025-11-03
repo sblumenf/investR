@@ -85,10 +85,12 @@ get_actual_cash_flows_from_activities <- function() {
         }),
         # Determine cash flow type based on strategy
         cash_flow_type = case_when(
-          # Dividends count for "Other" and "Legacy Covered Call" strategies (named strategies use position_group_cash_flows)
+          # Dividends count for "Other" and "Legacy Covered Call" strategies ONLY (named strategies use position_group_cash_flows)
           type == "Dividends" & strategy_type %in% c("Other", "Legacy Covered Call") ~ "dividend",
-          # Option premiums count for "Other" and "Legacy Covered Call" strategy groups only
-          type %in% c("Trades", "Other") & is_option_symbol(symbol) & strategy_type %in% c("Other", "Legacy Covered Call") ~ "option_premium",
+          # Option premiums count for "Other" and "Legacy Covered Call" strategy groups ONLY
+          # Named strategies (Dividend Aristocrats, Zero-Dividend Growth, etc.) should NOT have option premiums as actual cash flows
+          # because the premium is already accounted for in the projected option_gain calculation
+          type %in% c("Trades", "Other") & is_option_symbol(symbol) & action == "Sell" & strategy_type %in% c("Other", "Legacy Covered Call") ~ "option_premium",
           TRUE ~ NA_character_
         )
       ) %>%
@@ -178,9 +180,10 @@ get_projected_cash_flows_from_database <- function() {
       ))
     }
 
-    # Filter out "Other" strategy projections (they shouldn't exist, but double-check)
+    # Filter out "Other" and "Legacy Covered Call" strategy projections
+    # These strategies pull cash flows from account_activities only
     result <- result %>%
-      filter(strategy_type != "Other")
+      filter(!strategy_type %in% c("Other", "Legacy Covered Call"))
 
     # Get all group members to extract tickers
     all_group_ids <- unique(result$group_id)

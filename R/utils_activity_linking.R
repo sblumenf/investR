@@ -259,9 +259,10 @@ link_activities_to_group <- function(activity_ids, group_id) {
           filter(purrr::map_lgl(symbol, is_option_symbol))
 
         if (nrow(option_trades) > 0) {
-          # For Zero-Dividend Stocks, need to detect initial vs roll premiums
+          # For named strategies (not "Other" or "Legacy Covered Call"), need to detect initial vs roll premiums
+          # Initial premiums are cost reductions, not cash flows. Roll premiums ARE cash flows.
           earliest_stock_buy_date <- NULL
-          if (group_info$strategy_type[1] == "Zero-Dividend Stocks") {
+          if (!group_info$strategy_type[1] %in% c("Other", "Legacy Covered Call")) {
             # Get earliest stock buy date for this group (filter out options properly)
             stock_buys <- dbGetQuery(con, "
               SELECT trade_date, symbol
@@ -281,14 +282,15 @@ link_activities_to_group <- function(activity_ids, group_id) {
           for (i in seq_len(nrow(option_trades))) {
             opt <- option_trades[i, ]
 
-            # For Zero-Dividend Stocks, skip initial premium (cost reduction, not cash flow)
-            if (group_info$strategy_type[1] == "Zero-Dividend Stocks" &&
+            # For named strategies, skip initial premium (cost reduction, not cash flow)
+            # Only "Other" and "Legacy Covered Call" strategies record initial premiums as actual cash flows
+            if (!group_info$strategy_type[1] %in% c("Other", "Legacy Covered Call") &&
                 opt$action == "Sell" &&
                 !is.null(earliest_stock_buy_date)) {
               option_sell_date <- as.Date(opt$trade_date)
               if (option_sell_date == earliest_stock_buy_date) {
                 # Initial premium - skip creating cash flow
-                log_debug("Activity Linking: Skipping initial premium cash flow for Zero-Dividend Stocks (cost reduction)")
+                log_debug("Activity Linking: Skipping initial premium cash flow for {group_info$strategy_type[1]} (cost reduction)")
                 next
               }
             }
