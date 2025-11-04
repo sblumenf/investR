@@ -513,46 +513,25 @@ enrich_group_with_market_data <- function(group_id, members, activities, latest_
 
     stock_symbol <- stock_member$symbol
 
-    # Get current price from latest positions (fetch if not provided)
-    if (is.null(latest_positions)) {
-      latest_positions <- get_latest_positions()
-    }
+    # Always fetch fresh real-time price from API for portfolio groups
+    # Bypasses stale database cache that only updates when trades occur
+    log_debug("Market Data: Fetching fresh price for {stock_symbol} from market API")
 
-    if (nrow(latest_positions) == 0) {
-      log_debug("Market Data: No positions data available")
-      return(result)
-    }
-
-    stock_position <- latest_positions %>%
-      filter(symbol == stock_symbol) %>%
-      slice(1)
-
-    # Try to get price from latest_positions first
-    current_price <- if (nrow(stock_position) > 0) {
-      stock_position$current_price
-    } else {
+    current_price <- NULL
+    quote_data <- tryCatch({
+      fetch_current_quote(stock_symbol)
+    }, error = function(e) {
+      log_warn("Market Data: Failed to fetch quote for {stock_symbol} - {e$message}")
       NULL
-    }
+    })
 
-    # Fallback: fetch current price from market API if not in latest_positions
-    if (is.null(current_price) || is.na(current_price)) {
-      log_debug("Market Data: Stock {stock_symbol} not in latest_positions, fetching from market API")
-
-      quote_data <- tryCatch({
-        fetch_current_quote(stock_symbol)
-      }, error = function(e) {
-        log_warn("Market Data: Failed to fetch quote for {stock_symbol} - {e$message}")
-        NULL
-      })
-
-      # fetch_current_quote returns Yahoo-format dataframe with 'Last' column
-      if (!is.null(quote_data) && nrow(quote_data) > 0 && !is.na(quote_data$Last[1])) {
-        current_price <- quote_data$Last[1]
-        log_debug("Market Data: Fetched price for {stock_symbol} from API: ${current_price}")
-      } else {
-        log_debug("Market Data: Current price not available for {stock_symbol} from API")
-        return(result)
-      }
+    # fetch_current_quote returns Yahoo-format dataframe with 'Last' column
+    if (!is.null(quote_data) && nrow(quote_data) > 0 && !is.na(quote_data$Last[1])) {
+      current_price <- quote_data$Last[1]
+      log_debug("Market Data: Fetched fresh price for {stock_symbol}: ${current_price}")
+    } else {
+      log_debug("Market Data: Current price not available for {stock_symbol} from API")
+      return(result)
     }
 
     result$current_stock_price <- current_price
