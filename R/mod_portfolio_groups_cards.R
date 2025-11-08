@@ -184,6 +184,22 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
         NULL  # No stock purchases found, will use current price
       }
 
+      # Extract first trade date for accurate annualization
+      first_trade_date <- if (nrow(activities) > 0) {
+        activities %>%
+          filter(!is.na(trade_date)) %>%
+          arrange(trade_date) %>%
+          slice(1) %>%
+          pull(trade_date) %>%
+          as.Date()
+      } else {
+        NULL
+      }
+
+      if (!is.null(first_trade_date)) {
+        log_info("DEBUG: First trade date = {first_trade_date} for group {group_id}")
+      }
+
       # Calculate premium per contract
       total_premium <- abs(option_activity$net_amount)
       option_quantity <- abs(option_activity$quantity)
@@ -204,9 +220,10 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
         ticker = reactive(ticker),
         strike = reactive(option_details$strike),
         expiration = reactive(option_details$expiry),
-        premium_received = reactive(premium_per_contract / 100),
+        premium_received = reactive(premium_per_contract),
         current_price = reactive(NULL),  # Will fetch live
         cost_basis = reactive(cost_basis),  # Actual entry price
+        first_trade_date = reactive(first_trade_date),  # For accurate annualization
         is_aristocrat = reactive(FALSE),  # Unknown for portfolio positions
         simulation_paths = reactive(10000)
       )

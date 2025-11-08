@@ -104,7 +104,7 @@ mod_zero_dividend_results_table_server <- function(id, results_data){
           ticker = reactive(row$ticker),
           strike = reactive(row$strike),
           expiration = reactive(row$expiration),
-          premium_received = reactive(row$premium_received / 100),
+          premium_received = reactive(row$premium_received),
           current_price = reactive(row$current_price),
           is_aristocrat = reactive(FALSE),  # Zero dividend strategy
           simulation_paths = reactive(10000)
