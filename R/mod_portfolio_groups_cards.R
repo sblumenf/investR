@@ -207,8 +207,8 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
       # DEBUG: Check if quantity is in shares or contracts
       log_info("DEBUG: Option activity - total_premium=${sprintf('%.2f', total_premium)}, quantity={option_quantity}")
 
-      # Quantity is stored as SHARES, not contracts. Convert to contracts (divide by 100)
-      num_contracts <- option_quantity / 100
+      # Quantity is stored as CONTRACTS (not shares) - use directly
+      num_contracts <- option_quantity
       premium_per_contract <- total_premium / num_contracts
 
       log_info("DEBUG: Calculated premium = ${sprintf('%.2f', premium_per_contract)} per contract ({num_contracts} contracts)")
@@ -216,7 +216,10 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
       # Trigger risk analysis module
       mod_position_risk_server(
         id = paste0("risk_group_", group_id),
-        trigger = reactive({ input$analyze_risk_group_clicked }),
+        trigger = reactive({
+          req(input$analyze_risk_group_clicked == group_id)
+          input$analyze_risk_group_clicked
+        }),
         ticker = reactive(ticker),
         strike = reactive(option_details$strike),
         expiration = reactive(option_details$expiry),
