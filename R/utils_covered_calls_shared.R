@@ -89,14 +89,79 @@ process_stocks_parallel_generic <- function(stock_universe, strike_threshold_pct
     # Set quote source in this worker to match main process
     options(investR.quote_source = quote_source)
 
-    log_info("Analyzing {ticker}...")
-    analyze_single_stock_generic(ticker, strike_threshold_pct, min_days, max_days, expiry_month, target_days, result_flags)
+    # Wrap analysis to capture failure reason
+    tryCatch({
+      # Try to call with new parameter, fall back to old signature if it fails
+      result <- tryCatch({
+        analyze_single_stock_generic(ticker, strike_threshold_pct, min_days, max_days, expiry_month, target_days, result_flags, return_failure_reason = TRUE)
+      }, error = function(e) {
+        # If error is about unused argument, call without the parameter (old version)
+        if (grepl("unused argument", e$message)) {
+          analyze_single_stock_generic(ticker, strike_threshold_pct, min_days, max_days, expiry_month, target_days, result_flags)
+        } else {
+          stop(e)
+        }
+      })
+
+      # Check if result is a failure reason (new version) or just NULL (old version)
+      if (!is.null(result) && !is.null(result$failure_reason)) {
+        list(ticker = ticker, status = "failed", reason = result$failure_reason, result = NULL)
+      } else if (is.null(result)) {
+        list(ticker = ticker, status = "failed", reason = "Analysis returned NULL (check logs for details)", result = NULL)
+      } else {
+        list(ticker = ticker, status = "success", result = result)
+      }
+    }, error = function(e) {
+      list(ticker = ticker, status = "error", error = e$message, result = NULL)
+    })
   }, .options = furrr_options(
     seed = TRUE,
     packages = "investR"  # Load investR package in each worker
   ))
 
-  return(results)
+  # Log summary after workers complete (since worker logs don't appear in console)
+  log_info("\n=== Worker Results Summary ===")
+  success_count <- sum(sapply(results, function(r) r$status == "success"))
+  failed_count <- sum(sapply(results, function(r) r$status == "failed"))
+  error_count <- sum(sapply(results, function(r) r$status == "error"))
+
+  log_info("Successful: {success_count}, Failed: {failed_count}, Errors: {error_count}")
+
+  # Log failed tickers with reasons
+  if (failed_count > 0) {
+    failed_results <- results[sapply(results, function(r) r$status == "failed")]
+    log_warn("\nFailed tickers breakdown:")
+
+    # Group by failure reason
+    failure_reasons <- list()
+    for (fail in failed_results) {
+      reason <- fail$reason %||% "Unknown"
+      if (is.null(failure_reasons[[reason]])) {
+        failure_reasons[[reason]] <- c()
+      }
+      failure_reasons[[reason]] <- c(failure_reasons[[reason]], fail$ticker)
+    }
+
+    # Log each reason group
+    for (reason in names(failure_reasons)) {
+      tickers <- failure_reasons[[reason]]
+      log_warn("  [{reason}]: {paste(tickers, collapse=', ')}")
+    }
+  }
+
+  # Log error details
+  if (error_count > 0) {
+    error_results <- results[sapply(results, function(r) r$status == "error")]
+    log_error("\nError details:")
+    for (err in error_results) {
+      log_error("  {err$ticker}: {err$error}")
+    }
+  }
+
+  # Extract actual results
+  actual_results <- lapply(results, function(r) r$result)
+
+  return(actual_results)
 }
 
 ################################################################################
@@ -122,27 +187,43 @@ analyze_single_stock_generic <- function(ticker,
                                         max_days = NULL,
                                         expiry_month = NULL,
                                         target_days = NULL,
-                                        result_flags = list()) {
+                                        result_flags = list(),
+                                        ...) {
+  # Extract return_failure_reason from ... for backwards compatibility
+  return_failure_reason <- list(...)$return_failure_reason %||% FALSE
 
   validate_ticker(ticker)
+
+  log_info("{ticker}: Starting analysis (strike={sprintf('%.0f%%', strike_threshold_pct*100)}, days={min_days %||% 0}-{max_days %||% 'max'})")
 
   # Get stock data (already generic!)
   stock_data <- get_stock_data(ticker)
   if (is.null(stock_data)) {
+    reason <- "Quote fetch failed - get_stock_data() returned NULL"
+    log_warn("{ticker}: FAILED - {reason}")
+    if (return_failure_reason) return(list(failure_reason = reason))
     return(NULL)
   }
+
+  log_info("{ticker}: Price=${sprintf('%.2f', stock_data$current_price)}")
 
   # Filter by maximum stock price
   max_price <- tryCatch(CONFIG$max_stock_price, error = function(e) 250)
   if (stock_data$current_price > max_price) {
-    log_debug("{ticker}: Price ${stock_data$current_price} exceeds max ${max_price}")
+    reason <- sprintf("Price $%.2f exceeds max $%.0f", stock_data$current_price, max_price)
+    log_warn("{ticker}: FILTERED OUT - {reason}")
+    if (return_failure_reason) return(list(failure_reason = reason))
     return(NULL)
   }
 
   # Get options chain (already generic!)
   options_df <- get_options_chain(ticker, stock_data$current_price)
+  log_info("{ticker}: Options chain returned {nrow(options_df)} ITM calls")
+
   if (nrow(options_df) == 0) {
-    log_debug("{ticker}: No options data available")
+    reason <- "Options chain empty - no ITM calls with valid bids"
+    log_warn("{ticker}: FAILED - {reason}")
+    if (return_failure_reason) return(list(failure_reason = reason))
     return(NULL)
   }
 
@@ -150,9 +231,13 @@ analyze_single_stock_generic <- function(ticker,
   selection <- select_optimal_option(ticker, stock_data$current_price, options_df,
                                     strike_threshold_pct, min_days, max_days, expiry_month, target_days)
   if (is.null(selection)) {
-    log_debug("{ticker}: No suitable options found")
+    reason <- "No options passed filters (strike/days/OI)"
+    log_warn("{ticker}: FILTERED OUT - {reason}")
+    if (return_failure_reason) return(list(failure_reason = reason))
     return(NULL)
   }
+
+  log_info("{ticker}: Selected option - Strike=${selection$option$Strike}, Expiry={selection$option$expiration}, Days={selection$option$days_to_expiry}")
 
   # Calculate metrics (already generic!)
   metrics <- calculate_metrics(ticker, stock_data$current_price,
@@ -169,13 +254,17 @@ analyze_single_stock_generic <- function(ticker,
     error = function(e) 0
   )
 
+  log_info("{ticker}: Calculated return={sprintf('%.2f%%', metrics$annualized_return * 100)} (threshold={sprintf('%.2f%%', negative_threshold * 100)})")
+
   # Filter negative returns
   if (metrics$annualized_return <= negative_threshold) {
-    log_debug("{ticker}: Negative return: {sprintf('%.2f%%', metrics$annualized_return * 100)}")
+    reason <- sprintf("Return %.2f%% <= threshold %.2f%%", metrics$annualized_return * 100, negative_threshold * 100)
+    log_warn("{ticker}: FILTERED OUT - {reason}")
+    if (return_failure_reason) return(list(failure_reason = reason))
     return(NULL)
   }
 
-  log_success("{ticker}: Annualized return: {sprintf('%.2f%%', metrics$annualized_return * 100)}")
+  log_success("{ticker}: ✓ OPPORTUNITY FOUND - Annualized return: {sprintf('%.2f%%', metrics$annualized_return * 100)}")
 
   metrics
 }
