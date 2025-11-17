@@ -256,6 +256,21 @@ analyze_single_stock_generic <- function(ticker,
 
   log_info("{ticker}: Calculated return={sprintf('%.2f%%', metrics$annualized_return * 100)} (threshold={sprintf('%.2f%%', negative_threshold * 100)})")
 
+  # Filter net outlay - must be less than strike price
+  # Net outlay = investment - premium received
+  # For a covered call to be profitable, we need: net_outlay < strike_value
+  # This ensures we profit even if assigned at strike
+  strike_value <- metrics$strike * 100  # 100 shares per contract
+  if (metrics$net_outlay >= strike_value) {
+    reason <- sprintf("Net outlay $%.2f >= strike value $%.2f (unprofitable if assigned)",
+                      metrics$net_outlay, strike_value)
+    log_warn("{ticker}: FILTERED OUT - {reason}")
+    if (return_failure_reason) return(list(failure_reason = reason))
+    return(NULL)
+  }
+
+  log_info("{ticker}: Net outlay check passed - $%.2f < $%.2f strike value", metrics$net_outlay, strike_value)
+
   # Filter negative returns
   if (metrics$annualized_return <= negative_threshold) {
     reason <- sprintf("Return %.2f%% <= threshold %.2f%%", metrics$annualized_return * 100, negative_threshold * 100)
