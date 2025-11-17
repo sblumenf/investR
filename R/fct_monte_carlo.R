@@ -180,15 +180,40 @@ build_dividend_schedule <- function(ticker, days_to_expiry, is_aristocrat = FALS
   recent_divs <- tail(dividends, min(6, nrow(dividends)))
   div_dates <- index(recent_divs)
   days_between <- as.numeric(diff(div_dates))
-  avg_days_between <- as.integer(round(mean(days_between)))
+
+  # Take absolute value to handle any ordering issues, then get mean
+  avg_days_between <- as.integer(round(mean(abs(days_between))))
+
+  # Validate avg_days_between is positive and reasonable
+  if (avg_days_between <= 0) {
+    log_warn("{ticker}: Invalid average days between dividends ({avg_days_between}), cannot project schedule")
+    return(tibble(
+      dividend_date = as.Date(character(0)),
+      dividend_amount = numeric(0),
+      days_until = numeric(0),
+      confidence = character(0)
+    ))
+  }
 
   # Get latest dividend amount
   latest_dividend <- as.numeric(tail(dividends, 1))
 
   # Project future dividends
   expiration_date <- Sys.Date() + lubridate::days(as.integer(days_to_expiry))
+  first_projected_date <- Sys.Date() + lubridate::days(avg_days_between)
+
+  # If first projected date is after expiration, return empty schedule
+  if (first_projected_date > expiration_date) {
+    return(tibble(
+      dividend_date = as.Date(character(0)),
+      dividend_amount = numeric(0),
+      days_until = numeric(0),
+      confidence = character(0)
+    ))
+  }
+
   projected_dates <- seq(
-    from = Sys.Date() + lubridate::days(avg_days_between),
+    from = first_projected_date,
     to = expiration_date,
     by = paste(avg_days_between, "days")
   )
