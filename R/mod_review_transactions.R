@@ -66,14 +66,17 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
     }
 
     # Normalize ticker by stripping exchange suffixes for grouping purposes
-    # Examples: LB.TO -> LB, AAPL.MX -> AAPL, BRK.B -> BRK.B (preserves ticker dots)
+    # Examples: LB.TO -> LB, SRU.UN.TO -> SRU, AAPL.MX -> AAPL, BRK.B -> BRK.B
     normalize_ticker_for_grouping <- function(ticker) {
       if (is.na(ticker) || ticker == "") return(ticker)
 
-      # Strip common exchange suffixes: dot followed by 1-3 uppercase letters at end
-      # Matches: .TO (Toronto), .V (TSX Venture), .MX (Mexico), .L (London), etc.
+      # Strip ALL exchange suffixes (handles multiple like .UN.TO)
+      # Keeps stripping dot + 1-3 uppercase letters from end until no more matches
       # Won't match: BRK.B (has lowercase after), ticker internal dots
-      gsub("\\.[A-Z]{1,3}$", "", ticker)
+      while (grepl("\\.[A-Z]{1,3}$", ticker)) {
+        ticker <- gsub("\\.[A-Z]{1,3}$", "", ticker)
+      }
+      return(ticker)
     }
 
     # Parse option symbol from description text when symbol is empty
@@ -121,20 +124,30 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
           # FALLBACK: If symbol is empty/NULL, try parsing description
           if (is.null(sym) || is.na(sym) || sym == "") {
             ticker <- extract_ticker_from_description(desc)
-            if (!is.na(ticker)) return(normalize_ticker_for_grouping(ticker))
+            if (!is.na(ticker)) {
+              normalized <- normalize_ticker_for_grouping(ticker)
+              log_debug("Ticker extraction (fallback): {ticker} -> {normalized}")
+              return(normalized)
+            }
             return("UNKNOWN")  # Last resort if description parsing fails
           }
 
           # Normal logic: symbol exists
-          if (grepl("\\d{2}[A-Z][a-z]{2}\\d{2}[CP]", sym)) {
+          if (grepl("\\d{1,2}[A-Z][a-z]{2}\\d{2}[CP]", sym)) {
             result <- parse_option_symbol(sym)
             if (is.na(result)) {
-              return(normalize_ticker_for_grouping(sym))
+              normalized <- normalize_ticker_for_grouping(sym)
+              log_debug("Ticker extraction (option, no parse): {sym} -> {normalized}")
+              return(normalized)
             } else {
-              return(normalize_ticker_for_grouping(result))
+              normalized <- normalize_ticker_for_grouping(result)
+              log_debug("Ticker extraction (option): {sym} -> {result} -> {normalized}")
+              return(normalized)
             }
           } else {
-            return(normalize_ticker_for_grouping(sym))
+            normalized <- normalize_ticker_for_grouping(sym)
+            log_debug("Ticker extraction (stock): {sym} -> {normalized}")
+            return(normalized)
           }
         }))
 
@@ -399,7 +412,7 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
           ticker_groups <- members %>%
             filter(
               symbol == current_ticker |
-              grepl(paste0("^", current_ticker, "\\d{2}[A-Z][a-z]{2}\\d{2}[CP]"), symbol)
+              grepl(paste0("^", current_ticker, "\\d{1,2}[A-Z][a-z]{2}\\d{2}[CP]"), symbol)
             ) %>%
             pull(group_id) %>%
             unique()
@@ -561,8 +574,8 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
 
             if (is_option_symbol(sym)) {
               # Extract call/put indicator from option symbol
-              is_call <- grepl("\\d{2}[A-Z][a-z]{2}\\d{2}C", sym)
-              is_put <- grepl("\\d{2}[A-Z][a-z]{2}\\d{2}P", sym)
+              is_call <- grepl("\\d{1,2}[A-Z][a-z]{2}\\d{2}C", sym)
+              is_put <- grepl("\\d{1,2}[A-Z][a-z]{2}\\d{2}P", sym)
 
               # Determine if position is long (bought) or short (sold) based on net quantity
               is_long <- net_qty > 0

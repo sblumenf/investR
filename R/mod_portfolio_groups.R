@@ -90,6 +90,20 @@ mod_portfolio_groups_server <- function(id){
   moduleServer( id, function(input, output, session){
     ns <- session$ns
 
+    # Normalize ticker by stripping exchange suffixes for grouping purposes
+    # Examples: LB.TO -> LB, SRU.UN.TO -> SRU, AAPL.MX -> AAPL, BRK.B -> BRK.B
+    normalize_ticker_for_grouping <- function(ticker) {
+      if (is.na(ticker) || ticker == "") return(ticker)
+
+      # Strip ALL exchange suffixes (handles multiple like .UN.TO)
+      # Keeps stripping dot + 1-3 uppercase letters from end until no more matches
+      # Won't match: BRK.B (has lowercase after), ticker internal dots
+      while (grepl("\\.[A-Z]{1,3}$", ticker)) {
+        ticker <- gsub("\\.[A-Z]{1,3}$", "", ticker)
+      }
+      return(ticker)
+    }
+
     # Cache schema initialization (once per session)
     schema_initialized <- reactiveVal(FALSE)
 
@@ -149,16 +163,20 @@ mod_portfolio_groups_server <- function(id){
           # FALLBACK: If symbol is empty/NULL, try parsing description
           if (is.null(sym) || is.na(sym) || sym == "") {
             ticker <- extract_ticker_from_description(desc)
-            if (!is.na(ticker)) return(ticker)
+            if (!is.na(ticker)) return(normalize_ticker_for_grouping(ticker))
             return("UNKNOWN")  # Last resort if description parsing fails
           }
 
           # Normal logic: symbol exists
-          if (grepl("\\d{2}[A-Z][a-z]{2}\\d{2}[CP]", sym)) {
+          if (grepl("\\d{1,2}[A-Z][a-z]{2}\\d{2}[CP]", sym)) {
             result <- parse_option_symbol(sym)
-            if (is.na(result)) sym else result
+            if (is.na(result)) {
+              normalize_ticker_for_grouping(sym)
+            } else {
+              normalize_ticker_for_grouping(result)
+            }
           } else {
-            sym
+            normalize_ticker_for_grouping(sym)
           }
         })) %>%
         # Create composite key: ticker + account
