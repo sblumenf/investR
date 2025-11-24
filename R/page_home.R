@@ -37,6 +37,15 @@ page_home <- function() {
         ),
         href = "/dynamic-covered-calls",
         button_text = "Analyze Dynamic"
+      ),
+      list(
+        title = "ETF Screener Covered Calls",
+        description = c(
+          "Screen ETFs using yfscreen filters (expense ratio, dividend yield, net assets) and analyze for covered call opportunities.",
+          "Dynamically filters ETFs based on real-time characteristics. Customize screening criteria to find optimal ETF candidates."
+        ),
+        href = "/etf-covered-calls",
+        button_text = "Analyze ETF Screener"
       )
     ),
     collar_strategies = list(
@@ -48,6 +57,26 @@ page_home <- function() {
         ),
         href = "/collar",
         button_text = "Analyze Collars"
+      )
+    ),
+    cash_secured_puts = list(
+      list(
+        title = "Cash-Secured Puts - Dividend Aristocrats",
+        description = c(
+          "Sell cash-secured puts on dividend aristocrats to collect premium income.",
+          "Potentially acquire quality stocks at a discount if assigned. Targets stocks with 25+ years of dividend increases."
+        ),
+        href = "/cash-secured-puts",
+        button_text = "Analyze Cash-Secured Puts"
+      ),
+      list(
+        title = "Cash-Secured Puts - ETF Screener",
+        description = c(
+          "Screen ETFs using yfscreen filters and analyze for cash-secured put opportunities.",
+          "Dynamically filter by dividend status, market cap, and volume. Collect premium income or acquire ETFs at discount."
+        ),
+        href = "/etf-cash-secured-puts",
+        button_text = "Analyze ETF Puts"
       )
     ),
     dividend_capture = list(
@@ -156,6 +185,11 @@ page_home <- function() {
           create_home_accordion_section(
             title = "Collar Strategies",
             strategies = strategies_data$collar_strategies,
+            is_open = FALSE
+          ),
+          create_home_accordion_section(
+            title = "Cash-Secured Put Strategies",
+            strategies = strategies_data$cash_secured_puts,
             is_open = FALSE
           ),
           create_home_accordion_section(

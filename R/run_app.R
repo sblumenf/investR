@@ -67,6 +67,8 @@ run_app <- function(
   validate_zero_dividend_config()  # Zero Dividend
   validate_dynamic_config()  # Dynamic Covered Calls
   validate_collar_config()  # Collar Strategy
+  validate_etf_screener_config()  # ETF Screener
+  validate_puts_config()  # Cash-Secured Puts
 
   # --- Background Data Refresh ---
   # Sequential refresh chain to prevent token race conditions
@@ -115,7 +117,10 @@ run_app <- function(
       page_aristocrats(),
       page_zero_dividend(),
       page_dynamic_covered_calls(),
+      page_etf_covered_calls(),
       page_collar(),
+      page_cash_secured_puts(),
+      page_etf_cash_secured_puts_yfscreen(),
       page_dividend_capture_weekly(),
       page_dividend_capture_monthly(),
       page_dividend_capture_monthly_high_yield(),
