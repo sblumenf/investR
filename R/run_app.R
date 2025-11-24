@@ -121,6 +121,7 @@ run_app <- function(
       page_collar(),
       page_cash_secured_puts(),
       page_etf_cash_secured_puts_yfscreen(),
+      page_sp500_cash_secured_puts(),
       page_dividend_capture_weekly(),
       page_dividend_capture_monthly(),
       page_dividend_capture_monthly_high_yield(),

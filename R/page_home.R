@@ -77,6 +77,15 @@ page_home <- function() {
         ),
         href = "/etf-cash-secured-puts",
         button_text = "Analyze ETF Puts"
+      ),
+      list(
+        title = "Cash-Secured Puts - S&P 500",
+        description = c(
+          "Sell cash-secured puts on S&P 500 stocks with flexible dividend filtering.",
+          "Analyze all 500 stocks, or filter for dividend-payers only or zero-dividend growth stocks. Collect premium income or acquire stocks at discount."
+        ),
+        href = "/sp500-cash-secured-puts",
+        button_text = "Analyze S&P 500 Puts"
       )
     ),
     dividend_capture = list(
