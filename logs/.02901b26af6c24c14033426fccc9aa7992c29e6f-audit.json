@@ -1,0 +1,35 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/home/sergeblumenfeld/investR/logs/.02901b26af6c24c14033426fccc9aa7992c29e6f-audit.json",
+    "files": [
+        {
+            "date": 1762822616800,
+            "name": "/home/sergeblumenfeld/investR/logs/mcp-puppeteer-2025-11-10.log",
+            "hash": "3438cd99241257071512d1a576cfde2e510c29c57fa0ecec6928381e3c0317cd"
+        },
+        {
+            "date": 1763005275188,
+            "name": "/home/sergeblumenfeld/investR/logs/mcp-puppeteer-2025-11-12.log",
+            "hash": "6e2c037a38d6e4d24e4869fb53ed6793322d398c98a9b4080c9fc5b8207f42c5"
+        },
+        {
+            "date": 1763180988730,
+            "name": "/home/sergeblumenfeld/investR/logs/mcp-puppeteer-2025-11-14.log",
+            "hash": "b82a7b72913a19e8d5cc47948f3f12f8c2f3499d5e73e8b2aaee9eb5e7dd321e"
+        },
+        {
+            "date": 1763264478673,
+            "name": "/home/sergeblumenfeld/investR/logs/mcp-puppeteer-2025-11-15.log",
+            "hash": "80bab57f8799a160a46373f0e9a49b9daca166720bcc7d1332cb0aa73e9c7e50"
+        },
+        {
+            "date": 1763874700470,
+            "name": "/home/sergeblumenfeld/investR/logs/mcp-puppeteer-2025-11-23.log",
+            "hash": "61f23582952550f18da05ea199e9dcd7a8396b1116ff34b8474aec1819e40650"
+        }
+    ],
+    "hashType": "sha256"
+}

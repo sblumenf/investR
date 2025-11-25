@@ -230,7 +230,7 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
         is_aristocrat = reactive(FALSE),  # Unknown for portfolio positions
         simulation_paths = reactive(10000)
       )
-    })
+    }, ignoreInit = TRUE)
 
     # Handle Close Group button clicks
     observeEvent(input$close_group_clicked, {

@@ -163,74 +163,38 @@ preview_transaction <- function(tx, idx) {
 #' SYMBOLS: For options, use broker internal code - script will convert to standard format
 
 transactions <- list(
-  # Transaction 1: WBD Stock Purchase
+  # Transaction 1: WMT Stock Purchase
   list(
     account_number = "53238334",
-    account_type = "LIRA",
-    trans_date = "29/08/2025",
-    settlement_date = "02/09/2025",
+    account_type = "TFSA",  # Adjust if different
+    trans_date = "13/08/2025",
+    settlement_date = "14/08/2025",
     action = "Buy",
-    symbol = "WBD",  # Stock symbol
-    description = "WARNER BROS DISCOVERY INC SERIES A COMMON STOCK WE ACTED AS AGENT AVG PRICE - ASK US FOR DETAILS",
-    quantity = 500,
-    price = 11.54,
-    gross = -5770.00,
+    symbol = "WMT",
+    description = "WALMART INC COMMON STOCK WE ACTED AS AGENT",
+    quantity = 200.0,
+    price = 101.73,
+    gross = -20346.00,
     commission = 0.00,
-    net = -5770.00,
+    net = -20346.00,
     currency = "USD",
     type = "Trades"
   ),
 
-  # Transaction 2: CZR Stock Purchase
+  # Transaction 2: WMT Call Option Sale
   list(
     account_number = "53238334",
-    account_type = "LIRA",
-    trans_date = "29/08/2025",
-    settlement_date = "02/09/2025",
-    action = "Buy",
-    symbol = "CZR",  # Stock symbol
-    description = "CAESARS ENTERTAINMENT INC COMMON STOCK WE ACTED AS AGENT AVG PRICE - ASK US FOR DETAILS",
-    quantity = 300,
-    price = 26.69,
-    gross = -8007.00,
-    commission = 0.00,
-    net = -8007.00,
-    currency = "USD",
-    type = "Trades"
-  ),
-
-  # Transaction 3: WBD Option Sale
-  list(
-    account_number = "53238334",
-    account_type = "LIRA",
-    trans_date = "29/08/2025",
-    settlement_date = "02/09/2025",
+    account_type = "TFSA",  # Adjust if different
+    trans_date = "13/08/2025",
+    settlement_date = "14/08/2025",
     action = "Sell",
-    symbol = "9LTFSC4",  # Broker internal code - will be converted to WBD17Oct25C9.00
-    description = "CALL WBD 10/17/25 9 WARNER BROS DISCOVERY INC WE ACTED AS AGENT AVG PRICE - ASK US FOR DETAILS",
-    quantity = -5,
-    price = 2.64,
-    gross = 1320.00,
-    commission = -4.95,
-    net = 1315.05,
-    currency = "USD",
-    type = "Trades"
-  ),
-
-  # Transaction 4: CZR Option Sale
-  list(
-    account_number = "53238334",
-    account_type = "LIRA",
-    trans_date = "29/08/2025",
-    settlement_date = "02/09/2025",
-    action = "Sell",
-    symbol = "9GLXVT4",  # Broker internal code - will be converted to CZR17Oct25C22.00
-    description = "CALL CZR 10/17/25 22 CAESARS ENTERTAINMENT INC WE ACTED AS AGENT AVG PRICE - ASK US FOR DETAILS",
-    quantity = -3,
-    price = 5.11,
-    gross = 1533.00,
-    commission = -2.97,
-    net = 1530.03,
+    symbol = "WMT17Jun27C80.00",
+    description = "CALL WMT 06/17/27 80 WALMART INC WE ACTED AS AGENT",
+    quantity = -2.0,
+    price = 29.02,
+    gross = 5804.00,
+    commission = -1.98,
+    net = 5802.02,
     currency = "USD",
     type = "Trades"
   )

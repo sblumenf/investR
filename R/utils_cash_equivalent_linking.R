@@ -6,6 +6,7 @@
 #' @importFrom DBI dbConnect dbDisconnect dbGetQuery dbExecute
 #' @importFrom duckdb duckdb
 #' @importFrom logger log_info
+#' @importFrom shiny showNotification
 #' @noRd
 auto_link_cash_equivalents <- function() {
   con <- get_portfolio_db_connection()
@@ -61,6 +62,13 @@ auto_link_cash_equivalents <- function() {
 
   if (linked_count > 0) {
     log_info(sprintf("Auto-linked %d cash equivalent activities", linked_count))
+    showNotification(
+      sprintf("Auto-linked %d cash equivalent transaction%s (ZMMK.TO/SGOV)",
+              linked_count,
+              ifelse(linked_count == 1, "", "s")),
+      type = "message",
+      duration = 5
+    )
   }
 
   return(linked_count)

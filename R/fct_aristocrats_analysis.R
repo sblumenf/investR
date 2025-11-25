@@ -410,15 +410,16 @@ get_options_chain <- function(ticker, current_price) {
   validate_price(current_price, "current_price")
 
   tryCatch({
-    log_debug("Fetching options chain for {ticker}...")
+    log_info("{ticker}: Fetching options chain (source={toupper(getOption('investR.quote_source', 'questrade'))})")
 
     opt_chain <- fetch_options_chain(ticker, expiration = NULL)
 
     if (is.null(opt_chain) || length(opt_chain) == 0) {
+      log_warn("{ticker}: fetch_options_chain() returned NULL or empty")
       return(tibble())
     }
 
-    log_debug("Found {length(opt_chain)} expiration dates for {ticker}")
+    log_info("{ticker}: Raw options chain has {length(opt_chain)} expiration dates")
 
     # Process each expiration with error handling
     process_exp <- possibly(function(exp_date) {
@@ -448,6 +449,9 @@ get_options_chain <- function(ticker, current_price) {
     }, otherwise = tibble())
 
     all_options <- map_dfr(names(opt_chain), process_exp)
+
+    log_info("{ticker}: Processed options chain - {nrow(all_options)} ITM calls with valid bids (Bid > {sprintf('%.2f', ARISTOCRATS_CONFIG$min_option_bid)})")
+
     all_options
 
   }, error = function(e) {
@@ -482,53 +486,65 @@ select_optimal_option <- function(ticker, current_price, options_df,
 
   warning_flag <- FALSE
 
+  log_info("{ticker}: Starting option selection - {nrow(options_df)} total ITM calls")
+
   # Calculate strike threshold
   strike_threshold <- current_price * strike_threshold_pct
+  log_info("{ticker}: Strike filter: <=${sprintf('%.2f', strike_threshold)} ({sprintf('%.0f%%', strike_threshold_pct*100)} of ${sprintf('%.2f', current_price)})")
 
   # Filter by strike
   filtered_options <- options_df %>%
     filter(Strike <= strike_threshold)
+  log_info("{ticker}: After strike filter: {nrow(filtered_options)} options")
 
   # Filter by minimum open interest
   min_oi <- tryCatch(ARISTOCRATS_CONFIG$min_open_interest, error = function(e) 0)
   if (min_oi > 0) {
+    before_count <- nrow(filtered_options)
     filtered_options <- filtered_options %>%
       filter(OI >= min_oi)
+    log_info("{ticker}: After OI filter (>={min_oi}): {nrow(filtered_options)} options (filtered {before_count - nrow(filtered_options)})")
 
     if (nrow(filtered_options) == 0) {
-      log_debug("{ticker}: No options with OI >= {min_oi}")
+      log_warn("{ticker}: Filter failure - No options with OI >= {min_oi}")
       return(NULL)
     }
   }
 
   # Filter by expiry month if specified
   if (!is.null(expiry_month)) {
+    before_count <- nrow(filtered_options)
     filtered_options <- filtered_options %>%
       filter(lubridate::month(expiration) == expiry_month)
+    log_info("{ticker}: After month filter (={expiry_month}): {nrow(filtered_options)} options (filtered {before_count - nrow(filtered_options)})")
 
     if (nrow(filtered_options) == 0) {
-      log_debug("{ticker}: No options expiring in month {expiry_month}")
+      log_warn("{ticker}: Filter failure - No options expiring in month {expiry_month}")
       return(NULL)
     }
   }
 
   # Filter by days to expiry range
   if (!is.null(min_days)) {
+    before_count <- nrow(filtered_options)
     filtered_options <- filtered_options %>%
       filter(days_to_expiry >= min_days)
+    log_info("{ticker}: After min_days filter (>={min_days}): {nrow(filtered_options)} options (filtered {before_count - nrow(filtered_options)})")
 
     if (nrow(filtered_options) == 0) {
-      log_debug("{ticker}: No options with >= {min_days} days to expiry")
+      log_warn("{ticker}: Filter failure - No options with >= {min_days} days to expiry")
       return(NULL)
     }
   }
 
   if (!is.null(max_days)) {
+    before_count <- nrow(filtered_options)
     filtered_options <- filtered_options %>%
       filter(days_to_expiry <= max_days)
+    log_info("{ticker}: After max_days filter (<={max_days}): {nrow(filtered_options)} options (filtered {before_count - nrow(filtered_options)})")
 
     if (nrow(filtered_options) == 0) {
-      log_debug("{ticker}: No options with <= {max_days} days to expiry")
+      log_warn("{ticker}: Filter failure - No options with <= {max_days} days to expiry")
       return(NULL)
     }
   }

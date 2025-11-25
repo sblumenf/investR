@@ -311,8 +311,8 @@ analyze_collar_stocks <- function(dividend_filter = "all",
   log_info("Fetching S&P 500 stock universe (filter: {dividend_filter})...")
 
   stock_universe <- switch(dividend_filter,
-    "dividend" = get_dividend_paying_sp500(),
-    "zero" = get_zero_dividend_stocks(),
+    "dividend" = get_dividend_paying_sp500(max_workers = max_workers),
+    "zero" = get_zero_dividend_stocks(max_workers = max_workers),
     get_sp500_stocks()  # default "all"
   )
 

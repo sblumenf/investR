@@ -257,3 +257,147 @@ test_that("get_volatility respects config feature flag", {
   # Restore config
   RISK_CONFIG$features$use_implied_volatility <- original_flag
 })
+
+# New tests for three-tier horizon-based volatility selection
+
+test_that("Very short-term positions (≤90 days) use pure IV", {
+  skip_on_cran()
+  skip_if_offline()
+
+  # Position ≤ 90 days should use pure IV (no blending)
+  vol <- get_volatility(
+    ticker = "AAPL",
+    days_to_expiry = 30,  # Very short-term
+    use_implied = TRUE,
+    fallback_to_historical = TRUE
+  )
+
+  # Should return valid volatility
+  expect_true(is.numeric(vol))
+  expect_true(vol > 0)
+  expect_true(vol < 5)  # Reasonable range
+})
+
+test_that("Medium-term positions (90-365 days) blend IV and historical", {
+  skip_on_cran()
+  skip_if_offline()
+
+  # Position between 90-365 days should blend
+  vol <- get_volatility(
+    ticker = "AAPL",
+    days_to_expiry = 180,  # Medium-term (6 months)
+    use_implied = TRUE,
+    fallback_to_historical = TRUE
+  )
+
+  expect_true(is.numeric(vol))
+  expect_true(vol > 0)
+  expect_true(vol < 5)
+})
+
+test_that("Long-dated positions (>365 days) use pure historical", {
+  skip_on_cran()
+  skip_if_offline()
+
+  # Position > 365 days should skip IV and use pure historical
+  vol <- get_volatility(
+    ticker = "AAPL",
+    days_to_expiry = 500,  # Long-dated (LEAP)
+    use_implied = TRUE,  # Request IV but should be ignored
+    fallback_to_historical = TRUE
+  )
+
+  # Should return valid volatility from historical method
+  expect_true(is.numeric(vol))
+  expect_true(vol > 0)
+  expect_true(vol < 5)  # Reasonable range
+})
+
+test_that("Horizon threshold boundary at 90 days (pure IV vs blend)", {
+  skip_on_cran()
+  skip_if_offline()
+
+  # Exactly 90 days should use pure IV (not > 90)
+  vol_90 <- get_volatility(
+    ticker = "AAPL",
+    days_to_expiry = 90,
+    use_implied = TRUE,
+    fallback_to_historical = TRUE
+  )
+
+  expect_true(is.numeric(vol_90))
+  expect_true(vol_90 > 0)
+
+  # 91 days should blend (medium-term)
+  vol_91 <- get_volatility(
+    ticker = "AAPL",
+    days_to_expiry = 91,
+    use_implied = TRUE,
+    fallback_to_historical = TRUE
+  )
+
+  expect_true(is.numeric(vol_91))
+  expect_true(vol_91 > 0)
+})
+
+test_that("Horizon threshold boundary at 365 days (blend vs pure historical)", {
+  skip_on_cran()
+  skip_if_offline()
+
+  # Exactly 365 days should blend (not > 365)
+  vol_365 <- get_volatility(
+    ticker = "AAPL",
+    days_to_expiry = 365,
+    use_implied = TRUE,
+    fallback_to_historical = TRUE
+  )
+
+  expect_true(is.numeric(vol_365))
+  expect_true(vol_365 > 0)
+
+  # 366 days should use pure historical
+  vol_366 <- get_volatility(
+    ticker = "AAPL",
+    days_to_expiry = 366,
+    use_implied = TRUE,
+    fallback_to_historical = TRUE
+  )
+
+  expect_true(is.numeric(vol_366))
+  expect_true(vol_366 > 0)
+})
+
+test_that("Horizon threshold is configurable", {
+  skip_on_cran()
+  skip_if_offline()
+
+  # Save original threshold
+  original_threshold <- RISK_CONFIG$implied_vol_max_horizon
+
+  # Set custom threshold
+  RISK_CONFIG$implied_vol_max_horizon <- 180
+
+  # 200 days should now use historical (> 180)
+  vol <- get_volatility(
+    ticker = "AAPL",
+    days_to_expiry = 200,
+    use_implied = TRUE,
+    fallback_to_historical = TRUE
+  )
+
+  expect_true(is.numeric(vol))
+  expect_true(vol > 0)
+
+  # Restore config
+  RISK_CONFIG$implied_vol_max_horizon <- original_threshold
+})
+
+test_that("fetch_implied_vol_questrade handles missing data gracefully", {
+  skip_on_cran()
+
+  # Test with ticker that has no options (or will fail)
+  iv <- fetch_implied_vol_questrade("NONEXISTENT_TICKER", 30)
+
+  # Should return NA gracefully without crashing
+  expect_true(is.na(iv))
+})

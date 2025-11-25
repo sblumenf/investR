@@ -4,10 +4,12 @@
 \alias{get_zero_dividend_stocks}
 \title{Get zero-dividend S&P 500 stocks with caching}
 \usage{
-get_zero_dividend_stocks(limit = NULL)
+get_zero_dividend_stocks(limit = NULL, max_workers = 4)
 }
 \arguments{
 \item{limit}{Optional limit on number of stocks to check (for testing)}
+
+\item{max_workers}{Number of parallel workers to use (default 4)}
 }
 \value{
 Character vector of zero-dividend ticker symbols

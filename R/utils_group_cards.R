@@ -601,13 +601,13 @@ create_closed_group_card <- function(group_data, pnl, members, cash_flows, activ
     strategy_type <- group_data$strategy_type
 
     # Build costs section based on strategy type
-    if (strategy_type != "Other" && pnl$option_premiums > 0) {
+    if (strategy_type != "Other" && pnl$option_net_premium > 0) {
       # For covered call strategies: show premiums as cost reduction
       costs_section <- list(
         tags$h5("Costs"),
         create_metric_row("Stock Purchases", format_currency(pnl$stock_purchases)),
         create_metric_row("Option Premiums (Credit)",
-                         sprintf("-%s", format_currency(pnl$option_premiums))),
+                         sprintf("-%s", format_currency(pnl$option_net_premium))),
         create_metric_row("Commissions", format_currency(pnl$total_commissions)),
         create_metric_row("Net Cost Basis", format_currency(pnl$total_cost), is_primary = TRUE)
       )
@@ -631,7 +631,7 @@ create_closed_group_card <- function(group_data, pnl, members, cash_flows, activ
       proceeds_section <- list(
         tags$h5("Proceeds"),
         create_metric_row("Stock Sales", format_currency(pnl$stock_sales)),
-        create_metric_row("Option Premiums", format_currency(pnl$option_premiums)),
+        create_metric_row("Option Premiums", format_currency(pnl$option_net_premium)),
         create_metric_row("Dividends", format_currency(pnl$total_dividends)),
         create_metric_row("Total Proceeds", format_currency(pnl$total_proceeds), is_primary = TRUE)
       )

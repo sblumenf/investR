@@ -4,10 +4,12 @@
 \alias{get_dividend_paying_sp500}
 \title{Get dividend-paying S&P 500 stocks with caching}
 \usage{
-get_dividend_paying_sp500(limit = NULL)
+get_dividend_paying_sp500(limit = NULL, max_workers = 4)
 }
 \arguments{
 \item{limit}{Optional limit on number of stocks to check (for testing)}
+
+\item{max_workers}{Number of parallel workers to use (default 4)}
 }
 \value{
 Character vector of dividend-paying ticker symbols

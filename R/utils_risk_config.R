@@ -101,6 +101,14 @@ RISK_CONFIG <- list(
   volatility_min_observations = 50,          # Minimum data points required for estimation
   volatility_default = 0.30,                 # Fallback if insufficient data (30% annual vol)
 
+  # Implied volatility horizon thresholds (research-backed three-tier approach)
+  # Research shows:
+  # - IV strongest for <90 days (use pure IV)
+  # - IV competitive for 90-365 days (blend IV + historical)
+  # - Historical better for >365 days (use pure historical)
+  implied_vol_short_horizon = 90,            # Days: use pure IV for ≤ 90 days
+  implied_vol_max_horizon = 365,             # Days: blend IV+historical for 90-365, pure historical for >365
+
   ################################################################################
   # ADVANCED CONFIGURATION (Power users only - most users won't touch these)
   ################################################################################

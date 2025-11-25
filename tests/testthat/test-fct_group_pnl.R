@@ -57,10 +57,12 @@ test_that("calculate_group_pnl computes correct total and annualized returns", {
   expect_equal(nrow(pnl), 1)
 
   # With new accounting for covered call strategies (non-"Other"):
-  # - Option premiums reduce cost basis (net debit accounting)
+  # - Option net premiums reduce cost basis (net debit accounting)
   # - Stock purchases tracked separately for display
   expect_equal(pnl$stock_purchases, 15000)
-  expect_equal(pnl$option_premiums, 250)
+  expect_equal(pnl$option_sales, 250)
+  expect_equal(pnl$option_purchases, 0)
+  expect_equal(pnl$option_net_premium, 250)
 
   # Total cost = stock purchase - option premium = 15000 - 250 = 14750
   expect_equal(pnl$total_cost, 14750)
@@ -141,7 +143,9 @@ test_that("calculate_group_pnl includes commissions in total cost", {
   # Total cost includes purchase + commissions (no option premiums in this test)
   expect_equal(pnl$stock_purchases, 55000)
   expect_equal(pnl$total_commissions, 10)
-  expect_equal(pnl$option_premiums, 0)  # No options in this test
+  expect_equal(pnl$option_sales, 0)  # No options in this test
+  expect_equal(pnl$option_purchases, 0)
+  expect_equal(pnl$option_net_premium, 0)
   expect_equal(pnl$total_cost, 55010)   # 55000 + 10 - 0
 
   # Proceeds (no option premiums for Weekly Dividend Capture without options)
@@ -352,7 +356,9 @@ test_that("calculate_group_pnl uses legacy accounting for Other strategy", {
   # With legacy accounting for "Other" strategy:
   # Total cost = stock purchase only = 15000
   expect_equal(pnl$stock_purchases, 15000)
-  expect_equal(pnl$option_premiums, 250)
+  expect_equal(pnl$option_sales, 250)
+  expect_equal(pnl$option_purchases, 0)
+  expect_equal(pnl$option_net_premium, 250)
   expect_equal(pnl$total_cost, 15000)  # No premium offset
 
   # Total proceeds = stock sale + option premium
@@ -370,6 +376,113 @@ test_that("calculate_group_pnl uses legacy accounting for Other strategy", {
   on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
   dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
   dbExecute(conn, "DELETE FROM account_activities WHERE account_number = 'TEST111'")
+})
+
+test_that("calculate_group_pnl handles buy-to-close option transactions correctly", {
+  # Test the user's reported bug scenario:
+  # - Sold call for $7,153.01
+  # - Bought call back for $13,882.99
+  # - Net option loss: -$6,729.98
+  # - Stock gain: $7,275.00
+  # - Net P&L should be: $545.02
+
+  # Create test group
+  group_id <- paste0("TEST_BUY_TO_CLOSE_", format(Sys.time(), "%Y%m%d%H%M%S"))
+  create_position_group(
+    group_id = group_id,
+    group_name = "Test Buy-to-Close",
+    strategy_type = "DIVIDEND_ARISTOCRATS",
+    account_number = "TEST222",
+    members = tibble::tibble(
+      symbol = c("ABC", "ABC250117C00050000"),
+      role = c("underlying_stock", "short_call")
+    )
+  )
+
+  # Create activities matching user's scenario
+  activities <- tibble::tibble(
+    activity_id = c(
+      paste0("BTC_BUY_STOCK_", group_id),
+      paste0("BTC_SELL_CALL_", group_id),
+      paste0("BTC_BUY_CALL_", group_id),
+      paste0("BTC_SELL_STOCK_", group_id)
+    ),
+    account_number = rep("TEST222", 4),
+    account_type = rep("TFSA", 4),
+    trade_date = as.POSIXct(c(
+      "2024-01-01 10:00:00",
+      "2024-01-01 10:01:00",
+      "2024-03-31 14:00:00",  # Buy to close
+      "2024-03-31 14:01:00"
+    )),
+    transaction_date = as.POSIXct(c(
+      "2024-01-01 10:00:00",
+      "2024-01-01 10:01:00",
+      "2024-03-31 14:00:00",
+      "2024-03-31 14:01:00"
+    )),
+    settlement_date = as.POSIXct(c(
+      "2024-01-03 10:00:00",
+      "2024-01-03 10:01:00",
+      "2024-04-02 14:00:00",
+      "2024-04-02 14:01:00"
+    )),
+    action = c("Buy", "Sell", "Buy", "Sell"),
+    symbol = c("ABC", "ABC250117C00050000", "ABC250117C00050000", "ABC"),
+    symbol_id = c(12345, 67890, 67890, 12345),
+    description = c(
+      "Buy 100 ABC @ $236.45",
+      "Sell 1 ABC Jan17'25 $50 Call",
+      "Buy 1 ABC Jan17'25 $50 Call",
+      "Sell 100 ABC @ $309.20"
+    ),
+    currency = rep("USD", 4),
+    quantity = c(100, 1, -1, -100),
+    price = c(236.45, 71.5301, 138.8299, 309.20),
+    gross_amount = c(-23645, 7153.01, -13882.99, 30920),
+    commission = c(0, 0, 0, 0),
+    net_amount = c(-23645, 7153.01, -13882.99, 30920),
+    type = rep("Trades", 4),
+    group_id = rep(NA_character_, 4),
+    is_processed = rep(FALSE, 4),
+    fetched_at = rep(Sys.time(), 4)
+  )
+
+  save_result <- save_activities_batch(activities)
+  saved_activities <- get_activities() %>%
+    filter(account_number == "TEST222")
+
+  for (act_id in saved_activities$activity_id) {
+    link_activity_to_group(act_id, group_id)
+  }
+
+  pnl <- calculate_group_pnl(group_id)
+
+  # Verify option breakdown
+  expect_equal(pnl$option_sales, 7153.01)
+  expect_equal(pnl$option_purchases, 13882.99)
+  expect_equal(pnl$option_net_premium, 7153.01 - 13882.99)  # -6729.98
+
+  # For DIVIDEND_ARISTOCRATS strategy (net debit accounting):
+  # total_cost = stock_purchases + commissions - option_net_premium
+  # total_cost = 23645 + 0 - (-6729.98) = 30374.98
+  expect_equal(pnl$stock_purchases, 23645)
+  expect_equal(pnl$total_commissions, 0)
+  expect_equal(pnl$total_cost, 23645 + 0 - (7153.01 - 13882.99), tolerance = 0.01)
+
+  # total_proceeds = stock_sales + dividends
+  expect_equal(pnl$stock_sales, 30920)
+  expect_equal(pnl$total_dividends, 0)
+  expect_equal(pnl$total_proceeds, 30920)
+
+  # Net P&L = proceeds - cost = 30920 - 30374.98 = 545.02
+  expect_equal(pnl$net_pnl, 545.02, tolerance = 0.01)
+
+  # Cleanup
+  conn <- get_portfolio_db_connection()
+  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
+  dbExecute(conn, "DELETE FROM account_activities WHERE account_number = 'TEST222'")
 })
 
 test_that("annualized return calculation is correct for various hold periods", {

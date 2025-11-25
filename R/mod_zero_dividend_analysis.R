@@ -26,6 +26,8 @@ mod_zero_dividend_analysis_ui <- function(id){
         NULL,
         choices = c(
           "S&P 500 Zero-Dividend Stocks" = "sp500_zero",
+          "Liquid ETFs" = "liquid_etfs",
+          "Yahoo Most Active ETFs" = "yahoo_active_etfs",
           "Overbought Stocks" = "overbought",
           "Oversold Stocks" = "oversold",
           "Most Shorted Stocks" = "most_shorted",
@@ -137,6 +139,23 @@ mod_zero_dividend_analysis_server <- function(id){
           expiry_month = NULL,  # Always NULL - filter client-side with checkboxes
           max_workers = input$max_workers
         ),
+        "liquid_etfs" = analyze_zero_dividend_etfs(
+          min_market_cap = COLLAR_CONFIG$min_market_cap,
+          min_avg_volume = COLLAR_CONFIG$min_avg_volume,
+          strike_threshold_pct = input$strike_threshold / 100,
+          min_days = input$days_range[1],
+          max_days = input$days_range[2],
+          expiry_month = NULL,
+          max_workers = input$max_workers
+        ),
+        "yahoo_active_etfs" = analyze_zero_dividend_yahoo_active_etfs(
+          count = 150,
+          strike_threshold_pct = input$strike_threshold / 100,
+          min_days = input$days_range[1],
+          max_days = input$days_range[2],
+          expiry_month = NULL,
+          max_workers = input$max_workers
+        ),
         "overbought" = analyze_zero_dividend_custom_list(
           list_type = "overbought",
           strike_threshold_pct = input$strike_threshold / 100,
@@ -184,6 +203,8 @@ mod_zero_dividend_analysis_server <- function(id){
     variant_label <- reactive({
       switch(input$zero_dividend_variant,
         "sp500_zero" = "S&P 500 zero-dividend stocks",
+        "liquid_etfs" = "liquid ETFs",
+        "yahoo_active_etfs" = "Yahoo most active ETFs",
         "overbought" = "overbought stocks",
         "oversold" = "oversold stocks",
         "most_shorted" = "most shorted stocks",

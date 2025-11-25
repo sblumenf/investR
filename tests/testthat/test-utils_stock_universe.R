@@ -65,7 +65,7 @@ test_that("get_zero_dividend_stocks with limit works", {
   skip_if_offline()
 
   # Test with small limit for speed
-  stocks <- get_zero_dividend_stocks(limit = 10)
+  stocks <- get_zero_dividend_stocks(limit = 10, max_workers = 1)
 
   # Should return character vector
   expect_type(stocks, "character")

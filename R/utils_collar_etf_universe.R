@@ -141,3 +141,62 @@ get_bond_etfs <- function() {
 get_commodity_etfs <- function() {
   c("GLD", "SLV", "USO", "UNG")
 }
+
+#' Get most active ETFs from Yahoo Finance
+#'
+#' Scrapes Yahoo Finance's "Most Active ETFs" page to get real-time list of
+#' ETFs with highest trading volume. This list updates dynamically based on
+#' current market activity.
+#'
+#' Note: Requires internet connection. List will vary day-to-day based on
+#' market conditions and trading activity.
+#'
+#' @param count Maximum number of ETFs to retrieve (default 25, max ~100)
+#' @return Character vector of ETF tickers sorted by trading volume
+#' @export
+#' @examples
+#' \dontrun{
+#'   # Get top 25 most active ETFs from Yahoo Finance
+#'   active_etfs <- get_yahoo_most_active_etfs()
+#'
+#'   # Get top 50
+#'   active_etfs <- get_yahoo_most_active_etfs(count = 50)
+#' }
+get_yahoo_most_active_etfs <- function(count = 25) {
+
+  log_info("Fetching most active ETFs from Yahoo Finance...")
+
+  safely_fetch(
+    expr = {
+      url <- "https://finance.yahoo.com/markets/etfs/most-active/"
+
+      # Read and parse HTML
+      page <- rvest::read_html(url)
+      tables <- rvest::html_table(page, fill = TRUE)
+
+      if (length(tables) == 0) {
+        stop("No tables found on Yahoo Finance page")
+      }
+
+      # First table contains the ETF data
+      etf_table <- tables[[1]]
+
+      if (!"Symbol" %in% names(etf_table)) {
+        stop("Symbol column not found in Yahoo Finance table")
+      }
+
+      # Extract symbols and limit to requested count
+      symbols <- head(etf_table$Symbol, count)
+
+      # Remove any NA or empty symbols
+      symbols <- symbols[!is.na(symbols) & symbols != ""]
+
+      log_success("Found {length(symbols)} most active ETFs from Yahoo Finance")
+
+      return(symbols)
+    },
+    error_msg = "Failed to fetch ETFs from Yahoo Finance",
+    default = character(0),
+    log_level = "warn"
+  )
+}

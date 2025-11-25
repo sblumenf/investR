@@ -68,12 +68,25 @@ calculate_group_pnl <- function(group_id) {
     total_commissions <- if (length(total_commissions) == 0) 0 else total_commissions
 
     # Option sales (premiums received): use gross_amount (excluding commissions)
-    option_premiums <- activities %>%
+    option_sales <- activities %>%
       filter(type == "Trades", action == "Sell", purrr::map_lgl(symbol, is_option_symbol)) %>%
       summarise(total = sum(abs(gross_amount), na.rm = TRUE)) %>%
       pull(total)
 
-    option_premiums <- if (length(option_premiums) == 0) 0 else option_premiums
+    option_sales <- if (length(option_sales) == 0) 0 else option_sales
+
+    # Option purchases (premiums paid, e.g., buy-to-close): use gross_amount (excluding commissions)
+    option_purchases <- activities %>%
+      filter(type == "Trades", action == "Buy", purrr::map_lgl(symbol, is_option_symbol)) %>%
+      summarise(total = sum(abs(gross_amount), na.rm = TRUE)) %>%
+      pull(total)
+
+    option_purchases <- if (length(option_purchases) == 0) 0 else option_purchases
+
+    # Net option premium: sales - purchases
+    # Positive = net credit (received more than paid)
+    # Negative = net debit (paid more to close than received)
+    option_net_premium <- option_sales - option_purchases
 
     # Calculate total proceeds (money in)
     # Stock sales: use gross_amount (excluding commissions)
@@ -93,16 +106,17 @@ calculate_group_pnl <- function(group_id) {
     total_dividends <- if (length(total_dividends) == 0) 0 else total_dividends
 
     # Apply strategy-specific accounting
-    # For covered call strategies (non-"Other"): premiums reduce cost basis
-    # For "Other" strategy: premiums are proceeds (legacy behavior)
+    # For covered call strategies (non-"Other"): net premiums reduce cost basis
+    # For "Other" strategy: net premiums are proceeds (legacy behavior)
     if (strategy_type != "Other") {
-      # Net debit accounting: premiums offset cost
-      total_cost <- stock_purchases + total_commissions - option_premiums
+      # Net debit accounting: net premiums offset cost
+      # If net premium is negative (paid more to close), it increases cost
+      total_cost <- stock_purchases + total_commissions - option_net_premium
       total_proceeds <- stock_sales + total_dividends
     } else {
-      # Legacy accounting: premiums as income
+      # Legacy accounting: net premiums as income
       total_cost <- stock_purchases + total_commissions
-      total_proceeds <- stock_sales + option_premiums + total_dividends
+      total_proceeds <- stock_sales + option_net_premium + total_dividends
     }
 
     # Net P&L = proceeds - cost
@@ -150,7 +164,9 @@ calculate_group_pnl <- function(group_id) {
       total_proceeds = total_proceeds,
       stock_purchases = stock_purchases,
       stock_sales = stock_sales,
-      option_premiums = option_premiums,
+      option_sales = option_sales,
+      option_purchases = option_purchases,
+      option_net_premium = option_net_premium,
       total_dividends = total_dividends,
       total_commissions = total_commissions,
       net_pnl = net_pnl,
@@ -242,8 +258,9 @@ close_position_group <- function(group_id) {
   on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
 
   tryCatch({
-    # Delete all projected cash flows (future dividends no longer relevant)
-    delete_group_cash_flows(group_id, status_filter = "projected")
+    # Delete ALL cash flows (both projected and actual)
+    # For closed positions, all activity is captured in the final P&L
+    delete_group_cash_flows(group_id, status_filter = NULL)
 
     # Create actual cash flow event for final realized P&L
     # Get latest activity date (liquidation/close date)
@@ -324,8 +341,9 @@ auto_close_group <- function(group_id) {
   on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
 
   tryCatch({
-    # Always delete projected cash flows (future events no longer relevant)
-    delete_group_cash_flows(group_id, status_filter = "projected")
+    # Always delete ALL cash flows (both projected and actual)
+    # For closed positions, all activity is captured in the final P&L
+    delete_group_cash_flows(group_id, status_filter = NULL)
 
     # If "Other" strategy, skip P&L calculation
     if (strategy_type == "Other") {

@@ -280,6 +280,7 @@ stock_pays_dividend <- function(ticker, lookback_years = 2) {
 #' for 30 days to avoid expensive repeated scans.
 #'
 #' @param limit Optional limit on number of stocks to check (for testing)
+#' @param max_workers Number of parallel workers to use (default 4)
 #' @return Character vector of zero-dividend ticker symbols
 #' @export
 #' @examples
@@ -290,7 +291,7 @@ stock_pays_dividend <- function(ticker, lookback_years = 2) {
 #'   # Test with limit
 #'   zero_div_stocks <- get_zero_dividend_stocks(limit = 50)
 #' }
-get_zero_dividend_stocks <- function(limit = NULL) {
+get_zero_dividend_stocks <- function(limit = NULL, max_workers = 4) {
   cache_file <- "zero_dividend_stocks.rds"
 
   # Check cache first (unless limit specified, which is for testing)
@@ -312,7 +313,8 @@ get_zero_dividend_stocks <- function(limit = NULL) {
   }
 
   # Use parallel processing for speed
-  oplan <- future::plan(future::multisession, workers = 8)
+  log_info("Setting up {max_workers} parallel workers for dividend status check")
+  oplan <- future::plan(future::multisession, workers = max_workers)
   on.exit(future::plan(oplan), add = TRUE)
 
   # Check dividend status for each stock
@@ -344,6 +346,7 @@ get_zero_dividend_stocks <- function(limit = NULL) {
 #' for 30 days to avoid expensive repeated scans.
 #'
 #' @param limit Optional limit on number of stocks to check (for testing)
+#' @param max_workers Number of parallel workers to use (default 4)
 #' @return Character vector of dividend-paying ticker symbols
 #' @export
 #' @examples
@@ -354,7 +357,7 @@ get_zero_dividend_stocks <- function(limit = NULL) {
 #'   # Test with limit
 #'   div_stocks <- get_dividend_paying_sp500(limit = 50)
 #' }
-get_dividend_paying_sp500 <- function(limit = NULL) {
+get_dividend_paying_sp500 <- function(limit = NULL, max_workers = 4) {
   cache_file <- "dividend_paying_stocks.rds"
 
   # Check cache first (unless limit specified, which is for testing)
@@ -376,7 +379,8 @@ get_dividend_paying_sp500 <- function(limit = NULL) {
   }
 
   # Use parallel processing for speed
-  oplan <- future::plan(future::multisession, workers = 8)
+  log_info("Setting up {max_workers} parallel workers for dividend status check")
+  oplan <- future::plan(future::multisession, workers = max_workers)
   on.exit(future::plan(oplan), add = TRUE)
 
   # Check dividend status for each stock

@@ -216,12 +216,19 @@ convert_quote_to_yahoo_format <- function(quote_data, ticker) {
   last_price <- quote_data$lastTradePrice %||% NA_real_
   name <- quote_data$description %||% ticker
 
-  # Create data frame matching Yahoo Finance structure
+  # Add Trade Time to match Yahoo structure (column 1)
+  # Questrade doesn't provide trade time, use current time
+  trade_time <- Sys.time()
+
+  # Create data frame matching Yahoo Finance structure exactly
+  # Yahoo always includes "Trade Time" as first column
   result <- data.frame(
+    `Trade Time` = trade_time,
     Last = last_price,
     Name = name,
     row.names = ticker,
-    stringsAsFactors = FALSE
+    stringsAsFactors = FALSE,
+    check.names = FALSE  # Preserve "Trade Time" with space
   )
 
   return(result)

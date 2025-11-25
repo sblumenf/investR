@@ -258,6 +258,7 @@ create_position_group <- function(group_id, group_name = NULL, strategy_type,
       group_name = group_name,
       strategy_type = strategy_type,
       account_number = account_number,
+      status = "open",
       created_at = timestamp,
       updated_at = timestamp
     )

@@ -11,6 +11,7 @@ analyze_position_risk(
   premium_received,
   current_price = NULL,
   cost_basis = NULL,
+  first_trade_date = NULL,
   simulation_paths = RISK_CONFIG$default_simulation_paths,
   use_monte_carlo = TRUE,
   use_rquantlib = TRUE,
@@ -29,6 +30,8 @@ analyze_position_risk(
 \item{current_price}{Current stock price (if NULL, fetches live)}
 
 \item{cost_basis}{Actual cost basis per share (if NULL, uses current_price for return calculations)}
+
+\item{first_trade_date}{Date of first trade (if NULL, uses today for annualization calculation)}
 
 \item{simulation_paths}{Number of Monte Carlo paths (default 10000)}
 

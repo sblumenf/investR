@@ -180,7 +180,8 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
     positions = positions,
     portfolio_pnl = mc_results$portfolio_pnl,
     position_pnl_matrix = mc_results$position_pnl_matrix,
-    portfolio_var = var_95
+    portfolio_var = var_95,
+    assignment_probs = mc_results$assignment_probs
   )
 
   # Apply stress scenarios to entire portfolio
@@ -626,12 +627,13 @@ expand_correlation_to_positions <- function(positions, ticker_correlation_matrix
 #' Run correlated Monte Carlo simulation for portfolio
 #'
 #' Uses Cholesky decomposition to generate correlated random shocks.
+#' Tracks assignment probability for covered call positions.
 #'
 #' @param positions Tibble of position details
 #' @param correlation_matrix Correlation matrix for positions (not tickers)
 #' @param simulation_paths Number of simulation paths
 #' @param regime_info List with regime information (NULL if regime detection disabled)
-#' @return List with portfolio and position P&L (in dollars, not percentages)
+#' @return List with portfolio_pnl, position_pnl_matrix, and assignment_probs
 #' @noRd
 run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation_paths = 10000, regime_info = NULL) {
 
@@ -700,6 +702,9 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
   position_pnl_matrix <- matrix(0, nrow = simulation_paths, ncol = n_positions)
   portfolio_pnl <- numeric(simulation_paths)
 
+  # Initialize assignment counter for probability calculation
+  assignment_counts <- numeric(n_positions)
+
   # Run simulation
   for (path in seq_len(simulation_paths)) {
     # Generate correlated random shocks (for continuous component)
@@ -765,6 +770,7 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
       if (!is.null(param$strike) && !is.na(param$strike)) {
         if (final_price >= param$strike) {
           # Called away at strike price
+          assignment_counts[i] <- assignment_counts[i] + 1
           stock_pnl <- (param$strike - param$purchase_price) * param$shares
         } else {
           # Keep shares at final price
@@ -785,7 +791,8 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
 
   list(
     portfolio_pnl = portfolio_pnl,
-    position_pnl_matrix = position_pnl_matrix
+    position_pnl_matrix = position_pnl_matrix,
+    assignment_probs = assignment_counts / simulation_paths
   )
 }
 
@@ -798,9 +805,10 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
 #' @param portfolio_pnl Vector of portfolio P&L from MC simulations
 #' @param position_pnl_matrix Matrix of position P&L (paths x positions)
 #' @param portfolio_var Portfolio VaR (5th percentile P&L)
+#' @param assignment_probs Vector of assignment probabilities per position
 #' @return Tibble with position contributions
 #' @noRd
-calculate_position_contributions <- function(positions, portfolio_pnl, position_pnl_matrix, portfolio_var) {
+calculate_position_contributions <- function(positions, portfolio_pnl, position_pnl_matrix, portfolio_var, assignment_probs) {
 
   n_positions <- nrow(positions)
 
@@ -832,6 +840,7 @@ calculate_position_contributions <- function(positions, portfolio_pnl, position_
     group_id = positions$group_id,
     ticker = positions$ticker,
     expected_contribution = expected_contributions,
+    prob_assignment = assignment_probs,
     risk_contribution = risk_contributions,
     pct_of_portfolio_risk = abs(risk_contributions) / total_abs_risk,
     # Risk/Return Ratio: how much risk per dollar of expected return

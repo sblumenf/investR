@@ -21,12 +21,21 @@ get_volatility(
 
 \item{fallback_to_historical}{Logical: use historical if implied fails}
 
-\item{blend_weight}{If both available, weight for implied (0-1)}
+\item{blend_weight}{If both available, weight for implied (0-1), used for 90-365 day range}
 }
 \value{
 Annualized volatility estimate
 }
 \description{
 DRY PRINCIPLE: Single function replaces all volatility calculations.
-Tries implied vol first, falls back to historical adaptive method.
+Uses research-backed three-tier horizon strategy:
+- Very short-term (≤90 days): Pure IV (strongest research evidence)
+- Medium-term (90-365 days): Blend IV + historical (mixed evidence)
+- Long-term (>365 days): Pure historical (IV unreliable, mean reversion dominates)
+}
+\details{
+Research evidence:
+- IV has strongest predictive power for <90 day horizons
+- IV competitive but mixed results for 90-365 day horizons
+- Historical volatility preferred for LEAPs >365 days (sparse IV, mean reversion)
 }
