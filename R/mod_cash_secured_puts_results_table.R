@@ -99,7 +99,7 @@ mod_cash_secured_puts_results_table_server <- function(id, results_data){
         })
 
         # Call risk analysis module
-        # For cash-secured puts, we analyze as if buying the stock at the strike
+        # For cash-secured puts, specify option_type = "put"
         mod_position_risk_server(
           id = risk_id,
           trigger = trigger,
@@ -109,7 +109,8 @@ mod_cash_secured_puts_results_table_server <- function(id, results_data){
           premium_received = reactive(row$premium_received),
           current_price = reactive(row$current_price),
           is_aristocrat = reactive(TRUE),  # Cash-secured puts on aristocrats
-          simulation_paths = reactive(10000)
+          simulation_paths = reactive(10000),
+          option_type = reactive("put")  # CRITICAL: Must specify "put" for cash-secured puts
         )
       })
     })

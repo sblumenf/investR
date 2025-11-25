@@ -34,8 +34,10 @@ mod_position_risk_ui <- function(id) {
 #' @param premium_received Reactive premium received
 #' @param current_price Reactive current price (optional)
 #' @param cost_basis Reactive cost basis (optional, for actual positions)
+#' @param first_trade_date Reactive first trade date (optional, for accurate annualization)
 #' @param is_aristocrat Reactive logical for aristocrat status
 #' @param simulation_paths Reactive number of paths (default 10000)
+#' @param option_type Reactive option type: "call" (covered call) or "put" (cash-secured put)
 #' @noRd
 mod_position_risk_server <- function(id,
                                     trigger,
@@ -45,8 +47,10 @@ mod_position_risk_server <- function(id,
                                     premium_received,
                                     current_price = reactive(NULL),
                                     cost_basis = reactive(NULL),
+                                    first_trade_date = reactive(NULL),
                                     is_aristocrat = reactive(FALSE),
-                                    simulation_paths = reactive(10000)) {
+                                    simulation_paths = reactive(10000),
+                                    option_type = reactive("call")) {
 
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -94,8 +98,10 @@ mod_position_risk_server <- function(id,
           premium_received = premium_received(),
           current_price = current_price(),
           cost_basis = cost_basis(),
+          first_trade_date = first_trade_date(),
           simulation_paths = simulation_paths(),
-          is_aristocrat = is_aristocrat()
+          is_aristocrat = is_aristocrat(),
+          option_type = option_type()
         )
       }, seed = TRUE)
 

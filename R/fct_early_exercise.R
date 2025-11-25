@@ -22,6 +22,7 @@ NULL
 #' @param days_to_expiry Days until expiration
 #' @param dividend_schedule Tibble with dividend_date, dividend_amount
 #' @param volatility Implied volatility (if NULL, estimates from history)
+#' @param option_type Type of option: "call" (default) or "put"
 #' @return List with early exercise metrics
 #' @export
 calculate_early_exercise_probability <- function(ticker,
@@ -29,7 +30,8 @@ calculate_early_exercise_probability <- function(ticker,
                                                  strike,
                                                  days_to_expiry,
                                                  dividend_schedule,
-                                                 volatility = NULL) {
+                                                 volatility = NULL,
+                                                 option_type = "call") {
 
   # Estimate volatility if not provided - use integrated volatility function
   if (is.null(volatility)) {
@@ -68,10 +70,10 @@ calculate_early_exercise_probability <- function(ticker,
     discrete_dividend_times <- numeric(0)
   }
 
-  # Price American call with RQuantLib
+  # Price American option with RQuantLib (call or put)
   tryCatch({
     result <- RQuantLib::AmericanOption(
-      type = "call",
+      type = option_type,
       underlying = current_price,
       strike = strike,
       dividendYield = 0,  # Using discrete dividends instead
@@ -91,12 +93,18 @@ calculate_early_exercise_probability <- function(ticker,
         div_date <- dividend_schedule$dividend_date[i]
         div_amount <- dividend_schedule$dividend_amount[i]
 
-        # Critical price: stock price where time value = dividend
-        # Approximate using rule of thumb: exercise if S > K + dividend/delta
+        # Critical price calculation depends on option type
         delta <- result$delta
-        critical_price <- strike + (div_amount / max(delta, 0.5))
 
-        # Estimate probability stock will be above critical price
+        if (option_type == "call") {
+          # Call: exercise if S > K + dividend/delta
+          critical_price <- strike + (div_amount / max(delta, 0.5))
+        } else {
+          # Put: exercise if S < K - dividend/abs(delta)
+          critical_price <- strike - (div_amount / max(abs(delta), 0.5))
+        }
+
+        # Estimate probability of early exercise
         # Using lognormal distribution
         days_to_div <- as.numeric(difftime(div_date, Sys.Date(), units = "days"))
         t_div <- days_to_div / 365.25
@@ -106,8 +114,13 @@ calculate_early_exercise_probability <- function(ticker,
           mu_ln <- log(current_price) + (r - 0.5 * volatility^2) * t_div
           sigma_ln <- volatility * sqrt(t_div)
 
-          # P(S > critical_price)
-          prob <- 1 - pnorm(log(critical_price), mean = mu_ln, sd = sigma_ln)
+          if (option_type == "call") {
+            # Call: P(S > critical_price)
+            prob <- 1 - pnorm(log(critical_price), mean = mu_ln, sd = sigma_ln)
+          } else {
+            # Put: P(S < critical_price)
+            prob <- pnorm(log(critical_price), mean = mu_ln, sd = sigma_ln)
+          }
           dividend_exercise_probs[i] <- prob
         }
       }

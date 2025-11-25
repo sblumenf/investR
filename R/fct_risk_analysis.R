@@ -21,13 +21,15 @@ NULL
 #' @param ticker Stock ticker symbol
 #' @param strike Option strike price
 #' @param expiration Option expiration date (Date object or string)
-#' @param premium_received Premium received from selling call (total, not per share)
+#' @param premium_received Premium received from selling option (total, not per share)
 #' @param current_price Current stock price (if NULL, fetches live)
 #' @param cost_basis Actual cost basis per share (if NULL, uses current_price for return calculations)
+#' @param first_trade_date Date of first trade (if NULL, uses today for annualization calculation)
 #' @param simulation_paths Number of Monte Carlo paths (default 10000)
 #' @param use_monte_carlo Run full Monte Carlo simulation (TRUE)
 #' @param use_rquantlib Calculate Greeks with RQuantLib (TRUE)
 #' @param is_aristocrat Is this a dividend aristocrat (affects dividend stress assumptions)
+#' @param option_type Type of option: "call" (covered call) or "put" (cash-secured put)
 #' @return List with complete risk analysis results
 #' @export
 analyze_position_risk <- function(ticker,
@@ -36,10 +38,12 @@ analyze_position_risk <- function(ticker,
                                   premium_received,
                                   current_price = NULL,
                                   cost_basis = NULL,
+                                  first_trade_date = NULL,
                                   simulation_paths = RISK_CONFIG$default_simulation_paths,
                                   use_monte_carlo = TRUE,
                                   use_rquantlib = TRUE,
-                                  is_aristocrat = FALSE) {
+                                  is_aristocrat = FALSE,
+                                  option_type = "call") {
 
   log_info("Starting risk analysis for {ticker}")
 
@@ -52,6 +56,11 @@ analyze_position_risk <- function(ticker,
     expiration <- as.Date(expiration)
   }
 
+  # Convert first_trade_date to Date if string
+  if (!is.null(first_trade_date) && is.character(first_trade_date)) {
+    first_trade_date <- as.Date(first_trade_date)
+  }
+
   # Fetch current price if not provided
   if (is.null(current_price)) {
     quote <- fetch_current_quote(ticker, fields = "Last Trade (Price Only)")
@@ -62,14 +71,22 @@ analyze_position_risk <- function(ticker,
     }
   }
 
-  # Calculate days to expiration
+  # Calculate days to expiration (used for Monte Carlo simulation)
   days_to_expiry <- as.numeric(difftime(expiration, Sys.Date(), units = "days"))
 
   if (days_to_expiry <= 0) {
     stop("Option has already expired")
   }
 
-  log_debug("{ticker}: Days to expiry: {days_to_expiry}")
+  # Calculate total holding period for annualization
+  # If first_trade_date is provided, use it; otherwise fall back to days_to_expiry
+  total_holding_days <- if (!is.null(first_trade_date)) {
+    as.numeric(difftime(expiration, first_trade_date, units = "days"))
+  } else {
+    days_to_expiry
+  }
+
+  log_debug("{ticker}: Days to expiry: {days_to_expiry}, Total holding days: {total_holding_days}")
 
   # Build dividend schedule (reuses existing logic)
   dividend_schedule <- build_dividend_schedule(ticker, days_to_expiry, is_aristocrat)
@@ -115,7 +132,8 @@ analyze_position_risk <- function(ticker,
         premium_received = premium_received,
         n_paths = simulation_paths,
         model = "jump_diffusion",
-        is_aristocrat = is_aristocrat
+        is_aristocrat = is_aristocrat,
+        option_type = option_type
       )
 
       results$monte_carlo <- mc_result
@@ -137,7 +155,8 @@ analyze_position_risk <- function(ticker,
         current_price = current_price,
         strike = strike,
         days_to_expiry = days_to_expiry,
-        dividend_schedule = dividend_schedule
+        dividend_schedule = dividend_schedule,
+        option_type = option_type
       )
 
       results$rquantlib <- rql_result
@@ -156,11 +175,13 @@ analyze_position_risk <- function(ticker,
 
   # Calculate risk-adjusted return
   if (!is.null(results$monte_carlo) && !is.null(results$monte_carlo$expected_return)) {
-    # Convert to annualized
-    T_years <- days_to_expiry / 365.25
+    # Convert to annualized using TOTAL holding period (not just remaining days)
+    # This matches the position card calculation and gives actual investor return
+    T_years <- total_holding_days / 365.25
     mc_annualized <- ((1 + results$monte_carlo$expected_return)^(1/T_years)) - 1
 
     results$risk_adjusted_return_annualized <- mc_annualized
+    log_info("{ticker}: Annualized return calculated over {total_holding_days} total days (not just {days_to_expiry} remaining)")
   } else {
     results$risk_adjusted_return_annualized <- NA
   }

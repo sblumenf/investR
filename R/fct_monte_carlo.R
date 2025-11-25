@@ -233,33 +233,66 @@ build_dividend_schedule <- function(ticker, days_to_expiry, is_aristocrat = FALS
 # OPTION PAYOFF CALCULATORS
 ################################################################################
 
-#' Calculate covered call payoff at given stock price
+#' Calculate option strategy payoff at given stock price
 #'
 #' @param stock_price Stock price at evaluation
 #' @param strike Strike price
-#' @param premium_received Premium received from selling call
-#' @param entry_stock_price Original stock purchase price
+#' @param premium_received Premium received from selling option
+#' @param entry_stock_price Original stock purchase price (for calls) or strike (for puts)
 #' @param shares Number of shares (default 100)
+#' @param option_type Type of option: "call" (covered call) or "put" (cash-secured put)
 #' @return Profit/loss amount
+#' @noRd
+calculate_option_payoff <- function(stock_price,
+                                    strike,
+                                    premium_received,
+                                    entry_stock_price,
+                                    shares = 100,
+                                    option_type = "call") {
+
+  if (option_type == "call") {
+    # Covered call: own stock + sell call
+    if (stock_price >= strike) {
+      # Assigned: sell stock at strike
+      stock_pnl <- (strike - entry_stock_price) * shares
+      total_pnl <- stock_pnl + premium_received
+    } else {
+      # Hold stock
+      stock_pnl <- (stock_price - entry_stock_price) * shares
+      total_pnl <- stock_pnl + premium_received
+    }
+  } else if (option_type == "put") {
+    # Cash-secured put: sell put + hold cash
+    if (stock_price <= strike) {
+      # Assigned: forced to buy at strike, stock worth stock_price
+      stock_pnl <- (stock_price - strike) * shares
+      total_pnl <- stock_pnl + premium_received
+    } else {
+      # Not assigned: keep premium only
+      total_pnl <- premium_received
+    }
+  } else {
+    stop("Unknown option_type: ", option_type, ". Must be 'call' or 'put'.")
+  }
+
+  total_pnl
+}
+
+#' @describeIn calculate_option_payoff Legacy function name for backwards compatibility
 #' @noRd
 calculate_covered_call_payoff <- function(stock_price,
                                           strike,
                                           premium_received,
                                           entry_stock_price,
                                           shares = 100) {
-
-  # If assigned (stock price >= strike)
-  if (stock_price >= strike) {
-    # Sell stock at strike, keep premium
-    stock_pnl <- (strike - entry_stock_price) * shares
-    total_pnl <- stock_pnl + premium_received
-  } else {
-    # Hold stock, keep premium
-    stock_pnl <- (stock_price - entry_stock_price) * shares
-    total_pnl <- stock_pnl + premium_received
-  }
-
-  total_pnl
+  calculate_option_payoff(
+    stock_price = stock_price,
+    strike = strike,
+    premium_received = premium_received,
+    entry_stock_price = entry_stock_price,
+    shares = shares,
+    option_type = "call"
+  )
 }
 
 #' Determine if early exercise is optimal at dividend date
@@ -311,20 +344,21 @@ is_early_exercise_optimal <- function(stock_price,
 # MAIN MONTE CARLO ENGINE
 ################################################################################
 
-#' Run Monte Carlo simulation for American call option with dividends
+#' Run Monte Carlo simulation for American options with dividends
 #'
 #' Main simulation engine. Generates price paths and evaluates early exercise
-#' at each dividend date along each path.
+#' at each dividend date along each path. Supports both calls and puts.
 #'
 #' @param ticker Stock ticker
 #' @param current_price Current stock price (for simulation)
 #' @param entry_price Stock entry/cost basis price (for return calculations, defaults to current_price)
 #' @param strike Option strike price
 #' @param expiration_date Option expiration date
-#' @param premium_received Premium received from selling call
+#' @param premium_received Premium received from selling option
 #' @param n_paths Number of simulation paths
 #' @param model Stochastic model ("jump_diffusion" or "heston")
 #' @param is_aristocrat Is this a dividend aristocrat
+#' @param option_type Type of option: "call" (covered call) or "put" (cash-secured put)
 #' @return List with simulation results
 #' @export
 run_monte_carlo_simulation <- function(ticker,
@@ -335,7 +369,8 @@ run_monte_carlo_simulation <- function(ticker,
                                        premium_received,
                                        n_paths = RISK_CONFIG$default_simulation_paths,
                                        model = "jump_diffusion",
-                                       is_aristocrat = FALSE) {
+                                       is_aristocrat = FALSE,
+                                       option_type = "call") {
 
   # Use entry_price for return calculations if provided, otherwise use current_price
   if (is.null(entry_price)) {
@@ -452,12 +487,13 @@ run_monte_carlo_simulation <- function(ticker,
           early_exercise_dates[path] <- as.character(div_schedule$dividend_date[div_idx])
 
           # Calculate payoff (called away at strike)
-          payoffs[path] <- calculate_covered_call_payoff(
+          payoffs[path] <- calculate_option_payoff(
             stock_price = strike,
             strike = strike,
             premium_received = premium_received,
             entry_stock_price = entry_price,
-            shares = 100
+            shares = 100,
+            option_type = option_type
           )
           break
         }
@@ -467,12 +503,13 @@ run_monte_carlo_simulation <- function(ticker,
       if (!exercised) {
         final_price <- price_paths[n_steps + 1, path]
 
-        payoffs[path] <- calculate_covered_call_payoff(
+        payoffs[path] <- calculate_option_payoff(
           stock_price = final_price,
           strike = strike,
           premium_received = premium_received,
           entry_stock_price = entry_price,
-          shares = 100
+          shares = 100,
+          option_type = option_type
         )
       }
     }
@@ -519,12 +556,13 @@ run_monte_carlo_simulation <- function(ticker,
             early_exercise_dates[path] <- as.character(div_date)
 
             # Calculate payoff (assigned at dividend date)
-            payoffs[path] <- calculate_covered_call_payoff(
+            payoffs[path] <- calculate_option_payoff(
               stock_price = strike,  # Called away at strike
               strike = strike,
               premium_received = premium_received,
               entry_stock_price = entry_price,
-              shares = 100
+              shares = 100,
+              option_type = option_type
             )
 
             break  # Exit dividend loop
@@ -536,20 +574,32 @@ run_monte_carlo_simulation <- function(ticker,
       if (!exercised) {
         final_price <- price_paths[n_steps + 1, path]
 
-        payoffs[path] <- calculate_covered_call_payoff(
+        payoffs[path] <- calculate_option_payoff(
           stock_price = final_price,
           strike = strike,
           premium_received = premium_received,
           entry_stock_price = entry_price,
-          shares = 100
+          shares = 100,
+          option_type = option_type
         )
       }
     }
   }
 
   # Calculate statistics
-  # Return based on net outlay (actual cost basis - premium received)
-  net_outlay <- (entry_price * 100) - premium_received
+  # Return based on net outlay
+  # For calls: entry_price * 100 - premium (stock cost)
+  # For puts: strike * 100 - premium (cash reserved, may reduce by premium)
+  if (option_type == "put") {
+    # For cash-secured puts, the cash required is the strike price
+    # Some calculate net outlay as strike - premium, others as full strike
+    # Using strike - premium to match the cash flow at inception
+    net_outlay <- (strike * 100) - premium_received
+  } else {
+    # For covered calls, net outlay is stock purchase cost minus premium
+    net_outlay <- (entry_price * 100) - premium_received
+  }
+
   returns <- payoffs / net_outlay
 
   list(

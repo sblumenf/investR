@@ -30,6 +30,7 @@ Imports:
     promises,
     purrr,
     quantmod,
+    RQuantLib,
     R.utils,
     readr,
     rvest,
