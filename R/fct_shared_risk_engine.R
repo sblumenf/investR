@@ -355,12 +355,6 @@ generate_correlated_shocks <- function(correlation_matrix, n_paths, n_steps) {
 # HELPER UTILITIES
 ################################################################################
 
-#' Null coalescing operator
-#'
-#' @noRd
-`%||%` <- function(a, b) {
-  if (is.null(a)) b else a
-}
 
 #' Create model specification helper
 #'

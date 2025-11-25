@@ -2,7 +2,7 @@
 % Please edit documentation in R/fct_monte_carlo.R
 \name{run_monte_carlo_simulation}
 \alias{run_monte_carlo_simulation}
-\title{Run Monte Carlo simulation for American call option with dividends}
+\title{Run Monte Carlo simulation for American options with dividends}
 \usage{
 run_monte_carlo_simulation(
   ticker,
@@ -13,7 +13,8 @@ run_monte_carlo_simulation(
   premium_received,
   n_paths = RISK_CONFIG$default_simulation_paths,
   model = "jump_diffusion",
-  is_aristocrat = FALSE
+  is_aristocrat = FALSE,
+  option_type = "call"
 )
 }
 \arguments{
@@ -27,18 +28,20 @@ run_monte_carlo_simulation(
 
 \item{expiration_date}{Option expiration date}
 
-\item{premium_received}{Premium received from selling call}
+\item{premium_received}{Premium received from selling option}
 
 \item{n_paths}{Number of simulation paths}
 
 \item{model}{Stochastic model ("jump_diffusion" or "heston")}
 
 \item{is_aristocrat}{Is this a dividend aristocrat}
+
+\item{option_type}{Type of option: "call" (covered call) or "put" (cash-secured put)}
 }
 \value{
 List with simulation results
 }
 \description{
 Main simulation engine. Generates price paths and evaluates early exercise
-at each dividend date along each path.
+at each dividend date along each path. Supports both calls and puts.
 }

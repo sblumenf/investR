@@ -376,11 +376,6 @@ clear_regime_cache <- function() {
 # UTILITIES
 ################################################################################
 
-#' Null coalescing operator
-#' @noRd
-`%||%` <- function(a, b) {
-  if (is.null(a)) b else a
-}
 
 #' Display current regime information
 #'

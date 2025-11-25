@@ -46,6 +46,15 @@ page_home <- function() {
         ),
         href = "/etf-covered-calls",
         button_text = "Analyze ETF Screener"
+      ),
+      list(
+        title = "Extrinsic Value Scanner",
+        description = c(
+          "Scan for high extrinsic value options on zero-dividend S&P 500 stocks, focusing on most-shorted candidates.",
+          "Advanced reverse collar strategy: identify opportunities where option extrinsic value exceeds typical patterns for income generation."
+        ),
+        href = "/extrinsic_value_scanner",
+        button_text = "Scan Extrinsic Value"
       )
     ),
     collar_strategies = list(

@@ -15,7 +15,8 @@ analyze_position_risk(
   simulation_paths = RISK_CONFIG$default_simulation_paths,
   use_monte_carlo = TRUE,
   use_rquantlib = TRUE,
-  is_aristocrat = FALSE
+  is_aristocrat = FALSE,
+  option_type = "call"
 )
 }
 \arguments{
@@ -25,7 +26,7 @@ analyze_position_risk(
 
 \item{expiration}{Option expiration date (Date object or string)}
 
-\item{premium_received}{Premium received from selling call (total, not per share)}
+\item{premium_received}{Premium received from selling option (total, not per share)}
 
 \item{current_price}{Current stock price (if NULL, fetches live)}
 
@@ -40,6 +41,8 @@ analyze_position_risk(
 \item{use_rquantlib}{Calculate Greeks with RQuantLib (TRUE)}
 
 \item{is_aristocrat}{Is this a dividend aristocrat (affects dividend stress assumptions)}
+
+\item{option_type}{Type of option: "call" (covered call) or "put" (cash-secured put)}
 }
 \value{
 List with complete risk analysis results

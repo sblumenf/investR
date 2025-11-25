@@ -126,10 +126,10 @@ calculate_high_yield_statistics <- function(trade_results,
                                             current_yield,
                                             ex_div_date,
                                             days_until_ex_div,
-                                            universe_config) {
+                                            universe_config,
+                                            annual_sofr) {
 
-  # Get SOFR rate for Sharpe calculations
-  annual_sofr <- fetch_sofr_rate()
+  # Use provided SOFR rate for Sharpe calculations
   daily_sofr <- annual_sofr / universe_config$trading_days_per_year
 
   # Basic statistics
@@ -272,7 +272,8 @@ analyze_high_yield_candidate <- function(ticker,
                                          current_yield,
                                          ex_div_date,
                                          days_until_ex_div,
-                                         universe_config) {
+                                         universe_config,
+                                         annual_sofr) {
   tryCatch({
 
     log_debug("{ticker}: Analyzing candidate (Yield: {round(current_yield, 2)}%, Ex-div: {ex_div_date})")
@@ -328,7 +329,8 @@ analyze_high_yield_candidate <- function(ticker,
       current_yield,
       ex_div_date,
       days_until_ex_div,
-      universe_config
+      universe_config,
+      annual_sofr
     )
 
     # Apply quality filters (DRY - uses shared function)
@@ -486,6 +488,10 @@ batch_analyze_high_yield_stocks <- function(universe_config,
 
   log_info("Phase 2: Backtesting {nrow(candidates)} candidates...")
 
+  # Fetch SOFR rate ONCE (not per stock - this is the key optimization!)
+  annual_sofr <- fetch_sofr_rate()
+  log_info("Using SOFR rate: {round(annual_sofr * 100, 2)}%")
+
   # Analyze candidates in parallel
   # Note: quote_source already captured above, reuse it
   analysis_results <- future_map(seq_len(nrow(candidates)), function(i) {
@@ -502,7 +508,8 @@ batch_analyze_high_yield_stocks <- function(universe_config,
       current_yield = row$yield_pct,
       ex_div_date = row$ex_div_date,
       days_until_ex_div = row$days_until_ex_div,
-      universe_config = universe_config
+      universe_config = universe_config,
+      annual_sofr = annual_sofr
     )
   }, .options = furrr_options(seed = TRUE))
 

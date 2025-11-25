@@ -460,121 +460,6 @@ get_options_chain_puts <- function(ticker, current_price) {
 
 #' Process stocks in parallel for put analysis
 #'
-#' @param stock_universe Character vector of ticker symbols
-#' @param strike_threshold_pct Minimum strike as % of current price
-#' @param min_days Minimum days to expiry
-#' @param max_days Maximum days to expiry
-#' @param expiry_month Target expiry month (1-12, NULL for any)
-#' @param result_flags Named list of flags to add to results
-#' @return List of analysis results
-#' @noRd
-process_stocks_parallel_put <- function(stock_universe,
-                                        strike_threshold_pct,
-                                        min_days = NULL,
-                                        max_days = NULL,
-                                        expiry_month = NULL,
-                                        result_flags = list()) {
-  log_info("Processing stocks in parallel for put opportunities...")
-
-  # Capture quote source setting to pass to workers
-  quote_source <- get_quote_source()
-  log_info("Quote source for this analysis: {toupper(quote_source)}")
-
-  # Process in parallel
-  results <- future_map(stock_universe, function(ticker) {
-    # Ensure package is loaded in worker
-    if (!"investR" %in% loadedNamespaces()) {
-      suppressPackageStartupMessages(loadNamespace("investR"))
-    }
-
-    # Set quote source in this worker to match main process
-    options(investR.quote_source = quote_source)
-
-    # Wrap analysis to capture failure reason
-    tryCatch({
-      result <- analyze_single_stock_put(
-        ticker = ticker,
-        strike_threshold_pct = strike_threshold_pct,
-        min_days = min_days,
-        max_days = max_days,
-        expiry_month = expiry_month,
-        result_flags = result_flags,
-        return_failure_reason = TRUE
-      )
-
-      # Check if result is a failure reason or actual result
-      if (!is.null(result) && !is.null(result$failure_reason)) {
-        list(ticker = ticker, status = "failed", reason = result$failure_reason, result = NULL)
-      } else if (is.null(result)) {
-        list(ticker = ticker, status = "failed", reason = "Analysis returned NULL", result = NULL)
-      } else {
-        list(ticker = ticker, status = "success", result = result)
-      }
-    }, error = function(e) {
-      list(ticker = ticker, status = "error", error = e$message, result = NULL)
-    })
-  }, .options = furrr_options(
-    seed = TRUE,
-    packages = "investR"
-  ))
-
-  # Log summary
-  log_info("\n=== Worker Results Summary ===")
-  success_count <- sum(sapply(results, function(r) r$status == "success"))
-  failed_count <- sum(sapply(results, function(r) r$status == "failed"))
-  error_count <- sum(sapply(results, function(r) r$status == "error"))
-
-  log_info("Successful: {success_count}, Failed: {failed_count}, Errors: {error_count}")
-
-  # Log failed tickers with reasons
-  if (failed_count > 0) {
-    failed_results <- results[sapply(results, function(r) r$status == "failed")]
-    log_warn("\nFailed tickers breakdown:")
-
-    # Group by failure reason
-    failure_reasons <- list()
-    for (fail in failed_results) {
-      reason <- fail$reason %||% "Unknown"
-      if (is.null(failure_reasons[[reason]])) {
-        failure_reasons[[reason]] <- c()
-      }
-      failure_reasons[[reason]] <- c(failure_reasons[[reason]], fail$ticker)
-    }
-
-    # Log each reason group
-    for (reason in names(failure_reasons)) {
-      tickers <- failure_reasons[[reason]]
-      log_warn("  [{reason}]: {paste(tickers, collapse=', ')}")
-    }
-  }
-
-  # Log error tickers with error messages
-  if (error_count > 0) {
-    error_results <- results[sapply(results, function(r) r$status == "error")]
-    log_error("\nError tickers breakdown:")
-
-    # Group by error message
-    error_messages <- list()
-    for (err in error_results) {
-      message <- err$error %||% "Unknown error"
-      if (is.null(error_messages[[message]])) {
-        error_messages[[message]] <- c()
-      }
-      error_messages[[message]] <- c(error_messages[[message]], err$ticker)
-    }
-
-    # Log each error group
-    for (message in names(error_messages)) {
-      tickers <- error_messages[[message]]
-      log_error("  [{message}]: {paste(tickers, collapse=', ')}")
-    }
-  }
-
-  # Extract actual results
-  actual_results <- lapply(results, function(r) r$result)
-
-  return(actual_results)
-}
 
 ################################################################################
 # MAIN ANALYSIS FUNCTIONS
@@ -695,13 +580,15 @@ analyze_puts_generic <- function(
   on.exit(plan(oplan), add = TRUE)
 
   # Process stocks in parallel
-  results <- process_stocks_parallel_put(
+  results <- process_stocks_parallel_generic(
     stock_universe = stock_universe,
     strike_threshold_pct = strike_threshold_pct,
     min_days = min_days,
     max_days = max_days,
     expiry_month = expiry_month,
-    result_flags = result_flags
+    target_days = NULL,
+    result_flags = result_flags,
+    analyzer_func = analyze_single_stock_put
   )
 
   # Finalize and sort results

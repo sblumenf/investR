@@ -72,7 +72,7 @@ log_analysis_params_generic <- function(n_stocks, strategy_name,
 process_stocks_parallel_generic <- function(stock_universe, strike_threshold_pct,
                                            min_days = NULL, max_days = NULL,
                                            expiry_month = NULL, target_days = NULL,
-                                           result_flags) {
+                                           result_flags, analyzer_func) {
   log_info("Processing stocks in parallel...")
 
   # Capture quote source setting to pass to workers
@@ -93,7 +93,7 @@ process_stocks_parallel_generic <- function(stock_universe, strike_threshold_pct
     tryCatch({
       # Try to call with new parameter, fall back to old signature if it fails
       result <- tryCatch({
-        analyze_single_stock_generic(ticker, strike_threshold_pct, min_days, max_days, expiry_month, target_days, result_flags, return_failure_reason = TRUE)
+        analyzer_func(ticker, strike_threshold_pct, min_days, max_days, expiry_month, target_days, result_flags, return_failure_reason = TRUE)
       }, error = function(e) {
         # If error is about unused argument, call without the parameter (old version)
         if (grepl("unused argument", e$message)) {
@@ -362,7 +362,8 @@ analyze_covered_calls_generic <- function(stock_universe,
     max_days = max_days,
     expiry_month = expiry_month,
     target_days = target_days,
-    result_flags = result_flags
+    result_flags = result_flags,
+    analyzer_func = analyze_single_stock_generic
   )
 
   # Finalize and sort results (reuse existing function)

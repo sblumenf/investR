@@ -4,7 +4,7 @@
 \alias{analyze_monthly_etf}
 \title{Analyze a single monthly dividend ETF}
 \usage{
-analyze_monthly_etf(ticker, schedule_type = NULL)
+analyze_monthly_etf(ticker, schedule_type = NULL, annual_sofr)
 }
 \arguments{
 \item{ticker}{Character ETF ticker symbol}

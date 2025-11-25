@@ -10,7 +10,8 @@ analyze_high_yield_candidate(
   current_yield,
   ex_div_date,
   days_until_ex_div,
-  universe_config
+  universe_config,
+  annual_sofr
 )
 }
 \arguments{

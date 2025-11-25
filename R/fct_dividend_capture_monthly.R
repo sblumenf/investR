@@ -71,7 +71,7 @@ determine_schedule_pattern <- function(div_dates) {
 #' @param last_dividend_info List with last dividend date and amount
 #' @return Tibble row with aggregate statistics
 #' @noRd
-calculate_monthly_statistics <- function(trade_results, ticker, current_price, schedule_type = NULL, last_dividend_info = NULL) {
+calculate_monthly_statistics <- function(trade_results, ticker, current_price, schedule_type = NULL, last_dividend_info = NULL, annual_sofr) {
   config <- get_dividend_capture_monthly_config()
 
   # Determine schedule pattern from actual dividend dates
@@ -80,8 +80,7 @@ calculate_monthly_statistics <- function(trade_results, ticker, current_price, s
   # Use provided schedule type if available, otherwise use observed
   final_schedule <- if (!is.null(schedule_type)) schedule_type else observed_schedule
 
-  # Get SOFR rate for Sharpe calculations
-  annual_sofr <- fetch_sofr_rate()
+  # Use provided SOFR rate for Sharpe calculations
   daily_sofr <- annual_sofr / config$trading_days_per_year
   risk_free_per_trade <- daily_sofr * 100  # Convert to percentage
 
@@ -206,7 +205,7 @@ calculate_monthly_statistics <- function(trade_results, ticker, current_price, s
 #' @param schedule_type Optional schedule type from config
 #' @return Tibble row with analysis results, or NULL on error
 #' @export
-analyze_monthly_etf <- function(ticker, schedule_type = NULL) {
+analyze_monthly_etf <- function(ticker, schedule_type = NULL, annual_sofr) {
   # Fetch price history
   price_history <- fetch_price_history(
     ticker = ticker,
@@ -273,7 +272,7 @@ analyze_monthly_etf <- function(ticker, schedule_type = NULL) {
   }
 
   # Calculate statistics
-  stats <- calculate_monthly_statistics(trade_results, ticker, current_price, schedule_type, last_dividend_info)
+  stats <- calculate_monthly_statistics(trade_results, ticker, current_price, schedule_type, last_dividend_info, annual_sofr)
 
   # Apply quality filters (DRY - uses shared function)
   if (should_filter_dividend_opportunity(
@@ -307,6 +306,10 @@ batch_analyze_monthly_etfs <- function(max_workers = NULL) {
   log_info("Analyzing {length(ticker_list)} monthly dividend ETFs...")
   log_info("Using {max_workers} parallel workers")
 
+  # Fetch SOFR rate ONCE (not per ETF - this is the key optimization!)
+  annual_sofr <- fetch_sofr_rate()
+  log_info("Using SOFR rate: {round(annual_sofr * 100, 2)}%")
+
   # Setup parallel processing
   oplan <- plan(multisession, workers = max_workers)
   on.exit(plan(oplan), add = TRUE)
@@ -316,7 +319,7 @@ batch_analyze_monthly_etfs <- function(max_workers = NULL) {
     ticker_list,
     schedule_list,
     function(ticker, schedule) {
-      analyze_monthly_etf(ticker, schedule)
+      analyze_monthly_etf(ticker, schedule, annual_sofr)
     },
     .options = furrr_options(seed = TRUE)
   )

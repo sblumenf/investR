@@ -486,9 +486,3 @@ format_yahoo_date <- function(date) {
 #' Null coalescing operator
 #'
 #' @param x Value to check
-#' @param y Default value if x is NULL
-#' @return x if not NULL, otherwise y
-#' @noRd
-`%||%` <- function(x, y) {
-  if (is.null(x)) y else x
-}

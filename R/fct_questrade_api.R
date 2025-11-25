@@ -583,9 +583,3 @@ fetch_all_activities <- function(days_back = 30) {
 #' Returns default value if x is NULL
 #'
 #' @param x Value to check
-#' @param y Default value if x is NULL
-#' @return x if not NULL, otherwise y
-#' @noRd
-`%||%` <- function(x, y) {
-  if (is.null(x)) y else x
-}

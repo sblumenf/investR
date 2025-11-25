@@ -33,6 +33,7 @@ Imports:
     RQuantLib,
     R.utils,
     readr,
+    rlang,
     rvest,
     shiny (>= 1.7.4),
     stats,

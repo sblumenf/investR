@@ -10,7 +10,8 @@ calculate_early_exercise_probability(
   strike,
   days_to_expiry,
   dividend_schedule,
-  volatility = NULL
+  volatility = NULL,
+  option_type = "call"
 )
 }
 \arguments{
@@ -25,6 +26,8 @@ calculate_early_exercise_probability(
 \item{dividend_schedule}{Tibble with dividend_date, dividend_amount}
 
 \item{volatility}{Implied volatility (if NULL, estimates from history)}
+
+\item{option_type}{Type of option: "call" (default) or "put"}
 }
 \value{
 List with early exercise metrics

@@ -2,7 +2,7 @@
 % Please edit documentation in R/fct_cash_secured_puts.R
 \name{analyze_cash_secured_puts}
 \alias{analyze_cash_secured_puts}
-\title{Analyze dividend aristocrats for cash-secured put opportunities}
+\title{Process stocks in parallel for put analysis}
 \usage{
 analyze_cash_secured_puts(
   limit = NULL,
@@ -32,6 +32,9 @@ Lower % = more aggressive (deeper OTM)}
 Tibble with all opportunities sorted by annualized return
 }
 \description{
+Analyze dividend aristocrats for cash-secured put opportunities
+}
+\details{
 Analyzes dividend aristocrats for ATM/OTM cash-secured put opportunities.
 Targets high-quality dividend stocks with put options priced above fair value.
 }
