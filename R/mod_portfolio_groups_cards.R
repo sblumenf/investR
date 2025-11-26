@@ -775,6 +775,144 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
       }, ignoreInit = TRUE)
 
     }, ignoreInit = TRUE)
+
+    # Handle Convert to Legacy button clicks
+    observeEvent(input$convert_legacy_clicked, {
+      group_id <- input$convert_legacy_clicked
+
+      log_info("Convert to Legacy clicked - group_id: {group_id}")
+
+      # Get database connection
+      conn <- get_portfolio_db_connection()
+      on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+
+      # Get preview data
+      preview <- preview_legacy_conversion(conn, group_id)
+
+      if (is.null(preview) || !preview$has_events) {
+        showNotification(
+          "No projected events found to remove. Group cannot be converted.",
+          type = "warning",
+          duration = 5
+        )
+        return()
+      }
+
+      # Build preview content showing what will be deleted
+      event_list_items <- list()
+
+      if (!is.null(preview$by_type)) {
+        for (event_type in names(preview$by_type)) {
+          event_info <- preview$by_type[[event_type]]
+          event_label <- switch(event_type,
+            "option_gain" = "Profit at Expiration",
+            "dividend" = "Dividend Payments",
+            "option_premium" = "Option Premiums",
+            tools::toTitleCase(gsub("_", " ", event_type))
+          )
+
+          event_list_items <- c(event_list_items, list(
+            tags$li(
+              sprintf("%s: %d event%s totaling %s",
+                      event_label,
+                      event_info$count,
+                      if (event_info$count == 1) "" else "s",
+                      format_currency(event_info$amount))
+            )
+          ))
+        }
+      }
+
+      # Show confirmation modal with preview
+      showModal(modalDialog(
+        title = tags$span(
+          icon("archive", style = "color: #17a2b8;"),
+          " Convert to Legacy Covered Call?"
+        ),
+        tags$div(
+          tags$h5("What will happen:"),
+          tags$ul(
+            tags$li("Strategy type will change from \"Dynamic Covered Calls\" to \"Legacy Covered Call\""),
+            tags$li("All projected cash flow events will be permanently deleted"),
+            tags$li("No new projections will be generated automatically"),
+            tags$li("You will track dividends and option premiums manually as they occur")
+          ),
+          tags$hr(),
+          tags$h5("Events to be deleted:"),
+          tags$ul(
+            style = "color: #dc3545; font-weight: bold;",
+            event_list_items
+          ),
+          tags$p(
+            sprintf("Total projected amount: %s", format_currency(preview$total_amount)),
+            style = "font-weight: bold; color: #dc3545;"
+          ),
+          tags$hr(),
+          tags$div(
+            class = "alert alert-warning",
+            tags$strong("Warning: "),
+            "This action cannot be undone. The projected cash flows will be permanently deleted."
+          ),
+          tags$h5("What is \"Legacy Covered Call\" mode?"),
+          tags$p(
+            "In Legacy mode, the system will NOT automatically project future dividends or option gains. ",
+            "You will need to manually record cash flows as they actually occur (dividends received, new options sold, etc.). ",
+            "This is useful when a call option has expired worthless and the automatic projections are no longer valid.",
+            style = "color: #6c757d; font-size: 14px;"
+          )
+        ),
+        footer = tagList(
+          modalButton("Cancel"),
+          tags$button(
+            id = ns(sprintf("confirm_convert_legacy_btn_%s", group_id)),
+            type = "button",
+            class = "btn btn-info",
+            onclick = sprintf("console.log('Confirm convert to legacy: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                              group_id, ns("confirm_convert_legacy"), group_id),
+            icon("archive"),
+            " Convert to Legacy"
+          )
+        ),
+        size = "m",
+        easyClose = FALSE
+      ))
+    }, ignoreInit = TRUE)
+
+    # Handle confirmation of convert to legacy action
+    observeEvent(input$confirm_convert_legacy, {
+      group_id <- input$confirm_convert_legacy
+
+      log_info("Convert to Legacy confirmed - group_id: {group_id}")
+
+      # Get database connection
+      conn <- get_portfolio_db_connection()
+      on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+
+      # Execute conversion
+      result <- convert_to_legacy_covered_call(conn, group_id)
+
+      if (result) {
+        # Success
+        showNotification(
+          sprintf("Group successfully converted to Legacy Covered Call mode."),
+          type = "message",
+          duration = 5
+        )
+
+        # Increment card version to force re-render
+        card_version(card_version() + 1)
+      } else {
+        # Failure
+        showNotification(
+          "Failed to convert group. Please check logs for details.",
+          type = "error",
+          duration = 5
+        )
+      }
+
+      # Remove modal
+      removeModal()
+    }, ignoreInit = TRUE)
   })
 }
 

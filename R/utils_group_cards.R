@@ -482,9 +482,12 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
                      !is.na(market_data$strike_price) &&
                      !is.na(market_data$expiration_date)
 
+  # Determine if this group can be converted to legacy (any strategy with projected cash flows)
+  can_convert_to_legacy <- nrow(cash_flows %>% filter(status == "projected")) > 0
+
   action_buttons <- tags$div(
     class = "card-actions",
-    style = "margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; flex-wrap: nowrap; gap: 5px;",
+    style = "margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; row-gap: 8px;",
 
     # Add Analyze Risk button if option data exists
     if (has_option_data) {
@@ -492,12 +495,29 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
         id = risk_btn_id,
         type = "button",
         class = "btn btn-sm btn-primary",
+        style = "white-space: nowrap;",
         onclick = sprintf("console.log('Analyze Risk clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
                           group_data$group_id,
                           if (!is.null(ns)) ns("analyze_risk_group_clicked") else "analyze_risk_group_clicked",
                           group_data$group_id),
         icon("chart-line"),
-        " Analyze Risk"
+        " Risk"
+      )
+    },
+
+    # Add Convert to Legacy button if eligible
+    if (can_convert_to_legacy) {
+      tags$button(
+        id = sprintf("convert_legacy_%s", group_data$group_id),
+        type = "button",
+        class = "btn btn-sm btn-info",
+        style = "white-space: nowrap;",
+        onclick = sprintf("console.log('Convert to Legacy clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                          group_data$group_id,
+                          if (!is.null(ns)) ns("convert_legacy_clicked") else "convert_legacy_clicked",
+                          group_data$group_id),
+        icon("archive"),
+        " Legacy"
       )
     },
 
@@ -505,24 +525,27 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
       id = close_btn_id,
       type = "button",
       class = "btn btn-sm btn-warning",
+      style = "white-space: nowrap;",
       onclick = sprintf("console.log('Close clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
                         group_data$group_id, close_input_name, group_data$group_id),
       icon("times-circle"),
-      " Close Group"
+      " Close"
     ),
     tags$button(
       id = edit_btn_id,
       type = "button",
       class = "btn btn-sm btn-default",
+      style = "white-space: nowrap;",
       onclick = sprintf("console.log('Edit clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
                         group_data$group_id, edit_input_name, group_data$group_id),
       icon("edit"),
-      " Edit Members"
+      " Edit"
     ),
     tags$button(
       id = sprintf("delete_group_%s", group_data$group_id),
       type = "button",
       class = "btn btn-sm btn-danger",
+      style = "white-space: nowrap;",
       onclick = sprintf("console.log('Delete clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
                         group_data$group_id,
                         if (!is.null(ns)) ns("delete_group_clicked") else "delete_group_clicked",
@@ -673,15 +696,16 @@ create_closed_group_card <- function(group_data, pnl, members, cash_flows, activ
 
   action_buttons <- tags$div(
     class = "card-actions",
-    style = "margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; flex-wrap: nowrap; gap: 5px;",
+    style = "margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; row-gap: 8px;",
     tags$button(
       id = reopen_btn_id,
       type = "button",
       class = "btn btn-sm btn-success",
+      style = "white-space: nowrap;",
       onclick = sprintf("console.log('Reopen clicked: %s'); Shiny.setInputValue('%s', '%s', {priority: 'event'})",
                         group_data$group_id, reopen_input_name, group_data$group_id),
       icon("undo"),
-      " Reopen Group"
+      " Reopen"
     )
   )
 

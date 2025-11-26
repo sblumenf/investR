@@ -796,6 +796,222 @@ remove_group_member <- function(group_id, symbol) {
 }
 
 ################################################################################
+# CONVERSION TO LEGACY COVERED CALL
+################################################################################
+
+#' Check if a group can be converted to Legacy Covered Call
+#'
+#' Validates that a group meets criteria for conversion:
+#' - Group exists
+#' - Strategy type is "Dynamic Covered Calls"
+#' - Status is "open"
+#' - Has projected cash flows to remove
+#'
+#' @param conn DBI connection object
+#' @param group_id Group identifier
+#' @return List with valid (logical) and either reason (if invalid) or
+#'   projected_amount (if valid)
+#' @noRd
+can_convert_to_legacy <- function(conn, group_id) {
+  tryCatch({
+    # Check if group exists
+    group <- dbGetQuery(conn, "
+      SELECT group_id, strategy_type, status
+      FROM position_groups
+      WHERE group_id = ?
+    ", params = list(group_id))
+
+    if (nrow(group) == 0) {
+      return(list(valid = FALSE, reason = "Group not found"))
+    }
+
+    # Check status
+    if (group$status != "open") {
+      return(list(valid = FALSE, reason = "Group is not open"))
+    }
+
+    # Check for projected cash flows
+    projected <- dbGetQuery(conn, "
+      SELECT COUNT(*) as count, SUM(amount) as total_amount
+      FROM position_group_cash_flows
+      WHERE group_id = ? AND status = 'projected'
+    ", params = list(group_id))
+
+    if (projected$count == 0) {
+      return(list(valid = FALSE, reason = "No projected cash flows to remove"))
+    }
+
+    # Valid for conversion
+    return(list(
+      valid = TRUE,
+      projected_count = projected$count,
+      projected_amount = projected$total_amount
+    ))
+
+  }, error = function(e) {
+    log_error("Convert to Legacy: Validation error for group {group_id} - {e$message}")
+    return(list(valid = FALSE, reason = paste("Validation error:", e$message)))
+  })
+}
+
+#' Preview what will be deleted during legacy conversion
+#'
+#' Returns detailed breakdown of projected events that will be removed.
+#' Used to populate confirmation modal.
+#'
+#' @param conn DBI connection object
+#' @param group_id Group identifier
+#' @return List with event details grouped by type, or NULL on error
+#' @noRd
+preview_legacy_conversion <- function(conn, group_id) {
+  tryCatch({
+    # Get all projected events grouped by type
+    events <- dbGetQuery(conn, "
+      SELECT
+        event_type,
+        COUNT(*) as event_count,
+        SUM(amount) as total_amount
+      FROM position_group_cash_flows
+      WHERE group_id = ? AND status = 'projected'
+      GROUP BY event_type
+    ", params = list(group_id))
+
+    if (nrow(events) == 0) {
+      return(list(
+        has_events = FALSE,
+        message = "No projected events found"
+      ))
+    }
+
+    # Transform to named list for easy access
+    preview <- list(
+      has_events = TRUE,
+      total_count = sum(events$event_count),
+      total_amount = sum(events$total_amount),
+      by_type = list()
+    )
+
+    # Add each event type
+    for (i in seq_len(nrow(events))) {
+      event_type <- events$event_type[i]
+      preview$by_type[[event_type]] <- list(
+        count = events$event_count[i],
+        amount = events$total_amount[i]
+      )
+    }
+
+    log_debug("Convert to Legacy: Preview generated for group {group_id} - {preview$total_count} events, ${round(preview$total_amount, 2)}")
+
+    return(preview)
+
+  }, error = function(e) {
+    log_error("Convert to Legacy: Preview error for group {group_id} - {e$message}")
+    return(NULL)
+  })
+}
+
+#' Convert Dynamic Covered Call to Legacy Covered Call
+#'
+#' Executes the conversion in a transactional manner:
+#' 1. Validates conversion eligibility
+#' 2. Deletes all projected cash flows
+#' 3. Updates strategy_type to "Legacy Covered Call"
+#' 4. Updates timestamp
+#' 5. Logs conversion in projection_recalculations table
+#'
+#' All operations are atomic - either all succeed or all rollback.
+#'
+#' @param conn DBI connection object (optional, will create if not provided)
+#' @param group_id Group identifier
+#' @return TRUE on success, FALSE on failure
+#' @noRd
+convert_to_legacy_covered_call <- function(conn = NULL, group_id) {
+  # Connection management - use provided conn or create new one
+  should_close <- FALSE
+  if (is.null(conn)) {
+    conn <- get_portfolio_db_connection()
+    should_close <- TRUE
+  }
+
+  if (should_close) {
+    on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  }
+
+  tryCatch({
+    log_info("Convert to Legacy: Starting conversion for group {group_id}")
+
+    # Begin transaction for atomic operation
+    dbExecute(conn, "BEGIN TRANSACTION")
+
+    # Step 1: Validate conversion eligibility
+    validation <- can_convert_to_legacy(conn, group_id)
+
+    if (!validation$valid) {
+      dbExecute(conn, "ROLLBACK")
+      log_warn("Convert to Legacy: Validation failed for group {group_id} - {validation$reason}")
+      return(FALSE)
+    }
+
+    # Store count for logging
+    old_projection_count <- validation$projected_count
+
+    # Step 2: Delete all projected cash flows
+    deleted_count <- dbExecute(conn, "
+      DELETE FROM position_group_cash_flows
+      WHERE group_id = ? AND status = 'projected'
+    ", params = list(group_id))
+
+    log_info("Convert to Legacy: Deleted {deleted_count} projected cash flow(s) for group {group_id}")
+
+    # Step 3: Update strategy_type to "Legacy Covered Call"
+    update_count <- dbExecute(conn, "
+      UPDATE position_groups
+      SET strategy_type = 'Legacy Covered Call',
+          updated_at = ?
+      WHERE group_id = ?
+    ", params = list(Sys.time(), group_id))
+
+    if (update_count == 0) {
+      dbExecute(conn, "ROLLBACK")
+      log_error("Convert to Legacy: Failed to update strategy_type for group {group_id}")
+      return(FALSE)
+    }
+
+    log_info("Convert to Legacy: Updated strategy_type to 'Legacy Covered Call' for group {group_id}")
+
+    # Step 4: Log conversion in projection_recalculations table
+    # Ensure schema exists
+    initialize_income_projection_schema(conn)
+
+    recalc_id <- paste0("RECALC_", group_id, "_", format(Sys.time(), "%Y%m%d%H%M%S"))
+    recalc_data <- tibble::tibble(
+      recalc_id = recalc_id,
+      group_id = group_id,
+      recalc_date = Sys.time(),
+      reason = "converted_to_legacy",
+      old_projection_count = as.integer(old_projection_count),
+      new_projection_count = 0L
+    )
+
+    dbWriteTable(conn, "projection_recalculations", recalc_data, append = TRUE)
+
+    log_info("Convert to Legacy: Logged conversion in projection_recalculations table")
+
+    # Commit transaction - all operations succeeded
+    dbExecute(conn, "COMMIT")
+
+    log_info("Convert to Legacy: Successfully converted group {group_id} to Legacy Covered Call")
+    return(TRUE)
+
+  }, error = function(e) {
+    # Rollback on any error
+    tryCatch(dbExecute(conn, "ROLLBACK"), error = function(e2) NULL)
+    log_error("Convert to Legacy: Conversion failed for group {group_id} - {e$message}")
+    return(FALSE)
+  })
+}
+
+################################################################################
 # INTEGRITY CHECKING
 ################################################################################
 
