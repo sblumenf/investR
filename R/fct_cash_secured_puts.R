@@ -307,6 +307,7 @@ analyze_single_stock_put <- function(ticker,
                                      min_days = NULL,
                                      max_days = NULL,
                                      expiry_month = NULL,
+                                     target_days = NULL,
                                      result_flags = list(),
                                      return_failure_reason = FALSE) {
   validate_ticker(ticker)
