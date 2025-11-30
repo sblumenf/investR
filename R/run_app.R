@@ -120,6 +120,7 @@ run_app <- function(
       page_etf_covered_calls(),
       page_collar(),
       page_cash_secured_puts(),
+      page_put_calendar_spread(),
       page_etf_cash_secured_puts_yfscreen(),
       page_sp500_cash_secured_puts(),
       page_dividend_capture_weekly(),

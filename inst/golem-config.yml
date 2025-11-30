@@ -97,6 +97,31 @@ default:
       - FEPI
       - SPYI
 
+  # Put Calendar Spread strategy configuration
+  put_calendar_spread:
+    strike_pct: 0.95  # 95% = ATM (optimal for dividend aristocrats)
+    short_expiry_min_days: 20  # Front month minimum
+    short_expiry_max_days: 45  # Front month maximum
+    short_expiry_target_days: 30  # Target 30 DTE
+    long_expiry_min_days: 50  # Back month minimum
+    long_expiry_max_days: 120  # Back month maximum
+    long_expiry_target_days: 60  # Target 60 DTE (2:1 ratio)
+    min_expiry_ratio: 1.5  # Long DTE >= 1.5x short DTE
+    max_workers: 10
+    min_option_bid: 0.05  # Higher min bid for spreads
+    min_open_interest: 100  # Higher OI for liquidity
+    max_stock_price: 250
+    shares_per_contract: 100
+    days_per_year: 365
+    profit_target_conservative: 0.15  # 15% of debit
+    profit_target_standard: 0.20  # 20% of debit
+    profit_target_aggressive: 0.25  # 25% of debit
+    iv_rank_excellent: 0.20  # <20% = excellent for calendars
+    iv_rank_good: 0.30
+    iv_rank_acceptable: 0.40
+    default_top_n: 10
+    output_dir: strategies
+
   # Zero-dividend strategy configuration
   zero_dividend:
     max_workers: 10
@@ -187,6 +212,8 @@ default:
         - "Zero-Dividend Stocks"
         - "Dynamic Covered Calls"
         - "Legacy Covered Call"
+        - "S&P 500 Cash-Secured Puts"
+        - "Put Calendar Spread"
         - "Collar Strategy"
         - "Weekly Dividend Capture"
         - "Monthly Dividend Capture"
@@ -195,6 +222,7 @@ default:
       position_roles:
         - "underlying_stock"
         - "short_call"
+        - "short_put"
       match_confidence_threshold: 0.7
 
 production:

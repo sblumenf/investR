@@ -79,6 +79,15 @@ page_home <- function() {
         button_text = "Analyze Cash-Secured Puts"
       ),
       list(
+        title = "Put Calendar Spread - Dividend Aristocrats",
+        description = c(
+          "Sell near-term put, buy longer-dated put at same strike to profit from differential time decay.",
+          "Ideal for low-IV environments. Net debit trade with limited risk. Targets dividend aristocrats for stability."
+        ),
+        href = "/put-calendar-spread",
+        button_text = "Analyze Calendar Spreads"
+      ),
+      list(
         title = "Cash-Secured Puts - ETF Screener",
         description = c(
           "Screen ETFs using yfscreen filters and analyze for cash-secured put opportunities.",
