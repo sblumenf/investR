@@ -496,22 +496,30 @@ enrich_group_with_market_data <- function(group_id, members, activities, latest_
       itm_otm_amount = NULL
     )
 
-    # Find the underlying stock or cash equivalent member
+    # Find the underlying stock, cash equivalent, or short_put member
     stock_member <- members %>%
       filter(role %in% c("underlying_stock", "cash_equivalent")) %>%
       slice(1)
 
-    if (nrow(stock_member) == 0) {
+    # For CSPs: no underlying stock, need to parse ticker from put option
+    is_csp <- nrow(stock_member) == 0 && any(members$role == "short_put")
+
+    if (nrow(stock_member) == 0 && !is_csp) {
       log_debug("Market Data: No underlying stock or cash equivalent found for group {group_id}")
       return(result)
     }
 
-    # Log if this is a cash equivalent
-    if (stock_member$role[1] == "cash_equivalent") {
-      log_debug("Market Data: Processing cash equivalent {stock_member$symbol[1]} for group {group_id}")
+    # Determine stock symbol to fetch price for
+    if (is_csp) {
+      put_member <- members %>% filter(role == "short_put") %>% slice(1)
+      stock_symbol <- parse_option_symbol(put_member$symbol)
+      log_debug("Market Data: CSP detected, fetching price for underlying {stock_symbol}")
+    } else if (stock_member$role[1] == "cash_equivalent") {
+      stock_symbol <- stock_member$symbol
+      log_debug("Market Data: Processing cash equivalent {stock_symbol} for group {group_id}")
+    } else {
+      stock_symbol <- stock_member$symbol
     }
-
-    stock_symbol <- stock_member$symbol
 
     # Always fetch fresh real-time price from API for portfolio groups
     # Bypasses stale database cache that only updates when trades occur

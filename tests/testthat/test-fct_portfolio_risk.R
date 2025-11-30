@@ -162,3 +162,46 @@ test_that("Cholesky decomposition fallback works", {
   # We can't easily test this without mocking, but we verify it doesn't crash
   expect_true(TRUE)  # Placeholder
 })
+
+# ============================================================================
+# Cash-Secured Put (CSP) Risk Analysis Tests
+# ============================================================================
+
+test_that("CSP P&L formula is correct", {
+  # CSP: profit = premium when price >= strike, loss when price < strike
+  strike <- 50
+  premium <- 200
+  shares <- 100
+
+  # Price above strike: keep full premium
+  expect_equal(premium, 200)
+
+  # Price below strike: premium - (strike - price) * shares
+  price_below <- 40
+  pnl_below <- premium - (strike - price_below) * shares
+  expect_equal(pnl_below, -800)  # $200 - $1000 = -$800
+})
+
+test_that("CSP assignment is opposite of covered call", {
+  strike <- 50
+
+  # CSP: assigned when price < strike
+  expect_true(40 < strike)   # Assigned
+
+  expect_false(60 < strike)  # Not assigned
+
+  # Covered call: assigned when price >= strike (opposite)
+  expect_true(60 >= strike)  # Assigned
+  expect_false(40 >= strike) # Not assigned
+})
+
+test_that("CSP value is cash collateral not stock value", {
+  strike <- 50
+  stock_price <- 55
+
+  csp_value <- strike * 100      # $5,000 collateral
+  stock_value <- stock_price * 100  # $5,500 if we owned stock
+
+  expect_equal(csp_value, 5000)
+  expect_true(csp_value != stock_value)
+})

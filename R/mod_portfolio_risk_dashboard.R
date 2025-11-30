@@ -422,7 +422,7 @@ create_positions_risk_table <- function(positions, contributions, ns) {
   DT::datatable(
     data,
     options = list(
-      pageLength = 25,
+      pageLength = -1,  # Show all rows (was 25, hiding positions beyond row 25)
       order = list(list(7, 'desc')),  # Sort by Risk Contribution descending by default
       dom = 't',  # Only show table (no search box or pagination controls for cleaner look)
       scrollX = TRUE,

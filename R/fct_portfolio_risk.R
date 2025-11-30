@@ -35,9 +35,13 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
 
   log_info("Portfolio Risk: Starting analysis with {simulation_paths} paths")
 
-  # Get all open portfolio groups
+  # Get all open portfolio groups (excluding test data)
   all_groups <- get_all_groups()
-  open_groups <- all_groups %>% filter(status == "open")
+  open_groups <- all_groups %>%
+    filter(
+      status == "open",
+      !grepl("^TEST_", group_id)  # Exclude test groups
+    )
 
   if (nrow(open_groups) == 0) {
     log_warn("Portfolio Risk: No open positions found")
@@ -282,25 +286,36 @@ extract_portfolio_positions <- function(open_groups) {
       activities <- all_activities %>% filter(group_id == !!group_id)
 
       # Extract ticker (underlying stock symbol, cash equivalent, or parse from option)
+      # Also detect if this is a cash-secured put (short_put with no underlying stock)
       ticker <- NULL
+      is_csp <- FALSE
+
       if (nrow(members) > 0) {
-        # Try underlying stock first
-        underlying <- members %>% filter(role == "underlying_stock")
-        if (nrow(underlying) > 0) {
-          ticker <- underlying$symbol[1]
-          # Validate: if this is actually an option symbol, parse it
-          if (is_option_symbol(ticker)) {
-            ticker <- parse_option_symbol(ticker)
-          }
+        # Check for cash-secured put: has short_put but NO underlying_stock
+        has_short_put <- any(members$role == "short_put")
+        has_underlying <- any(members$role == "underlying_stock")
+        is_csp <- has_short_put && !has_underlying
+
+        if (is_csp) {
+          # CSP: parse ticker from put option symbol
+          put_member <- members %>% filter(role == "short_put")
+          ticker <- parse_option_symbol(put_member$symbol[1])
         } else {
-          # Try cash equivalent
-          cash_eq <- members %>% filter(role == "cash_equivalent")
-          if (nrow(cash_eq) > 0) {
-            ticker <- cash_eq$symbol[1]
-            log_info("Portfolio Risk: Group {group_id} is cash equivalent ({ticker})")
+          # Try underlying stock first
+          underlying <- members %>% filter(role == "underlying_stock")
+          if (nrow(underlying) > 0) {
+            ticker <- underlying$symbol[1]
+            if (is_option_symbol(ticker)) {
+              ticker <- parse_option_symbol(ticker)
+            }
           } else {
-            # No underlying or cash, try to parse from first member
-            if (nrow(members) > 0) {
+            # Try cash equivalent
+            cash_eq <- members %>% filter(role == "cash_equivalent")
+            if (nrow(cash_eq) > 0) {
+              ticker <- cash_eq$symbol[1]
+              log_info("Portfolio Risk: Group {group_id} is cash equivalent ({ticker})")
+            } else if (nrow(members) > 0) {
+              # Fallback: parse from first member
               ticker <- parse_option_symbol(members$symbol[1])
             }
           }
@@ -339,46 +354,45 @@ extract_portfolio_positions <- function(open_groups) {
         0
       }
 
-      # Calculate shares from group's stock purchase activities (single source of truth)
-      # This handles positions split across multiple groups without needing allocated_quantity
-      stock_purchases <- activities %>%
-        filter(type == "Trades", action == "Buy") %>%
-        filter(!purrr::map_lgl(symbol, is_option_symbol))
-
-      shares <- if (nrow(stock_purchases) > 0) {
-        sum(abs(stock_purchases$quantity), na.rm = TRUE)
+      # Calculate shares and value
+      if (is_csp) {
+        # CSP: value is cash collateral (strike × 100), not stock ownership
+        shares <- 100  # Standard contract size
+        current_value <- if (!is.null(strike) && !is.na(strike)) strike * 100 else 0
+        purchase_price <- strike %||% current_price  # Strike is "cost" if assigned
       } else {
-        100  # Default fallback
-      }
+        # Stock-based: existing logic
+        stock_purchases <- activities %>%
+          filter(type == "Trades", action == "Buy") %>%
+          filter(!purrr::map_lgl(symbol, is_option_symbol))
 
-      # Calculate weighted average purchase price from stock purchases
-      # This is the cost basis per share for P&L calculations
-      purchase_price <- if (nrow(stock_purchases) > 0) {
-        total_cost <- sum(abs(stock_purchases$gross_amount), na.rm = TRUE)
-        total_shares <- sum(abs(stock_purchases$quantity), na.rm = TRUE)
-        if (total_shares > 0) {
-          total_cost / total_shares
+        shares <- if (nrow(stock_purchases) > 0) {
+          sum(abs(stock_purchases$quantity), na.rm = TRUE)
         } else {
-          current_price  # Fallback if shares calculation fails
+          100  # Default fallback
         }
-      } else {
-        current_price  # Fallback if no stock purchases found
+
+        purchase_price <- if (nrow(stock_purchases) > 0) {
+          total_cost <- sum(abs(stock_purchases$gross_amount), na.rm = TRUE)
+          total_shares <- sum(abs(stock_purchases$quantity), na.rm = TRUE)
+          if (total_shares > 0) total_cost / total_shares else current_price
+        } else {
+          current_price
+        }
+
+        current_value <- shares * current_price
       }
 
       # Get symbol_id from latest_positions for sector lookup
-      stock_member <- members %>% filter(role == "underlying_stock")
       symbol_id <- NA_integer_
+      stock_member <- members %>% filter(role == "underlying_stock")
       if (nrow(stock_member) > 0) {
         stock_symbol <- stock_member$symbol[1]
         stock_position <- latest_positions %>% filter(symbol == stock_symbol)
-        if (nrow(stock_position) > 0 &&
-            !is.null(stock_position$symbol_id) &&
-            !is.na(stock_position$symbol_id[1])) {
+        if (nrow(stock_position) > 0 && !is.na(stock_position$symbol_id[1])) {
           symbol_id <- stock_position$symbol_id[1]
         }
       }
-
-      current_value <- shares * current_price
 
       # Log if position has no expiration
       if (is.null(expiration)) {
@@ -389,11 +403,12 @@ extract_portfolio_positions <- function(open_groups) {
         group_id = group_id,
         ticker = ticker,
         symbol_id = symbol_id,
+        is_csp = is_csp,  # TRUE for cash-secured puts
         current_price = current_price,
         purchase_price = purchase_price,
         strike = strike,
         expiration = expiration,
-        premium_received = abs(premium_received),  # Take absolute value
+        premium_received = abs(premium_received),
         shares = shares,
         current_value = current_value,
         days_to_expiry = if (!is.null(expiration)) as.numeric(difftime(expiration, Sys.Date(), units = "days")) else NA_real_
@@ -426,6 +441,7 @@ extract_portfolio_positions <- function(open_groups) {
       group_id = character(0),
       ticker = character(0),
       symbol_id = integer(0),
+      is_csp = logical(0),
       current_price = numeric(0),
       purchase_price = numeric(0),
       strike = numeric(0),
@@ -674,6 +690,7 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
 
     list(
       ticker = pos$ticker,
+      is_csp = pos$is_csp,
       current_price = pos$current_price,
       purchase_price = pos$purchase_price,
       strike = pos$strike,
@@ -765,21 +782,28 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
       log_return <- continuous_component + jump_component
       final_price <- param$current_price * exp(log_return)
 
-      # Calculate covered call payoff
-      # P&L is calculated from purchase_price (cost basis), not current_price
-      if (!is.null(param$strike) && !is.na(param$strike)) {
+      # Calculate P&L based on position type
+      if (param$is_csp && !is.null(param$strike) && !is.na(param$strike)) {
+        # CSP: Assignment when price < strike (opposite of covered call)
+        if (final_price < param$strike) {
+          assignment_counts[i] <- assignment_counts[i] + 1
+          total_pnl <- param$premium_received - (param$strike - final_price) * param$shares
+        } else {
+          total_pnl <- param$premium_received  # Put expires worthless
+        }
+
+      } else if (!is.null(param$strike) && !is.na(param$strike)) {
+        # Covered call: Assignment when price >= strike
         if (final_price >= param$strike) {
-          # Called away at strike price
           assignment_counts[i] <- assignment_counts[i] + 1
           stock_pnl <- (param$strike - param$purchase_price) * param$shares
         } else {
-          # Keep shares at final price
           stock_pnl <- (final_price - param$purchase_price) * param$shares
         }
-
         total_pnl <- stock_pnl + param$premium_received
+
       } else {
-        # No option, just stock
+        # Stock only
         total_pnl <- (final_price - param$purchase_price) * param$shares
       }
 
@@ -887,16 +911,26 @@ run_portfolio_stress_tests <- function(positions, correlation_matrix) {
 
       stressed_price <- pos$current_price * (1 + price_change_pct)
 
-      # Calculate P&L (using purchase_price for consistency with position-level stress tests)
-      # This shows total profit/loss from cost basis, not just incremental change from current price
-      if (!is.null(pos$strike) && !is.na(pos$strike)) {
+      # Calculate P&L (CSP vs covered call have opposite assignment triggers)
+      if (pos$is_csp && !is.null(pos$strike) && !is.na(pos$strike)) {
+        # CSP: Assignment when price < strike
+        if (stressed_price < pos$strike) {
+          position_pnl <- pos$premium_received - (pos$strike - stressed_price) * pos$shares
+        } else {
+          position_pnl <- pos$premium_received
+        }
+
+      } else if (!is.null(pos$strike) && !is.na(pos$strike)) {
+        # Covered call: Assignment when price >= strike
         if (stressed_price >= pos$strike) {
           stock_pnl <- (pos$strike - pos$purchase_price) * pos$shares
         } else {
           stock_pnl <- (stressed_price - pos$purchase_price) * pos$shares
         }
         position_pnl <- stock_pnl + pos$premium_received
+
       } else {
+        # Stock only
         position_pnl <- (stressed_price - pos$purchase_price) * pos$shares
       }
 
