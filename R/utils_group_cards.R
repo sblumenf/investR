@@ -305,14 +305,14 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
     header_secondary_parts <- c(header_secondary_parts, sprintf("%s to expiration", expiration_text))
   } else if (nrow(metrics) > 0) {
     # Fallback to days held if no expiration
-    header_secondary_parts <- c(header_secondary_parts, sprintf("%d days held", metrics$days_held))
+    header_secondary_parts <- c(header_secondary_parts, sprintf("%d days held", metrics$days_held[1]))
   }
 
   # Add annualized return if available
-  if (nrow(metrics) > 0 && !is.na(metrics$projected_annualized_return_pct)) {
+  if (nrow(metrics) > 0 && !is.na(metrics$projected_annualized_return_pct[1])) {
     header_secondary_parts <- c(
       header_secondary_parts,
-      sprintf("%s annualized", format_percentage(metrics$projected_annualized_return_pct / 100))
+      sprintf("%s annualized", format_percentage(metrics$projected_annualized_return_pct[1] / 100))
     )
   }
 
@@ -332,6 +332,12 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
   )
 
   # Quick Overview section with new structure
+  # Ensure metrics is a single row (take first if multiple)
+  if (nrow(metrics) > 1) {
+    log_warn("Group Card: Multiple metrics rows for group {group_data$group_id}, using first")
+    metrics <- metrics[1, ]
+  }
+
   quick_overview <- if (nrow(metrics) > 0) {
     # Build Position Status subsection
     position_status_rows <- list(
@@ -350,10 +356,16 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
     if (!is.null(market_data$strike_price)) {
       strike_display <- format_currency(market_data$strike_price)
       if (!is.null(market_data$itm_otm_amount)) {
+        # Determine option type based on strategy
+        option_type <- if (grepl("Cash-Secured Put", group_data$strategy_type, ignore.case = TRUE)) {
+          "put"
+        } else {
+          "call"
+        }
         itm_str <- format_strike_relationship(
           market_data$current_stock_price,
           market_data$strike_price,
-          "call"  # Assume short call for now
+          option_type
         )
         strike_display <- sprintf("%s %s", strike_display, itm_str)
       }
@@ -389,26 +401,66 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
       pull(total)
     option_premium_collected <- if (length(option_premium_collected) == 0) 0 else option_premium_collected
 
-    # Capital deployed with context
-    capital_display <- if (option_premium_collected > 0 && group_data$strategy_type != "Other") {
-      sprintf("%s (net after %s premium collected)",
-              format_currency(metrics$cost_basis),
-              format_currency(option_premium_collected))
+    # Cash-Secured Put specific: Show cash collateral instead of capital deployed
+    is_csp <- grepl("Cash-Secured Put", group_data$strategy_type, ignore.case = TRUE)
+
+    if (is_csp) {
+      # For CSP: Calculate cash collateral (strike × 100)
+      if (!is.null(market_data$strike_price)) {
+        # Get number of contracts from activities
+        num_contracts <- activities %>%
+          filter(
+            type == "Trades",
+            action == "Sell",
+            purrr::map_lgl(symbol, is_option_symbol)
+          ) %>%
+          summarise(total = sum(abs(quantity), na.rm = TRUE)) %>%
+          pull(total)
+        num_contracts <- if (length(num_contracts) == 0) 1 else num_contracts
+
+        cash_collateral <- market_data$strike_price * 100 * num_contracts
+        collateral_display <- sprintf("%s (%d shares × %s strike)",
+                                      format_currency(cash_collateral),
+                                      as.integer(num_contracts * 100),
+                                      format_currency(market_data$strike_price))
+
+        capital_rows <- c(capital_rows, list(
+          create_metric_row("Cash Collateral", collateral_display, is_primary = TRUE)
+        ))
+
+        # Premium received
+        if (option_premium_collected > 0) {
+          return_on_collateral <- option_premium_collected / cash_collateral
+          premium_display <- sprintf("%s (%s of collateral)",
+                                    format_currency(option_premium_collected),
+                                    format_percentage(return_on_collateral))
+          capital_rows <- c(capital_rows, list(
+            create_metric_row("Premium Received", premium_display)
+          ))
+        }
+      }
     } else {
-      format_currency(metrics$cost_basis)
+      # Standard covered call display
+      capital_display <- if (option_premium_collected > 0 && group_data$strategy_type != "Other") {
+        sprintf("%s (net after %s premium collected)",
+                format_currency(metrics$cost_basis[1]),
+                format_currency(option_premium_collected))
+      } else {
+        format_currency(metrics$cost_basis[1])
+      }
+
+      capital_rows <- c(capital_rows, list(
+        create_metric_row("Capital Deployed", capital_display, is_primary = TRUE)
+      ))
     }
 
-    capital_rows <- c(capital_rows, list(
-      create_metric_row("Capital Deployed", capital_display, is_primary = TRUE)
-    ))
-
     # Expected profit with clear labeling
-    if (metrics$projected_income > 0) {
-      return_pct <- metrics$projected_income / metrics$cost_basis
-      annualized_pct <- metrics$projected_annualized_return_pct / 100
+    if (metrics$projected_income[1] > 0) {
+      return_pct <- metrics$projected_income[1] / metrics$cost_basis[1]
+      annualized_pct <- metrics$projected_annualized_return_pct[1] / 100
 
       profit_display <- sprintf("%s (%s return | %s annualized)",
-                               format_currency(metrics$projected_income),
+                               format_currency(metrics$projected_income[1]),
                                format_percentage(return_pct),
                                format_percentage(annualized_pct))
 
@@ -423,8 +475,8 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
     )
 
     # Dividends collected
-    dividend_display <- if (metrics$cash_collected > 0) {
-      sprintf("%s collected", format_currency(metrics$cash_collected))
+    dividend_display <- if (metrics$cash_collected[1] > 0) {
+      sprintf("%s collected", format_currency(metrics$cash_collected[1]))
     } else {
       # Check if this is a zero-dividend stock
       if (grepl("Zero-Dividend", group_data$strategy_type, ignore.case = TRUE)) {

@@ -41,6 +41,9 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
     ))
   }
 
+  # Detect Cash-Secured Put strategy
+  is_csp <- grepl("Cash-Secured Put", strategy_type, ignore.case = TRUE)
+
   # Calculate stock purchases (excluding commissions for gross amount)
   stock_purchases <- activities %>%
     filter(type == "Trades", action == "Buy", !purrr::map_lgl(symbol, is_option_symbol)) %>%
@@ -55,8 +58,10 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
   total_commissions <- if (length(total_commissions) == 0) 0 else total_commissions
 
   # Calculate option premiums (excluding commissions for gross amount)
-  option_premiums <- activities %>%
-    filter(type == "Trades", action == "Sell", purrr::map_lgl(symbol, is_option_symbol)) %>%
+  option_sells <- activities %>%
+    filter(type == "Trades", action == "Sell", purrr::map_lgl(symbol, is_option_symbol))
+
+  option_premiums <- option_sells %>%
     summarise(total = sum(abs(gross_amount), na.rm = TRUE)) %>%
     pull(total)
   option_premiums <- if (length(option_premiums) == 0) 0 else option_premiums
@@ -69,9 +74,48 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
   total_dividends <- if (length(total_dividends) == 0) 0 else total_dividends
 
   # Apply strategy-specific accounting
+  # For CSP: cost_basis = cash collateral (strike × 100 × contracts)
   # For covered call strategies (non-"Other"): premiums reduce cost basis
   # For "Other" strategy: premiums are income (legacy behavior)
-  if (strategy_type != "Other") {
+  csp_expiration_date <- NULL  # Track expiration for CSP days_held calculation
+
+  if (is_csp) {
+    # For Cash-Secured Puts: calculate cash collateral from group members
+    # The "capital at risk" is strike × 100 × number of contracts
+    # Use members table (has complete option symbol) instead of activities (may be truncated)
+    cash_collateral <- 0
+    
+    # Get members to find the short_put with correct option symbol
+    members <- if (!is.null(group_id)) get_group_members(group_id) else tibble::tibble()
+    put_members <- members %>% filter(role == "short_put")
+    
+    if (nrow(put_members) > 0) {
+      # Get strike and expiry from members (has complete symbol)
+      option_symbol <- put_members$symbol[1]
+      option_details <- parse_option_details(option_symbol)
+      
+      if (!is.null(option_details$strike) && !is.na(option_details$strike)) {
+        # Get quantity from activities (members doesn't store quantity)
+        option_qty <- if (nrow(option_sells) > 0) sum(abs(option_sells$quantity)) else 1
+        cash_collateral <- option_details$strike * 100 * option_qty
+      }
+      
+      # Capture expiration date for days_held calculation
+      if (!is.null(option_details$expiry) && !is.na(option_details$expiry)) {
+        csp_expiration_date <- option_details$expiry
+      }
+    }
+
+    # If we couldn't parse strike from members, fall back to a reasonable estimate
+    if (cash_collateral == 0 && option_premiums > 0) {
+      log_warn("Group Metrics: Could not parse strike for CSP {group_id}, using premium as fallback")
+      cash_collateral <- option_premiums * 10  # Rough estimate
+    }
+
+    cost_basis <- cash_collateral
+    cash_collected <- option_premiums  # Premium is income for CSP
+    log_info("GROUP_METRICS_CALC: CSP detected - cash_collateral={cash_collateral}, premium={option_premiums}, expiry={csp_expiration_date}")
+  } else if (strategy_type != "Other") {
     cost_basis <- stock_purchases + total_commissions - option_premiums
     cash_collected <- total_dividends
   } else {
@@ -103,7 +147,12 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
 
   # For covered call strategies (non-"Other"), use expected hold period until option expiration
   # For "Other" strategies, no projected returns (no expected close date)
-  if (strategy_type != "Other" && nrow(projected_cash_flows) > 0) {
+  # For CSP: use option expiration date parsed from symbol
+  if (is_csp && !is.null(csp_expiration_date)) {
+    # CSP: use expiration date from option symbol
+    days_held <- as.numeric(csp_expiration_date - first_trade_date)
+    log_info("GROUP_METRICS_CALC: CSP using expiration - first={first_trade_date}, expiry={csp_expiration_date}, days={days_held}")
+  } else if (strategy_type != "Other" && nrow(projected_cash_flows) > 0) {
     # Use last projected event date as end date (option expiration)
     last_event_date <- projected_cash_flows %>%
       arrange(desc(event_date)) %>%
@@ -126,10 +175,19 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
 
   # Calculate projected annualized return
   # Formula: ((1 + return_ratio)^(365/days_held) - 1) * 100
-  # return_ratio = projected_income / cost_basis (the gain as a percentage)
+  # return_ratio = income / cost_basis (the gain as a percentage)
   # Note: "Other" strategy does NOT calculate projected returns (no expected close date)
   projected_annualized_return_pct <- if (strategy_type == "Other") {
     NA_real_  # No projected return for "Other" strategy
+  } else if (is_csp && cost_basis > 0 && days_held > 0) {
+    # For CSP: use premium collected as the income (already received)
+    # projected_income may be 0 since CSPs don't project option_gain
+    csp_income <- if (projected_income > 0) projected_income else cash_collected
+    return_ratio <- csp_income / cost_basis
+    annualization_factor <- 365 / days_held
+    result <- ((1 + return_ratio) ^ annualization_factor - 1) * 100
+    log_info("GROUP_METRICS_CALC: CSP - income={csp_income}, collateral={cost_basis}, days={days_held}, result={result}%")
+    result
   } else if (cost_basis > 0 && days_held > 0) {
     return_ratio <- projected_income / cost_basis
     annualization_factor <- 365 / days_held
