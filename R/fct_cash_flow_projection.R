@@ -71,11 +71,35 @@ get_actual_cash_flows_from_activities <- function() {
       ))
     }
 
+    # For CSP positions, get correct option symbols from members table
+    # Activities may have truncated symbols (e.g., "26Dec25P11.00" instead of "BITO26Dec25P11.50")
+    csp_groups <- result %>%
+      filter(grepl("Cash-Secured Put", strategy_type, ignore.case = TRUE)) %>%
+      pull(group_id) %>%
+      unique()
+
+    csp_member_symbols <- tibble(group_id = character(), member_symbol = character())
+    if (length(csp_groups) > 0) {
+      csp_member_symbols <- dbGetQuery(conn, paste0("
+        SELECT group_id, symbol as member_symbol
+        FROM position_group_members
+        WHERE role = 'short_put'
+          AND group_id IN ('", paste(csp_groups, collapse = "','"), "')
+      ")) %>% as_tibble()
+    }
+
     # Process each activity to determine if it's a cash flow
     cash_flows <- result %>%
+      # Join CSP member symbols to get correct option symbol
+      left_join(csp_member_symbols, by = "group_id") %>%
       mutate(
-        # Parse ticker from symbol (for options, extract underlying)
-        ticker = map_chr(symbol, function(sym) {
+        # For CSPs, use member symbol if available; otherwise use activity symbol
+        effective_symbol = case_when(
+          grepl("Cash-Secured Put", strategy_type, ignore.case = TRUE) & !is.na(member_symbol) ~ member_symbol,
+          TRUE ~ symbol
+        ),
+        # Parse ticker from effective symbol (for options, extract underlying)
+        ticker = map_chr(effective_symbol, function(sym) {
           if (is_option_symbol(sym)) {
             parsed <- parse_option_symbol(sym)
             if (!is.na(parsed)) parsed else sym
@@ -87,10 +111,11 @@ get_actual_cash_flows_from_activities <- function() {
         cash_flow_type = case_when(
           # Dividends count for "Other" and "Legacy Covered Call" strategies ONLY (named strategies use position_group_cash_flows)
           type == "Dividends" & strategy_type %in% c("Other", "Legacy Covered Call") ~ "dividend",
-          # Option premiums count for "Other" and "Legacy Covered Call" strategy groups ONLY
+          # Option premiums count for "Other", "Legacy Covered Call", and "S&P 500 Cash-Secured Puts" strategy groups
           # Named strategies (Dividend Aristocrats, Zero-Dividend Growth, etc.) should NOT have option premiums as actual cash flows
           # because the premium is already accounted for in the projected option_gain calculation
-          type %in% c("Trades", "Other") & is_option_symbol(symbol) & action == "Sell" & strategy_type %in% c("Other", "Legacy Covered Call") ~ "option_premium",
+          # CSPs show actual premium because there's no projection for premium-only strategies
+          type %in% c("Trades", "Other") & is_option_symbol(symbol) & action == "Sell" & strategy_type %in% c("Other", "Legacy Covered Call", "S&P 500 Cash-Secured Puts") ~ "option_premium",
           TRUE ~ NA_character_
         )
       ) %>%
