@@ -484,19 +484,49 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
       current_account <- extract_account_from_key(current_key)
       selected_activities <- displayed_transactions()[selected_rows(), ]
 
-      # Resolve empty option symbols using description fallback
+      # Resolve empty, NOSYMBOL, or malformed option symbols using description fallback
+      # First, try to find a pure stock ticker in the selection (excluding NOSYMBOL and malformed symbols)
       stock_ticker <- unique(selected_activities$symbol[!is.na(selected_activities$symbol) &
+                                                         selected_activities$symbol != "" &
+                                                         selected_activities$symbol != "NOSYMBOL" &
+                                                         !grepl("^\\d", selected_activities$symbol) &
                                                          !purrr::map_lgl(selected_activities$symbol, is_option_symbol)])[1]
+
+      # If no stock ticker found in symbols, try extracting from description
+      if (is.na(stock_ticker)) {
+        for (i in seq_len(nrow(selected_activities))) {
+          potential_ticker <- extract_ticker_from_description(selected_activities$description[i])
+          if (!is.na(potential_ticker)) {
+            stock_ticker <- potential_ticker
+            log_info(sprintf("Extracted ticker from description (as fallback): '%s'", stock_ticker))
+            break
+          }
+        }
+      }
+
       resolved_symbols <- list()  # Track which activities we resolved
 
       if (!is.na(stock_ticker)) {
-        for (i in which(is.na(selected_activities$symbol) | selected_activities$symbol == "")) {
+        # Identify rows that need resolution:
+        # - symbol is NA, empty string, literal "NOSYMBOL", or starts with digit (malformed)
+        needs_resolution <- which(
+          is.na(selected_activities$symbol) |
+          selected_activities$symbol == "" |
+          selected_activities$symbol == "NOSYMBOL" |
+          grepl("^\\d", selected_activities$symbol)
+        )
+
+        for (i in needs_resolution) {
           resolved <- parse_option_symbol_from_description(selected_activities$description[i], stock_ticker)
           if (!is.na(resolved)) {
-            log_info(sprintf("Resolved empty symbol from description: '%s' -> '%s'", selected_activities$description[i], resolved))
+            log_info(sprintf("Resolved symbol from description: '%s' -> '%s' (ticker: %s)",
+                             selected_activities$description[i], resolved, stock_ticker))
             selected_activities$symbol[i] <- resolved
             # Track resolution for database update
             resolved_symbols[[selected_activities$activity_id[i]]] <- resolved
+          } else {
+            log_warn(sprintf("Failed to resolve symbol from description for activity %s: '%s'",
+                             selected_activities$activity_id[i], selected_activities$description[i]))
           }
         }
 
@@ -528,6 +558,9 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
             dbDisconnect(db_conn, shutdown = TRUE)
           })
         }
+      } else {
+        log_warn(sprintf("Could not determine underlying ticker for symbol resolution. Selected %d activities but no stock ticker or extractable ticker found.",
+                         nrow(selected_activities)))
       }
 
       # POINT A: Log selected activities in detail
