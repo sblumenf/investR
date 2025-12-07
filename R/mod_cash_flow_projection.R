@@ -18,6 +18,9 @@ mod_cash_flow_projection_ui <- function(id){
     tags$p("View projected and actual cash flows across all position groups. Dividends and option premiums aggregated by month."),
     tags$hr(),
 
+    # Portfolio Return Summary
+    mod_portfolio_return_summary_ui(ns("return_summary")),
+
     # Period filter
     tags$div(
       class = "well",
@@ -81,6 +84,9 @@ mod_cash_flow_projection_server <- function(id){
         log_info("Cash Flow Projection: Database schemas initialized")
       }
     })
+
+    # Initialize Portfolio Return Summary sub-module
+    mod_portfolio_return_summary_server("return_summary", refresh_trigger = schema_initialized)
 
     # Reactive: Get date range
     date_range <- reactive({

@@ -16,6 +16,9 @@ mod_portfolio_groups_ui <- function(id){
     uiOutput(ns("refresh_status_line")),
     tags$hr(),
 
+    # Portfolio Return Summary
+    mod_portfolio_return_summary_ui(ns("return_summary")),
+
     # Alert section (for broken/incomplete groups)
     uiOutput(ns("integrity_alerts")),
 
@@ -451,6 +454,9 @@ mod_portfolio_groups_server <- function(id){
         NULL
       }
     })
+
+    # Initialize Portfolio Return Summary sub-module (refresh when positions refresh)
+    mod_portfolio_return_summary_server("return_summary", refresh_trigger = position_refresh_version)
 
     # Call dashboard sub-module (pass pre-calculated metrics)
     mod_dashboard_server("dashboard",

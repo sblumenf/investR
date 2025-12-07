@@ -14,6 +14,9 @@ mod_portfolio_risk_dashboard_ui <- function(id){
       # Page header
       titlePanel("Portfolio Risk Analysis"),
 
+      # Portfolio Return Summary
+      mod_portfolio_return_summary_ui(ns("return_summary")),
+
       # Description
       wellPanel(
         style = "background-color: #f8f9fa; border-left: 4px solid #007bff;",
@@ -81,6 +84,9 @@ mod_portfolio_risk_dashboard_ui <- function(id){
 mod_portfolio_risk_dashboard_server <- function(id){
   moduleServer( id, function(input, output, session){
     ns <- session$ns
+
+    # Initialize Portfolio Return Summary sub-module (no refresh trigger needed - calculates on load)
+    mod_portfolio_return_summary_server("return_summary")
 
     # Reactive to store analysis results
     analysis_results <- reactiveVal(NULL)
