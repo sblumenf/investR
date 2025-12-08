@@ -796,15 +796,15 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
         # Covered call: Assignment when price >= strike
         if (final_price >= param$strike) {
           assignment_counts[i] <- assignment_counts[i] + 1
-          stock_pnl <- (param$strike - param$purchase_price) * param$shares
+          stock_pnl <- (param$strike - param$current_price) * param$shares
         } else {
-          stock_pnl <- (final_price - param$purchase_price) * param$shares
+          stock_pnl <- (final_price - param$current_price) * param$shares
         }
         total_pnl <- stock_pnl + param$premium_received
 
       } else {
         # Stock only
-        total_pnl <- (final_price - param$purchase_price) * param$shares
+        total_pnl <- (final_price - param$current_price) * param$shares
       }
 
       # Store dollar P&L (not returns)
@@ -923,15 +923,15 @@ run_portfolio_stress_tests <- function(positions, correlation_matrix) {
       } else if (!is.null(pos$strike) && !is.na(pos$strike)) {
         # Covered call: Assignment when price >= strike
         if (stressed_price >= pos$strike) {
-          stock_pnl <- (pos$strike - pos$purchase_price) * pos$shares
+          stock_pnl <- (pos$strike - pos$current_price) * pos$shares
         } else {
-          stock_pnl <- (stressed_price - pos$purchase_price) * pos$shares
+          stock_pnl <- (stressed_price - pos$current_price) * pos$shares
         }
         position_pnl <- stock_pnl + pos$premium_received
 
       } else {
         # Stock only
-        position_pnl <- (stressed_price - pos$purchase_price) * pos$shares
+        position_pnl <- (stressed_price - pos$current_price) * pos$shares
       }
 
       total_pnl <- total_pnl + position_pnl
