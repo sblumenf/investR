@@ -215,7 +215,7 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
     positions = positions,
     portfolio_pnl = mc_results$portfolio_pnl,
     position_pnl_matrix = mc_results$position_pnl_matrix,
-    portfolio_var = var_drawdown, # Use drawdown VaR to properly scale risk contributions
+    portfolio_var = var_95, # Revert to var_95 so table sums to displayed Portfolio VaR
     assignment_probs = mc_results$assignment_probs
   )
 

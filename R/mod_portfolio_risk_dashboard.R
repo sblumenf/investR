@@ -401,9 +401,9 @@ create_positions_risk_table <- function(positions, contributions, ns) {
   data <- positions %>%
     left_join(contributions, by = c("group_id", "ticker")) %>%
     mutate(
-      # Add warning icon for high risk positions (>10% of portfolio risk)
+      # Add warning icon for high risk positions (>10% of portfolio risk AND >20% probability of assignment)
       ticker_display = ifelse(
-        !is.na(pct_of_portfolio_risk) & pct_of_portfolio_risk > 0.10,
+        !is.na(pct_of_portfolio_risk) & pct_of_portfolio_risk > 0.10 & (!is.na(prob_assignment) & prob_assignment > 0.20),
         paste0("⚠️ ", ticker),
         ticker
       ),
@@ -456,11 +456,6 @@ create_positions_risk_table <- function(positions, contributions, ns) {
     DT::formatStyle(
       'Expected Contribution',
       color = DT::styleInterval(c(0), c('#dc3545', '#28a745'))
-    ) %>%
-    # Highlight high risk positions (>10% of portfolio risk)
-    DT::formatStyle(
-      '% of Portfolio Risk',
-      backgroundColor = DT::styleInterval(c(0.10), c('white', '#fff3cd'))
     )
 }
 
