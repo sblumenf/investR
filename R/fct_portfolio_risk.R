@@ -200,8 +200,26 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
   # Calculate portfolio value
   total_value <- sum(positions$current_value, na.rm = TRUE)
 
+  # Calculate current unrealized P&L (to adjust VaR for risk level)
+  # We want risk level to reflect "drawdown from current", not "variance of total profit"
+  # MC P&L is "Total P&L from Purchase".
+  # Drawdown P&L = Total P&L - Current Unrealized P&L
+  current_portfolio_pnl <- positions %>%
+    mutate(pnl = case_when(
+      is_csp & current_price < strike ~ premium_received - (strike - current_price) * shares,
+      is_csp ~ premium_received,
+      !is.na(strike) & current_price >= strike ~ (strike - purchase_price) * shares + premium_received,
+      !is.na(strike) ~ (current_price - purchase_price) * shares + premium_received,
+      TRUE ~ (current_price - purchase_price) * shares
+    )) %>%
+    summarize(total = sum(pnl, na.rm = TRUE)) %>%
+    pull(total)
+
   # Determine overall risk level
-  var_pct <- abs(var_95) / total_value
+  # Use drawdown VaR (relative to current value) rather than absolute VaR (relative to purchase)
+  # This prevents profitable positions from being flagged as high risk
+  var_drawdown <- var_95 - current_portfolio_pnl
+  var_pct <- abs(var_drawdown) / total_value
   risk_level <- if (var_pct < 0.05) {
     "Low"
   } else if (var_pct < 0.10) {
@@ -796,15 +814,15 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
         # Covered call: Assignment when price >= strike
         if (final_price >= param$strike) {
           assignment_counts[i] <- assignment_counts[i] + 1
-          stock_pnl <- (param$strike - param$current_price) * param$shares
+          stock_pnl <- (param$strike - param$purchase_price) * param$shares
         } else {
-          stock_pnl <- (final_price - param$current_price) * param$shares
+          stock_pnl <- (final_price - param$purchase_price) * param$shares
         }
         total_pnl <- stock_pnl + param$premium_received
 
       } else {
         # Stock only
-        total_pnl <- (final_price - param$current_price) * param$shares
+        total_pnl <- (final_price - param$purchase_price) * param$shares
       }
 
       # Store dollar P&L (not returns)
@@ -923,15 +941,15 @@ run_portfolio_stress_tests <- function(positions, correlation_matrix) {
       } else if (!is.null(pos$strike) && !is.na(pos$strike)) {
         # Covered call: Assignment when price >= strike
         if (stressed_price >= pos$strike) {
-          stock_pnl <- (pos$strike - pos$current_price) * pos$shares
+          stock_pnl <- (pos$strike - pos$purchase_price) * pos$shares
         } else {
-          stock_pnl <- (stressed_price - pos$current_price) * pos$shares
+          stock_pnl <- (stressed_price - pos$purchase_price) * pos$shares
         }
         position_pnl <- stock_pnl + pos$premium_received
 
       } else {
         # Stock only
-        position_pnl <- (stressed_price - pos$current_price) * pos$shares
+        position_pnl <- (stressed_price - pos$purchase_price) * pos$shares
       }
 
       total_pnl <- total_pnl + position_pnl
