@@ -179,24 +179,6 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
   # CVaR 99%: Expected Shortfall at 99% confidence
   cvar_99 <- mean(mc_results$portfolio_pnl[mc_results$portfolio_pnl <= var_99])
 
-  # Calculate position contributions to risk and return
-  position_contributions <- calculate_position_contributions(
-    positions = positions,
-    portfolio_pnl = mc_results$portfolio_pnl,
-    position_pnl_matrix = mc_results$position_pnl_matrix,
-    portfolio_var = var_95,
-    assignment_probs = mc_results$assignment_probs
-  )
-
-  # Apply stress scenarios to entire portfolio
-  stress_results <- run_portfolio_stress_tests(
-    positions = positions,
-    correlation_matrix = correlation_matrix
-  )
-
-  # Calculate concentration metrics
-  concentration <- calculate_concentration(positions)
-
   # Calculate portfolio value
   total_value <- sum(positions$current_value, na.rm = TRUE)
 
@@ -227,6 +209,24 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
   } else {
     "High"
   }
+
+  # Calculate position contributions to risk and return
+  position_contributions <- calculate_position_contributions(
+    positions = positions,
+    portfolio_pnl = mc_results$portfolio_pnl,
+    position_pnl_matrix = mc_results$position_pnl_matrix,
+    portfolio_var = var_drawdown, # Use drawdown VaR to properly scale risk contributions
+    assignment_probs = mc_results$assignment_probs
+  )
+
+  # Apply stress scenarios to entire portfolio
+  stress_results <- run_portfolio_stress_tests(
+    positions = positions,
+    correlation_matrix = correlation_matrix
+  )
+
+  # Calculate concentration metrics
+  concentration <- calculate_concentration(positions)
 
   log_info("Portfolio Risk: Analysis complete. VaR 95% = {format_currency(var_95)}, Risk Level = {risk_level}")
 
