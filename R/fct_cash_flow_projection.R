@@ -54,6 +54,7 @@ get_actual_cash_flows_from_activities <- function() {
       WHERE aa.group_id IS NOT NULL
         AND aa.type IN ('Dividends', 'Trades', 'Other')
         AND COALESCE(aa.ignore_for_grouping, FALSE) = FALSE
+        AND pg.status != 'ignored'
       ORDER BY aa.trade_date ASC
     ") %>% as_tibble()
 
@@ -115,7 +116,7 @@ get_actual_cash_flows_from_activities <- function() {
           # Named strategies (Dividend Aristocrats, Zero-Dividend Growth, etc.) should NOT have option premiums as actual cash flows
           # because the premium is already accounted for in the projected option_gain calculation
           # CSPs show actual premium because there's no projection for premium-only strategies
-          type %in% c("Trades", "Other") & is_option_symbol(symbol) & action == "Sell" & strategy_type %in% c("Other", "Legacy Covered Call", "S&P 500 Cash-Secured Puts") ~ "option_premium",
+          type %in% c("Trades", "Other") & is_option_symbol(symbol) & strategy_type %in% c("Other", "Legacy Covered Call", "S&P 500 Cash-Secured Puts") ~ "option_premium",
           TRUE ~ NA_character_
         )
       ) %>%
@@ -188,6 +189,7 @@ get_projected_cash_flows_from_database <- function() {
       FROM position_group_cash_flows cf
       INNER JOIN position_groups pg ON cf.group_id = pg.group_id
       WHERE cf.status IN ('projected', 'actual')
+        AND pg.status != 'ignored'
       ORDER BY cf.event_date ASC
     ") %>% as_tibble()
 
@@ -214,11 +216,26 @@ get_projected_cash_flows_from_database <- function() {
     all_group_ids <- unique(result$group_id)
     group_members <- get_members_for_groups(all_group_ids)
 
-    # Extract ticker for each group (use underlying_stock role)
-    group_tickers <- group_members %>%
+    # Extract ticker for each group
+    # For Covered Calls: use underlying_stock symbol directly
+    # For CSPs: parse ticker from the short_put option symbol (no underlying_stock member)
+    underlying_tickers <- group_members %>%
       filter(role == "underlying_stock") %>%
-      select(group_id, ticker = symbol) %>%
-      distinct()
+      select(group_id, ticker = symbol)
+
+    # For CSPs, extract ticker from short_put option symbol
+    csp_tickers <- group_members %>%
+      filter(role == "short_put") %>%
+      mutate(ticker = purrr::map_chr(symbol, ~ {
+        parsed <- parse_option_symbol(.x)
+        if (!is.null(parsed)) parsed else NA_character_
+      })) %>%
+      filter(!is.na(ticker)) %>%
+      select(group_id, ticker)
+
+    # Combine both sources, prioritizing underlying_stock
+    group_tickers <- bind_rows(underlying_tickers, csp_tickers) %>%
+      distinct(group_id, .keep_all = TRUE)
 
     # Join tickers and format
     cash_flows <- result %>%
