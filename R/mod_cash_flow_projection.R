@@ -141,13 +141,23 @@ mod_cash_flow_projection_server <- function(id){
         ))
       }
 
+      # Summarize by ticker first (intermediate step)
+      # This collapses multiple transactions (e.g. buy/sell for rolls) into a single net amount per ticker
+      ticker_summary <- transactions %>%
+        group_by(month_label, type, ticker) %>%
+        summarise(
+          net_amount = sum(amount, na.rm = TRUE),
+          .groups = "drop"
+        ) %>%
+        filter(abs(net_amount) > 0.01) # Filter out near-zero net amounts (e.g. fully closed positions)
+
       # Recalculate aggregates from filtered transactions with ticker breakdown
-      aggregated <- transactions %>%
+      aggregated <- ticker_summary %>%
         group_by(month_label, type) %>%
         summarise(
-          total_amount = sum(amount, na.rm = TRUE),
+          total_amount = sum(net_amount, na.rm = TRUE),
           ticker_breakdown = paste(
-            paste0("  - ", ticker, ": $", format(round(amount, 2), big.mark = ",", nsmall = 2)),
+            paste0("  - ", ticker, ": $", format(round(net_amount, 2), big.mark = ",", nsmall = 2)),
             collapse = "\n"
           ),
           .groups = "drop"
