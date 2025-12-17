@@ -433,8 +433,8 @@ extract_member_components <- function(members) {
   ticker <- if (nrow(stock_members) > 0) {
     stock_members$symbol[1]
   } else {
-    # Fallback: extract from option symbol
-    option_members <- members %>% filter(role == "short_call")
+    # Fallback: extract from option symbol (supports both covered calls and CSPs)
+    option_members <- members %>% filter(role %in% c("short_call", "short_put"))
     if (nrow(option_members) > 0) {
       parse_option_symbol(option_members$symbol[1])
     } else {
@@ -442,8 +442,8 @@ extract_member_components <- function(members) {
     }
   }
 
-  # Get option details if short call exists
-  option_members <- members %>% filter(role == "short_call")
+  # Get option details if short call or short put exists (supports CSPs)
+  option_members <- members %>% filter(role %in% c("short_call", "short_put"))
   if (nrow(option_members) > 0) {
     option_details <- parse_option_details(option_members$symbol[1])
     list(

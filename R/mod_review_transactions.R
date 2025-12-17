@@ -582,12 +582,23 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
       # Build complete members list from selected activities with proper role assignment
       # Group by symbol and determine predominant action (net quantity direction)
       # Calculate net quantities and assign roles
-      net_quantities <- selected_activities %>%
+      # SAFETY: Filter out activities with empty/NA symbols that couldn't be recovered
+      valid_activities <- selected_activities %>%
+        filter(!is.na(symbol), symbol != "", symbol != "NOSYMBOL")
+
+      if (nrow(valid_activities) < nrow(selected_activities)) {
+        skipped_count <- nrow(selected_activities) - nrow(valid_activities)
+        log_warn(sprintf("Group Creation: Skipped %d activities with unrecoverable empty symbols", skipped_count))
+      }
+
+      net_quantities <- valid_activities %>%
         group_by(symbol) %>%
         summarize(
           # Calculate net position - quantity is already signed correctly in database
           # Positive = bought (long), Negative = sold (short)
           net_quantity = sum(quantity, na.rm = TRUE),
+          # Preserve description for any final fallback symbol extraction
+          description = first(description),
           .groups = "drop"
         )
 

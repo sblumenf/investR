@@ -63,9 +63,12 @@ test_that("create_positions_risk_table handles empty data", {
     group_id = character(),
     ticker = character(),
     expected_contribution = numeric(),
+    prob_assignment = numeric(),
     risk_contribution = numeric(),
     pct_of_portfolio_risk = numeric(),
-    risk_return_ratio = numeric()
+    risk_return_ratio = numeric(),
+    portfolio_correlation = numeric(),
+    correlation_impact = character()
   )
 
   ns <- shiny::NS("test")
@@ -90,23 +93,32 @@ test_that("create_positions_risk_table creates proper structure", {
     group_id = c(1, 2),
     ticker = c("AAPL", "MSFT"),
     expected_contribution = c(250, 400),
+    prob_assignment = c(0.15, 0.25),
     risk_contribution = c(150, 200),
     pct_of_portfolio_risk = c(0.08, 0.12),
-    risk_return_ratio = c(0.6, 0.5)
+    risk_return_ratio = c(0.6, 0.5),
+    portfolio_correlation = c(0.65, 0.45),
+    correlation_impact = c("neutral", "neutral")
   )
 
   ns <- shiny::NS("test")
 
   table <- create_positions_risk_table(positions, contributions, ns)
-  table_html <- as.character(table)
 
-  # Check for table structure
-  expect_true(grepl("<table", table_html))
-  expect_true(grepl("AAPL", table_html))
-  expect_true(grepl("MSFT", table_html))
-  expect_true(grepl("Expected Contribution", table_html))
-  expect_true(grepl("Risk Contribution", table_html))
-  expect_true(grepl("Component VaR", table_html))
+  # DT datatable returns an htmlwidget - check it's created properly
+  expect_s3_class(table, "datatables")
+
+  # Get underlying data
+  table_data <- table$x$data
+
+  # Check column names
+  expect_true("Ticker" %in% names(table_data))
+  expect_true("Expected Contribution" %in% names(table_data))
+  expect_true("Risk Contribution" %in% names(table_data))
+
+  # Check data values
+  expect_true(any(grepl("AAPL", table_data$Ticker)))
+  expect_true(any(grepl("MSFT", table_data$Ticker)))
 })
 
 test_that("create_positions_risk_table highlights high risk positions", {
@@ -123,18 +135,29 @@ test_that("create_positions_risk_table highlights high risk positions", {
     group_id = 1,
     ticker = "AAPL",
     expected_contribution = 500,
+    prob_assignment = 0.20,
     risk_contribution = 1000,
     pct_of_portfolio_risk = 0.15,  # >10%, should be highlighted
-    risk_return_ratio = 2.0
+    risk_return_ratio = 2.0,
+    portfolio_correlation = 0.75,
+    correlation_impact = "amplifying"
   )
 
   ns <- shiny::NS("test")
   table <- create_positions_risk_table(positions, contributions, ns)
-  table_html <- as.character(table)
 
-  # Should have warning color (this is the key indicator)
-  expect_true(grepl("fff3cd", table_html))  # warning background color
-  expect_true(grepl("AAPL", table_html))  # ticker present
+  # DT datatable returns an htmlwidget
+  expect_s3_class(table, "datatables")
+
+  # Check table was created with data
+  table_data <- table$x$data
+  expect_true(any(grepl("AAPL", table_data$Ticker)))
+
+  # Check that high risk position has warning icon (⚠️)
+  expect_true(any(grepl("\u26A0", table_data$Ticker)))  # Warning icon in Unicode
+
+  # Check correlation impact shows as amplifying
+  expect_true(any(grepl("Amplifying", table_data$Correlation)))
 })
 
 test_that("create_stress_test_table creates proper structure", {
@@ -267,14 +290,25 @@ test_that("dashboard content includes regime card when present", {
       group_id = 1,
       ticker = "AAPL",
       expected_contribution = 500,
+      prob_assignment = 0.15,
       risk_contribution = 1000,
       pct_of_portfolio_risk = 0.08,
-      risk_return_ratio = 2.0
+      risk_return_ratio = 2.0,
+      portfolio_correlation = 0.55,
+      correlation_impact = "neutral"
     ),
     stress_results = tibble::tibble(
       scenario = "2008 Crisis",
       portfolio_pnl = -5000,
       portfolio_return_pct = -0.25
+    ),
+    stress_position_attribution = list(
+      financial_crisis_2008 = tibble::tibble(
+        group_id = 1,
+        ticker = "AAPL",
+        position_pnl = -5000,
+        pct_of_scenario_impact = 1.0
+      )
     ),
     concentration = list(
       by_ticker = tibble::tibble(
@@ -289,6 +323,33 @@ test_that("dashboard content includes regime card when present", {
         pct_of_portfolio = 0.20,
         n_positions = 1
       ),
+      alerts = character()
+    ),
+    risk_reduction_levers = tibble::tibble(
+      group_id = 1,
+      ticker = "AAPL",
+      days_to_expiry = 30,
+      current_value = 10000,
+      risk_reduction = 500,
+      risk_reduction_pct = 0.20,
+      expected_return_lost = 100,
+      var_without_position = -2000,
+      suggested_action = "Roll"
+    ),
+    assignment_clustering = list(
+      calendar = tibble::tibble(
+        expiration_week = as.Date("2025-12-29"),
+        n_positions = 1,
+        tickers = "AAPL",
+        total_value = 10000,
+        avg_assignment_prob = 0.15,
+        max_assignment_prob = 0.15,
+        value_at_assignment_risk = 1500,
+        pct_of_portfolio = 0.03,
+        risk_level = "low"
+      ),
+      high_risk_weeks = tibble::tibble(),
+      clustering_score = 0.03,
       alerts = character()
     ),
     regime = list(
@@ -335,15 +396,19 @@ test_that("dashboard handles NULL regime gracefully", {
       group_id = 1,
       ticker = "AAPL",
       expected_contribution = 500,
+      prob_assignment = 0.15,
       risk_contribution = 1000,
       pct_of_portfolio_risk = 0.08,
-      risk_return_ratio = 2.0
+      risk_return_ratio = 2.0,
+      portfolio_correlation = 0.55,
+      correlation_impact = "neutral"
     ),
     stress_results = tibble::tibble(
       scenario = "2008 Crisis",
       portfolio_pnl = -5000,
       portfolio_return_pct = -0.25
     ),
+    stress_position_attribution = list(),
     concentration = list(
       by_ticker = tibble::tibble(
         ticker = "AAPL",
@@ -357,6 +422,13 @@ test_that("dashboard handles NULL regime gracefully", {
         pct_of_portfolio = 0.20,
         n_positions = 1
       ),
+      alerts = character()
+    ),
+    risk_reduction_levers = tibble::tibble(),
+    assignment_clustering = list(
+      calendar = tibble::tibble(),
+      high_risk_weeks = tibble::tibble(),
+      clustering_score = 0,
       alerts = character()
     ),
     regime = NULL  # No regime
