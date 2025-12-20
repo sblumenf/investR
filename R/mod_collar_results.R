@@ -97,34 +97,66 @@ mod_collar_results_server <- function(id, results_data){
       tags$div(class = "opportunity-cards-container", cards)
     })
 
-    # Setup risk analysis modules for each card
-    observe({
-      req(results_data())
-      results <- results_data()
+    # Track which row's risk button was clicked (single observer pattern)
+    # Use a counter to ensure re-triggers work even for the same row
+    trigger_counter <- reactiveVal(0)
+    clicked_row <- reactiveVal(NULL)
 
-      lapply(seq_len(nrow(results)), function(i) {
-        row <- results[i, ]
-        risk_id <- paste0("risk_", i)
-
-        # Create reactive trigger for this card's button
-        trigger <- reactive({
-          input[[paste0("analyze_risk_btn_", i)]]
-        })
-
-        # Call risk analysis module
-        mod_position_risk_server(
-          id = risk_id,
-          trigger = trigger,
-          ticker = reactive(row$ticker),
-          strike = reactive(row$strike),
-          expiration = reactive(row$expiration),
-          premium_received = reactive(row$premium_received),
-          current_price = reactive(row$current_price),
-          is_aristocrat = reactive(FALSE),  # Collar strategy
-          simulation_paths = reactive(10000)
-        )
+    # Create a SINGLE set of button observers at module init (not inside observe)
+    # These watch buttons 1-50 (reasonable max) - only active ones will ever fire
+    lapply(1:50, function(i) {
+      local({
+        idx <- i
+        btn_id <- paste0("analyze_risk_btn_", idx)
+        observeEvent(input[[btn_id]], {
+          clicked_row(idx)
+          trigger_counter(isolate(trigger_counter()) + 1)
+        }, ignoreInit = TRUE)
       })
     })
+
+    # Single risk analysis module instance
+    mod_position_risk_server(
+      id = "risk_analysis",
+      trigger = reactive({ trigger_counter() }),
+      ticker = reactive({
+        req(clicked_row(), results_data())
+        idx <- clicked_row()
+        if (!is.null(idx) && idx <= nrow(results_data())) {
+          results_data()$ticker[idx]
+        } else NULL
+      }),
+      strike = reactive({
+        req(clicked_row(), results_data())
+        idx <- clicked_row()
+        if (!is.null(idx) && idx <= nrow(results_data())) {
+          results_data()$strike[idx]
+        } else NULL
+      }),
+      expiration = reactive({
+        req(clicked_row(), results_data())
+        idx <- clicked_row()
+        if (!is.null(idx) && idx <= nrow(results_data())) {
+          results_data()$expiration[idx]
+        } else NULL
+      }),
+      premium_received = reactive({
+        req(clicked_row(), results_data())
+        idx <- clicked_row()
+        if (!is.null(idx) && idx <= nrow(results_data())) {
+          results_data()$premium_received[idx]
+        } else NULL
+      }),
+      current_price = reactive({
+        req(clicked_row(), results_data())
+        idx <- clicked_row()
+        if (!is.null(idx) && idx <= nrow(results_data())) {
+          results_data()$current_price[idx]
+        } else NULL
+      }),
+      is_aristocrat = reactive(FALSE),  # Collar strategy
+      simulation_paths = reactive(10000)
+    )
   })
 }
 
