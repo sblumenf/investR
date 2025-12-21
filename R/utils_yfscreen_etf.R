@@ -8,6 +8,70 @@
 #' @importFrom dplyr arrange desc slice_head %>%
 NULL
 
+#' Check if an ETF is a leveraged or inverse product
+#'
+#' Identifies leveraged (2x, 3x) and inverse (-1x, -2x, -3x) ETFs by analyzing
+#' their names for common patterns used by issuers like ProShares, Direxion,
+#' GraniteShares, etc.
+#'
+#' @param etf_name Character string containing the ETF's short name or long name
+#' @return Logical TRUE if the ETF appears to be leveraged or inverse, FALSE otherwise
+#' @noRd
+#' @examples
+#' \dontrun{
+#'   is_leveraged_or_inverse_etf("ProShares UltraPro QQQ")
+#'   # TRUE
+#'   is_leveraged_or_inverse_etf("SPDR S&P 500")
+#'   # FALSE
+#'   is_leveraged_or_inverse_etf("Direxion Daily Semiconductor Bull 3X")
+#'   # TRUE
+#' }
+is_leveraged_or_inverse_etf <- function(etf_name) {
+  if (is.na(etf_name) || is.null(etf_name) || etf_name == "") {
+    return(FALSE)
+  }
+
+  # Convert to lowercase for case-insensitive matching
+  name_lower <- tolower(etf_name)
+
+  # First, check for legitimate "ultra-short" bond funds (NOT leveraged)
+  # These are short-duration bond funds, not leveraged products
+  if (grepl("ultra-short|ultra short", name_lower)) {
+    return(FALSE)
+  }
+
+  # Patterns that indicate leveraged/inverse ETFs
+  # Note: "Short" alone is ambiguous (could be "Short-Term Bond")
+  # So we check for "Short" with leveraged issuer context
+  leveraged_patterns <- c(
+    "ultrapro",        # ProShares UltraPro (3x leveraged)
+    "ultrashort",      # ProShares UltraShort (2x inverse) - no hyphen version
+    "proshares ultra", # ProShares Ultra (2x leveraged)
+    "proshares short", # ProShares Short (1x inverse)
+    "2x",              # 2X leveraged
+    "3x",              # 3X leveraged
+    "-1x",             # -1X inverse
+    "-2x",             # -2X inverse
+    "-3x",             # -3X inverse
+    "bull 2x",         # Direxion Bull 2X
+    "bull 3x",         # Direxion Bull 3X
+    "bear",            # Bear funds are inverse
+    "inverse",         # Explicit inverse
+    "daily.*bull",     # Direxion Daily Bull
+    "daily.*bear",     # Direxion Daily Bear
+    "direxion daily"   # Most Direxion Daily products are leveraged
+  )
+
+  # Check if any pattern matches
+  for (pattern in leveraged_patterns) {
+    if (grepl(pattern, name_lower, perl = TRUE)) {
+      return(TRUE)
+    }
+  }
+
+  return(FALSE)
+}
+
 #' Build yfscreen filter list from ETF screening parameters
 #'
 #' Converts user-friendly parameter values into the nested list format
@@ -200,6 +264,19 @@ fetch_yfscreen_etfs <- function(dividend_yield_min = NULL,
       data <- data[zero_div_mask, ]
 
       log_info("Filtered to zero-dividend ETFs: {nrow(data)} from {original_count}")
+    }
+
+    # Filter out leveraged and inverse ETFs
+    if ("shortName" %in% names(data)) {
+      original_count <- nrow(data)
+      leveraged_mask <- sapply(data$shortName, is_leveraged_or_inverse_etf)
+      data <- data[!leveraged_mask, ]
+      excluded_count <- original_count - nrow(data)
+      if (excluded_count > 0) {
+        log_info("Excluded {excluded_count} leveraged/inverse ETFs: {nrow(data)} remaining from {original_count}")
+      }
+    } else {
+      log_warn("shortName column not found, cannot filter leveraged/inverse ETFs")
     }
 
     # Sort by average volume (descending) if volume column exists
