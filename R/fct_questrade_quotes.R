@@ -99,9 +99,10 @@ get_fallback_summary <- function() {
 #'
 #' @param ticker Character ticker symbol
 #' @param auth List with access_token and api_server from get_questrade_auth()
+#' @param retry_on_401 Logical, whether to retry once on 401 error (default TRUE)
 #' @return Integer symbol ID, or NULL on failure
 #' @noRd
-search_questrade_symbol <- function(ticker, auth) {
+search_questrade_symbol <- function(ticker, auth, retry_on_401 = TRUE) {
   if (is.null(auth)) {
     log_error("Questrade Quotes: No authentication provided for symbol search")
     return(NULL)
@@ -116,6 +117,40 @@ search_questrade_symbol <- function(ticker, auth) {
       query = list(prefix = ticker),
       add_headers(Authorization = paste("Bearer", auth$access_token))
     )
+
+    # Handle 401 Unauthorized - token is invalid despite expiry check
+    if (status_code(response) == 401 && retry_on_401) {
+      log_warn("Questrade Quotes: Received 401 Unauthorized for symbol search, cached token is invalid")
+      log_info("Questrade Quotes: Preserving refresh token and forcing re-authentication...")
+
+      # CRITICAL: Read and preserve refresh_token BEFORE deleting cache
+      cached_token <- read_token_file()
+      preserved_refresh_token <- if (!is.null(cached_token)) {
+        cached_token$refresh_token
+      } else {
+        NULL
+      }
+
+      # Delete the stale cached token
+      delete_token_file(reason = "401 error on symbol search - access token invalid")
+
+      # Get fresh authentication using preserved refresh token
+      if (!is.null(preserved_refresh_token)) {
+        log_info("Questrade Quotes: Using preserved refresh token (starts with {substring(preserved_refresh_token, 1, 10)}...)")
+      }
+
+      fresh_auth <- get_questrade_auth(override_refresh_token = preserved_refresh_token)
+
+      if (is.null(fresh_auth)) {
+        log_error("Questrade Quotes: Failed to refresh authentication after 401")
+        return(NULL)
+      }
+
+      log_info("Questrade Quotes: Retrying symbol search with fresh token for '{ticker}'")
+
+      # Retry once with fresh token (retry_on_401 = FALSE prevents infinite loop)
+      return(search_questrade_symbol(ticker, fresh_auth, retry_on_401 = FALSE))
+    }
 
     if (status_code(response) != 200) {
       log_error("Questrade Quotes: Symbol search failed for '{ticker}' with status {status_code(response)}")
@@ -160,9 +195,10 @@ search_questrade_symbol <- function(ticker, auth) {
 #'
 #' @param symbol_id Integer Questrade symbol ID
 #' @param auth List with access_token and api_server from get_questrade_auth()
+#' @param retry_on_401 Logical, whether to retry once on 401 error (default TRUE)
 #' @return List with quote data, or NULL on failure
 #' @noRd
-fetch_questrade_quote_raw <- function(symbol_id, auth) {
+fetch_questrade_quote_raw <- function(symbol_id, auth, retry_on_401 = TRUE) {
   if (is.null(auth)) {
     log_error("Questrade Quotes: No authentication provided for quote fetch")
     return(NULL)
@@ -176,6 +212,40 @@ fetch_questrade_quote_raw <- function(symbol_id, auth) {
       url,
       add_headers(Authorization = paste("Bearer", auth$access_token))
     )
+
+    # Handle 401 Unauthorized - token is invalid despite expiry check
+    if (status_code(response) == 401 && retry_on_401) {
+      log_warn("Questrade Quotes: Received 401 Unauthorized for quote fetch, cached token is invalid")
+      log_info("Questrade Quotes: Preserving refresh token and forcing re-authentication...")
+
+      # CRITICAL: Read and preserve refresh_token BEFORE deleting cache
+      cached_token <- read_token_file()
+      preserved_refresh_token <- if (!is.null(cached_token)) {
+        cached_token$refresh_token
+      } else {
+        NULL
+      }
+
+      # Delete the stale cached token
+      delete_token_file(reason = "401 error on quote fetch - access token invalid")
+
+      # Get fresh authentication using preserved refresh token
+      if (!is.null(preserved_refresh_token)) {
+        log_info("Questrade Quotes: Using preserved refresh token (starts with {substring(preserved_refresh_token, 1, 10)}...)")
+      }
+
+      fresh_auth <- get_questrade_auth(override_refresh_token = preserved_refresh_token)
+
+      if (is.null(fresh_auth)) {
+        log_error("Questrade Quotes: Failed to refresh authentication after 401")
+        return(NULL)
+      }
+
+      log_info("Questrade Quotes: Retrying quote fetch with fresh token for symbolId {symbol_id}")
+
+      # Retry once with fresh token (retry_on_401 = FALSE prevents infinite loop)
+      return(fetch_questrade_quote_raw(symbol_id, fresh_auth, retry_on_401 = FALSE))
+    }
 
     if (status_code(response) != 200) {
       log_error("Questrade Quotes: Quote fetch failed for symbolId {symbol_id} with status {status_code(response)}")

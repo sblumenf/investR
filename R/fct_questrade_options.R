@@ -107,9 +107,10 @@ fetch_questrade_options_chain <- function(ticker, expiration = NULL) {
 #'
 #' @param symbol_id Integer Questrade symbol ID
 #' @param auth List with access_token and api_server from get_questrade_auth()
+#' @param retry_on_401 Logical, whether to retry once on 401 error (default TRUE)
 #' @return List with options structure data, or NULL on failure
 #' @noRd
-fetch_questrade_options_structure <- function(symbol_id, auth) {
+fetch_questrade_options_structure <- function(symbol_id, auth, retry_on_401 = TRUE) {
   if (is.null(auth)) {
     log_error("Questrade Options: No authentication provided for structure fetch")
     return(NULL)
@@ -123,6 +124,40 @@ fetch_questrade_options_structure <- function(symbol_id, auth) {
       url,
       add_headers(Authorization = paste("Bearer", auth$access_token))
     )
+
+    # Handle 401 Unauthorized - token is invalid despite expiry check
+    if (status_code(response) == 401 && retry_on_401) {
+      log_warn("Questrade Options: Received 401 Unauthorized for structure fetch, cached token is invalid")
+      log_info("Questrade Options: Preserving refresh token and forcing re-authentication...")
+
+      # CRITICAL: Read and preserve refresh_token BEFORE deleting cache
+      cached_token <- read_token_file()
+      preserved_refresh_token <- if (!is.null(cached_token)) {
+        cached_token$refresh_token
+      } else {
+        NULL
+      }
+
+      # Delete the stale cached token
+      delete_token_file(reason = "401 error on options structure fetch - access token invalid")
+
+      # Get fresh authentication using preserved refresh token
+      if (!is.null(preserved_refresh_token)) {
+        log_info("Questrade Options: Using preserved refresh token (starts with {substring(preserved_refresh_token, 1, 10)}...)")
+      }
+
+      fresh_auth <- get_questrade_auth(override_refresh_token = preserved_refresh_token)
+
+      if (is.null(fresh_auth)) {
+        log_error("Questrade Options: Failed to refresh authentication after 401")
+        return(NULL)
+      }
+
+      log_info("Questrade Options: Retrying structure fetch with fresh token for symbolId {symbol_id}")
+
+      # Retry once with fresh token (retry_on_401 = FALSE prevents infinite loop)
+      return(fetch_questrade_options_structure(symbol_id, fresh_auth, retry_on_401 = FALSE))
+    }
 
     if (status_code(response) != 200) {
       log_error("Questrade Options: Structure fetch failed for symbolId {symbol_id} with status {status_code(response)}")
@@ -171,9 +206,10 @@ fetch_questrade_options_structure <- function(symbol_id, auth) {
 #' @param option_ids Integer vector of Questrade option symbol IDs
 #' @param auth List with access_token and api_server from get_questrade_auth()
 #' @param batch_size Integer, number of option IDs to fetch per request (default: 100)
+#' @param retry_on_401 Logical, whether to retry once on 401 error (default TRUE)
 #' @return List of option quote data, or NULL on failure
 #' @noRd
-fetch_questrade_option_quotes <- function(option_ids, auth, batch_size = 100) {
+fetch_questrade_option_quotes <- function(option_ids, auth, batch_size = 100, retry_on_401 = TRUE) {
   if (is.null(auth)) {
     log_error("Questrade Options: No authentication provided for quotes fetch")
     return(NULL)
@@ -207,6 +243,40 @@ fetch_questrade_option_quotes <- function(option_ids, auth, batch_size = 100) {
         body = list(optionIds = batch_ids),
         encode = "json"
       )
+
+      # Handle 401 Unauthorized - token is invalid despite expiry check
+      if (status_code(response) == 401 && retry_on_401) {
+        log_warn("Questrade Options: Received 401 Unauthorized for quotes fetch, cached token is invalid")
+        log_info("Questrade Options: Preserving refresh token and forcing re-authentication...")
+
+        # CRITICAL: Read and preserve refresh_token BEFORE deleting cache
+        cached_token <- read_token_file()
+        preserved_refresh_token <- if (!is.null(cached_token)) {
+          cached_token$refresh_token
+        } else {
+          NULL
+        }
+
+        # Delete the stale cached token
+        delete_token_file(reason = "401 error on option quotes fetch - access token invalid")
+
+        # Get fresh authentication using preserved refresh token
+        if (!is.null(preserved_refresh_token)) {
+          log_info("Questrade Options: Using preserved refresh token (starts with {substring(preserved_refresh_token, 1, 10)}...)")
+        }
+
+        fresh_auth <- get_questrade_auth(override_refresh_token = preserved_refresh_token)
+
+        if (is.null(fresh_auth)) {
+          log_error("Questrade Options: Failed to refresh authentication after 401")
+          return(NULL)
+        }
+
+        log_info("Questrade Options: Retrying quotes fetch with fresh token")
+
+        # Retry entire function with fresh token (retry_on_401 = FALSE prevents infinite loop)
+        return(fetch_questrade_option_quotes(option_ids, fresh_auth, batch_size, retry_on_401 = FALSE))
+      }
 
       if (status_code(response) != 200) {
         # Log the actual error response for debugging
