@@ -64,6 +64,9 @@ extract_ticker_from_description <- function(description) {
     return(NA_character_)
   }
 
+  # Normalize multiple spaces to single space (Questrade sometimes has extra spaces)
+  description <- stringr::str_squish(description)
+
   # Pattern: (CALL|PUT) followed by whitespace, then ticker (letters/dots), then whitespace and date
   # Examples:
   # "CALL PYPL 12/19/25 55..."    -> PYPL
