@@ -110,7 +110,7 @@ default:
     max_workers: 10
     min_option_bid: 0.05  # Higher min bid for spreads
     min_open_interest: 100  # Higher OI for liquidity
-    max_stock_price: 250
+    max_stock_price: 300
     shares_per_contract: 100
     days_per_year: 365
     profit_target_conservative: 0.15  # 15% of debit
@@ -130,7 +130,7 @@ default:
     max_days: 120  # Maximum days to expiry
     min_option_bid: 0.01
     min_open_interest: 10  # Minimum 10 contracts for liquidity
-    max_stock_price: 250  # Maximum stock price filter
+    max_stock_price: 300  # Maximum stock price filter
     shares_per_contract: 100
     history_years: 5
     cache_ttl_days: 30

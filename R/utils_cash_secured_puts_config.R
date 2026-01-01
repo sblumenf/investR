@@ -40,7 +40,7 @@ CASH_SECURED_PUTS_CONFIG <- list(
   # Data Validation
   min_option_bid = 0.01,         # Filter out low-premium options
   min_open_interest = 10,        # Liquidity filter
-  max_stock_price = 250,         # Skip very expensive stocks
+  max_stock_price = 300,         # Skip very expensive stocks
 
   # Financial Constants
   shares_per_contract = 100,     # Standard option contract size
