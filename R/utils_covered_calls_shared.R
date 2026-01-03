@@ -208,7 +208,7 @@ analyze_single_stock_generic <- function(ticker,
   log_info("{ticker}: Price=${sprintf('%.2f', stock_data$current_price)}")
 
   # Filter by maximum stock price
-  max_price <- tryCatch(CONFIG$max_stock_price, error = function(e) 250)
+  max_price <- tryCatch(CONFIG$max_stock_price, error = function(e) 300)
   if (stock_data$current_price > max_price) {
     reason <- sprintf("Price $%.2f exceeds max $%.0f", stock_data$current_price, max_price)
     log_warn("{ticker}: FILTERED OUT - {reason}")
