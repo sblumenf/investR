@@ -99,13 +99,13 @@ initialize_activities_schema <- function(conn) {
         ALTER TABLE account_activities
         ADD COLUMN IF NOT EXISTS ignore_for_grouping BOOLEAN DEFAULT FALSE
       ")
-      log_info("Activities DB: Added ignore_for_grouping column (migration)")
+      log_debug("Activities DB: Added ignore_for_grouping column (migration)")
     }, error = function(e) {
       # Column might already exist in older databases, that's okay
       log_debug("Activities DB: ignore_for_grouping column already exists")
     })
 
-    log_info("Activities DB: Schema initialized successfully")
+    log_debug("Activities DB: Schema initialized successfully")
     return(TRUE)
   }, error = function(e) {
     log_error("Activities DB: Schema initialization failed - {e$message}")

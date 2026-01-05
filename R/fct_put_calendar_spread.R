@@ -543,9 +543,10 @@ analyze_calendar_spread_generic <- function(
     .progress = TRUE
   )
 
-  # Combine results
+  # Combine results (remove NULLs and non-dataframe failures)
   results_df <- results %>%
     compact() %>%
+    keep(~ is.data.frame(.x)) %>%
     bind_rows()
 
   # Sort by opportunity score (descending), then annualized return

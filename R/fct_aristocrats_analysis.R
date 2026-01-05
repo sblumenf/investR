@@ -611,8 +611,11 @@ setup_parallel_processing <- function(max_workers) {
 #' @importFrom dplyr bind_rows arrange desc
 #' @importFrom tibble tibble
 finalize_results <- function(results) {
+  # Filter out failure_reason lists (keep only tibble/data.frame results)
+  # Failures are already logged in worker summary, don't need them in final table
   results_df <- results %>%
     compact() %>%
+    keep(~ is.data.frame(.x)) %>%
     bind_rows()
 
   # If no results, return properly structured empty tibble with expected schema

@@ -325,9 +325,10 @@ batch_analyze_weekly_etfs <- function(max_workers = NULL, force_refresh = FALSE)
     })
   }, .options = furrr_options(seed = TRUE))
 
-  # Combine screening results (remove NULLs)
+  # Combine screening results (remove NULLs and non-dataframe failures)
   candidates <- screening_results %>%
     compact() %>%
+    keep(~ is.data.frame(.x)) %>%
     bind_rows()
 
   log_info("Phase 1 complete: Retrieved data for {nrow(candidates)}/{length(etf_list)} ETFs")
@@ -362,9 +363,10 @@ batch_analyze_weekly_etfs <- function(max_workers = NULL, force_refresh = FALSE)
     )
   }, .options = furrr_options(seed = TRUE))
 
-  # Combine results (remove NULLs from failed backtests)
+  # Combine results (remove NULLs and non-dataframe failures)
   results_df <- analysis_results %>%
     compact() %>%
+    keep(~ is.data.frame(.x)) %>%
     bind_rows()
 
   if (nrow(results_df) > 0) {

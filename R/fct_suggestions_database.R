@@ -56,7 +56,7 @@ initialize_suggestions_schema <- function(conn) {
       ON grouping_suggestions(created_at)
     ")
 
-    log_info("Suggestions DB: Schema initialized successfully")
+    log_debug("Suggestions DB: Schema initialized successfully")
     return(TRUE)
   }, error = function(e) {
     log_error("Suggestions DB: Schema initialization failed - {e$message}")

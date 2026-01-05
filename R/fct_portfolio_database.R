@@ -83,7 +83,7 @@ initialize_portfolio_database <- function(conn) {
     # Initialize position groups schema
     initialize_groups_schema(conn)
 
-    log_info("Portfolio DB: Schema initialized successfully")
+    log_debug("Portfolio DB: Schema initialized successfully")
     return(TRUE)
   }, error = function(e) {
     log_error("Portfolio DB: Schema initialization failed - {e$message}")

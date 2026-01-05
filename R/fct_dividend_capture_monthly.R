@@ -324,9 +324,10 @@ batch_analyze_monthly_etfs <- function(max_workers = NULL) {
     .options = furrr_options(seed = TRUE)
   )
 
-  # Combine results (remove NULLs)
+  # Combine results (remove NULLs and non-dataframe failures)
   results_df <- results %>%
     compact() %>%
+    keep(~ is.data.frame(.x)) %>%
     bind_rows()
 
   if (nrow(results_df) > 0) {

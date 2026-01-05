@@ -37,7 +37,6 @@ get_questrade_auth <- function(override_refresh_token = NULL) {
     time_until_expiry <- as.numeric(difftime(cached_token$expires_at, Sys.time(), units = "secs"))
 
     if (time_until_expiry > 60) {
-      log_info("Questrade API: Using cached access token (expires in {round(time_until_expiry)} seconds)")
       log_debug("Questrade API: Access token starts with: {substring(cached_token$access_token, 1, 10)}...")
       log_debug("Questrade API: Refresh token starts with: {substring(cached_token$refresh_token, 1, 10)}...")
       return(list(

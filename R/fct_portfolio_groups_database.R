@@ -71,7 +71,7 @@ initialize_groups_schema <- function(conn) {
     # Migrate schema to add allocated_quantity column if it doesn't exist
     migrate_members_schema_for_allocation(conn)
 
-    log_info("Portfolio Groups DB: Schema initialized successfully")
+    log_debug("Portfolio Groups DB: Schema initialized successfully")
     return(TRUE)
   }, error = function(e) {
     log_error("Portfolio Groups DB: Schema initialization failed - {e$message}")

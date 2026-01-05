@@ -73,7 +73,7 @@ initialize_income_projection_schema <- function(conn) {
       ON projection_recalculations(group_id)
     ")
 
-    log_info("Income Projection DB: Schema initialized successfully")
+    log_debug("Income Projection DB: Schema initialized successfully")
     return(TRUE)
   }, error = function(e) {
     log_error("Income Projection DB: Schema initialization failed - {e$message}")

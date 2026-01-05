@@ -459,9 +459,10 @@ batch_analyze_high_yield_stocks <- function(universe_config,
     })
   }, .options = furrr_options(seed = TRUE))
 
-  # Combine results (remove NULLs)
+  # Combine results (remove NULLs and non-dataframe failures)
   screening_data <- screening_results %>%
     compact() %>%
+    keep(~ is.data.frame(.x)) %>%
     bind_rows()
 
   log_info("Phase 1 complete: Retrieved data for {nrow(screening_data)}/{length(stock_list)} stocks")
@@ -513,9 +514,10 @@ batch_analyze_high_yield_stocks <- function(universe_config,
     )
   }, .options = furrr_options(seed = TRUE))
 
-  # Combine results (remove NULLs from failed backtests)
+  # Combine results (remove NULLs and non-dataframe failures)
   results_df <- analysis_results %>%
     compact() %>%
+    keep(~ is.data.frame(.x)) %>%
     bind_rows()
 
   if (nrow(results_df) > 0) {

@@ -114,7 +114,7 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
 
     cost_basis <- cash_collateral
     cash_collected <- option_premiums  # Premium is income for CSP
-    log_info("GROUP_METRICS_CALC: CSP detected - cash_collateral={cash_collateral}, premium={option_premiums}, expiry={csp_expiration_date}")
+    log_debug("GROUP_METRICS_CALC: CSP detected - cash_collateral={cash_collateral}, premium={option_premiums}, expiry={csp_expiration_date}")
   } else if (strategy_type != "Other") {
     cost_basis <- stock_purchases + total_commissions - option_premiums
     cash_collected <- total_dividends
@@ -151,7 +151,7 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
   if (is_csp && !is.null(csp_expiration_date)) {
     # CSP: use expiration date from option symbol
     days_held <- as.numeric(csp_expiration_date - first_trade_date)
-    log_info("GROUP_METRICS_CALC: CSP using expiration - first={first_trade_date}, expiry={csp_expiration_date}, days={days_held}")
+    log_debug("GROUP_METRICS_CALC: CSP using expiration - first={first_trade_date}, expiry={csp_expiration_date}, days={days_held}")
   } else if (strategy_type != "Other" && nrow(projected_cash_flows) > 0) {
     # Use last projected event date as end date (option expiration)
     last_event_date <- projected_cash_flows %>%
@@ -161,7 +161,7 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
       as.Date()
 
     days_held <- as.numeric(last_event_date - first_trade_date)
-    log_info("GROUP_METRICS_CALC: Using last_event_date - first={first_trade_date}, last={last_event_date}, days={days_held}")
+    log_debug("GROUP_METRICS_CALC: Using last_event_date - first={first_trade_date}, last={last_event_date}, days={days_held}")
   } else if (strategy_type == "Other") {
     # For "Other" strategy, use days held so far but don't calculate projected returns
     days_held <- as.numeric(Sys.Date() - first_trade_date)
@@ -186,13 +186,13 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
     return_ratio <- csp_income / cost_basis
     annualization_factor <- 365 / days_held
     result <- ((1 + return_ratio) ^ annualization_factor - 1) * 100
-    log_info("GROUP_METRICS_CALC: CSP - income={csp_income}, collateral={cost_basis}, days={days_held}, result={result}%")
+    log_debug("GROUP_METRICS_CALC: CSP - income={csp_income}, collateral={cost_basis}, days={days_held}, result={result}%")
     result
   } else if (cost_basis > 0 && days_held > 0) {
     return_ratio <- projected_income / cost_basis
     annualization_factor <- 365 / days_held
     result <- ((1 + return_ratio) ^ annualization_factor - 1) * 100
-    log_info("GROUP_METRICS_CALC: proj_inc={projected_income}, cost={cost_basis}, days={days_held}, result={result}%")
+    log_debug("GROUP_METRICS_CALC: proj_inc={projected_income}, cost={cost_basis}, days={days_held}, result={result}%")
     result
   } else {
     0
