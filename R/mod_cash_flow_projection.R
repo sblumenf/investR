@@ -311,14 +311,22 @@ mod_cash_flow_projection_server <- function(id){
         ))
       }
 
-      # Format table data
+      # Group by month, ticker, and type - show net amount per ticker per month
       table_data <- transactions %>%
+        group_by(month_label, ticker, type) %>%
+        summarise(
+          Amount = sum(amount, na.rm = TRUE),
+          Group = paste(unique(group_name), collapse = ", "),
+          source = if (n_distinct(source) > 1) "Mixed" else first(source),
+          .groups = "drop"
+        ) %>%
+        filter(abs(Amount) > 0.01) %>%  # Filter out near-zero net amounts
         transmute(
           Month = month_label,
           Ticker = ticker,
-          Amount = amount,
+          Amount = Amount,
           Type = tools::toTitleCase(gsub("_", " ", type)),
-          Group = group_name,
+          Group = Group,
           `Actual/Projected` = tools::toTitleCase(source)
         ) %>%
         arrange(Month, Ticker)  # Ascending order by month, then ticker
