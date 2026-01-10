@@ -252,11 +252,27 @@ link_activities_to_group <- function(activity_ids, group_id) {
       ", placeholders_opt)
       option_trades <- dbGetQuery(con, opt_sql, params = as.list(activity_ids))
 
-      # Filter to only option symbols
+      # Filter to option trades
       if (nrow(option_trades) > 0) {
-        option_trades <- option_trades %>%
-          as_tibble() %>%
-          filter(purrr::map_lgl(symbol, is_option_symbol))
+        # For Legacy Covered Call ONLY: use role-based logic (not underlying stock = option trade)
+        # This handles cases where the symbol field is empty but the trade is clearly an option
+        if (group_info$strategy_type[1] == "Legacy Covered Call") {
+          underlying_result <- dbGetQuery(con, "
+            SELECT symbol FROM position_group_members
+            WHERE group_id = ? AND role = 'underlying_stock'
+          ", params = list(group_id))
+
+          underlying_symbol <- if (nrow(underlying_result) > 0) underlying_result$symbol[1] else ""
+
+          option_trades <- option_trades %>%
+            as_tibble() %>%
+            filter(symbol != underlying_symbol)
+        } else {
+          # For all other strategies: require symbol to look like an option
+          option_trades <- option_trades %>%
+            as_tibble() %>%
+            filter(purrr::map_lgl(symbol, is_option_symbol))
+        }
 
         if (nrow(option_trades) > 0) {
           # For named strategies (not "Other" or "Legacy Covered Call"), need to detect initial vs roll premiums
