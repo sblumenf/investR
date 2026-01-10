@@ -292,11 +292,20 @@ delete_projected_option_gains <- function(group_id, conn = NULL) {
 #' Retrieves all projected and actual events, ordered by date.
 #'
 #' @param group_id Group identifier
+#' @param conn Optional database connection for transaction consistency
 #' @return Tibble with event data
 #' @noRd
-get_group_cash_flows <- function(group_id) {
-  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+get_group_cash_flows <- function(group_id, conn = NULL) {
+  # Connection management - use provided conn or create new one
+  should_close <- FALSE
+  if (is.null(conn)) {
+    conn <- get_portfolio_db_connection()
+    should_close <- TRUE
+  }
+
+  if (should_close) {
+    on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  }
 
   tryCatch({
     # Ensure schema exists

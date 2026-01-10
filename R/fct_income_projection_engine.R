@@ -384,8 +384,8 @@ regenerate_projections_after_roll <- function(group_id, new_option_symbol, conn 
       return(FALSE)
     }
 
-    # Count old projections before deletion
-    old_projections <- get_group_cash_flows(group_id) %>%
+    # Count old projections before deletion (use same connection for transaction consistency)
+    old_projections <- get_group_cash_flows(group_id, conn = conn) %>%
       filter(event_type == "option_gain", status == "projected")
     old_count <- nrow(old_projections)
 
