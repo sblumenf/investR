@@ -612,7 +612,7 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
         mutate(
           role = purrr::map2_chr(symbol, net_quantity, function(sym, net_qty) {
             # Check for cash equivalent tickers first
-            if (toupper(sym) %in% c("SGOV", "ZMMK.TO")) {
+            if (is_cash_equivalent(sym)) {
               return("cash_equivalent")
             }
 

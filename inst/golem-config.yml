@@ -23,6 +23,7 @@ default:
   # Aristocrats strategy configuration
   aristocrats:
     max_workers: 10
+    max_stock_price: 300
     strike_threshold_pct: 0.8
     target_days: null
     min_aristocrats: 50
@@ -193,6 +194,16 @@ default:
     # Liquid ETFs configuration
     min_market_cap: 1000000000  # $1 billion
     min_avg_volume: 1000000  # 1 million shares
+
+  # Cash equivalent (money market) tickers configuration
+  # These tickers are treated specially: no expiration required, SEC yield for returns
+  cash_equivalents:
+    tickers:
+      - SGOV       # iShares 0-3 Month Treasury Bond ETF
+      - ZMMK.TO    # BMO Money Market ETF (CAD)
+      - BIL        # SPDR Bloomberg 1-3 Month T-Bill ETF
+      - WEEK       # SPDR 1-3 Month T-Bill ETF (Weekly)
+      - JMMF       # JPMorgan Money Market ETF
 
   # Portfolio management configuration
   portfolio:

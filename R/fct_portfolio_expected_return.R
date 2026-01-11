@@ -15,8 +15,10 @@ STRATEGY_DISPLAY_MAP <- list(
   "Dynamic Covered Calls" = "Covered Calls",
   "Legacy Covered Call" = "Covered Calls",
   "Zero-Dividend" = "Covered Calls",
+  "Zero-Dividend Stocks" = "Covered Calls",
   "CSP" = "Cash Secured Puts",
   "Cash-Secured Put" = "Cash Secured Puts",
+  "S&P 500 Cash-Secured Puts" = "Cash Secured Puts",
   "Collar" = "Collars",
   "Put Calendar Spread" = "Put Calendar Spreads",
   "Dividend Aristocrats" = "Dividend Aristocrats",
@@ -31,7 +33,7 @@ STRATEGY_DISPLAY_MAP <- list(
 #' @noRd
 map_strategy_to_display <- function(strategy_type, ticker = NULL) {
   # Check for money market first
-  if (!is.null(ticker) && ticker %in% CASH_EQUIVALENT_TICKERS) {
+  if (!is.null(ticker) && is_cash_equivalent(ticker)) {
     return("Money Market")
   }
 
@@ -95,7 +97,7 @@ get_money_market_yield <- function(ticker) {
 #' @noRd
 calculate_capital_at_risk <- function(group_detail, strategy_type, ticker = NULL) {
   # Money market: use cost_basis (which should equal current value)
-  if (!is.null(ticker) && ticker %in% CASH_EQUIVALENT_TICKERS) {
+  if (!is.null(ticker) && is_cash_equivalent(ticker)) {
     return(group_detail$cost_basis)
   }
 
@@ -273,7 +275,7 @@ process_open_positions <- function(open_detail, include_breakdown = TRUE) {
     # Get expected return
     # Money market: use yield
     # Other strategies: use projected_annualized_return_pct
-    if (!is.null(ticker) && ticker %in% CASH_EQUIVALENT_TICKERS) {
+    if (!is.null(ticker) && is_cash_equivalent(ticker)) {
       return_pct <- get_money_market_yield(ticker) * 100  # Convert to percentage
     } else {
       return_pct <- row$projected_annualized_return_pct

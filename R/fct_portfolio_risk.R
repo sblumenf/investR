@@ -10,9 +10,6 @@
 #' @importFrom PerformanceAnalytics VaR ES
 NULL
 
-# Cash equivalent tickers for special handling in risk analysis
-CASH_EQUIVALENT_TICKERS <- c("ZMMK.TO", "SGOV")
-
 #' Analyze portfolio risk using correlated Monte Carlo
 #'
 #' Main function for portfolio-level risk analysis. Fetches all open positions,
@@ -69,7 +66,7 @@ analyze_portfolio_risk <- function(simulation_paths = 10000, lookback_days = 252
   }
 
   # Filter out positions without expiration and expired positions (except cash equivalents)
-  cash_equivalent_tickers <- CASH_EQUIVALENT_TICKERS
+  cash_equivalent_tickers <- get_cash_equivalent_tickers()
 
   # Identify expired positions (negative days_to_expiry)
   expired_positions <- positions %>%
@@ -763,7 +760,7 @@ run_correlated_monte_carlo <- function(positions, correlation_matrix, simulation
       # Determine time horizon
       T <- if (!is.null(param$days_to_expiry) && !is.na(param$days_to_expiry)) {
         max(param$days_to_expiry, 1) / 365
-      } else if (param$ticker %in% CASH_EQUIVALENT_TICKERS) {
+      } else if (is_cash_equivalent(param$ticker)) {
         0.001  # Cash equivalents - minimal time horizon (near-zero volatility impact)
       } else {
         # This shouldn't happen after filtering, but log if it does

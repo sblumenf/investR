@@ -13,26 +13,27 @@ auto_link_cash_equivalents <- function() {
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   # Get unlinked cash equivalent activities
-  unlinked_cash <- dbGetQuery(con, "
+  cash_tickers_sql <- get_cash_equivalent_sql_list()
+  unlinked_cash <- dbGetQuery(con, sprintf("
     SELECT activity_id, symbol, account_number
     FROM account_activities
-    WHERE UPPER(symbol) IN ('ZMMK.TO', 'SGOV')
+    WHERE UPPER(symbol) IN %s
       AND group_id IS NULL
       AND COALESCE(ignore_for_grouping, FALSE) = FALSE
-  ")
+  ", cash_tickers_sql))
 
   if (nrow(unlinked_cash) == 0) {
     return(0)
   }
 
   # Get existing cash equivalent groups by symbol and account
-  cash_groups <- dbGetQuery(con, "
+  cash_groups <- dbGetQuery(con, sprintf("
     SELECT pg.group_id, pg.account_number, pgm.symbol
     FROM position_groups pg
     INNER JOIN position_group_members pgm ON pg.group_id = pgm.group_id
-    WHERE UPPER(pgm.symbol) IN ('ZMMK.TO', 'SGOV')
-      AND pg.group_name LIKE '%Cash Equivalent%'
-  ")
+    WHERE UPPER(pgm.symbol) IN %s
+      AND pg.group_name LIKE '%%Cash Equivalent%%'
+  ", cash_tickers_sql))
 
   linked_count <- 0
 
@@ -61,11 +62,13 @@ auto_link_cash_equivalents <- function() {
   }
 
   if (linked_count > 0) {
+    tickers_display <- paste(get_cash_equivalent_tickers(), collapse = "/")
     log_info(sprintf("Auto-linked %d cash equivalent activities", linked_count))
     showNotification(
-      sprintf("Auto-linked %d cash equivalent transaction%s (ZMMK.TO/SGOV)",
+      sprintf("Auto-linked %d cash equivalent transaction%s (%s)",
               linked_count,
-              ifelse(linked_count == 1, "", "s")),
+              ifelse(linked_count == 1, "", "s"),
+              tickers_display),
       type = "message",
       duration = 5
     )
