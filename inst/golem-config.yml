@@ -204,6 +204,11 @@ default:
       - BIL        # SPDR Bloomberg 1-3 Month T-Bill ETF
       - WEEK       # SPDR 1-3 Month T-Bill ETF (Weekly)
       - JMMF       # JPMorgan Money Market ETF
+      - MMKT       # First Trust Money Market ETF
+      - TBLL       # iShares Treasury Bill ETF
+      - USFR       # WisdomTree Floating Rate Treasury Fund
+      - GSY        # Invesco Ultra Short Duration ETF
+      - ARCM       # Arrow Reserve Capital Management ETF
 
   # Portfolio management configuration
   portfolio:
