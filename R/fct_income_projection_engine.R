@@ -41,16 +41,26 @@ generate_initial_projections <- function(group_id, members, account_number) {
 
     # Strategies that should NOT have projections (short-term or unstructured)
     # Legacy Covered Call: only track actual cash flows from activities
+    # Money Market / Cash Equivalent: no dividend projections, only track actuals
     no_projection_strategies <- c(
       "Other",
       "Legacy Covered Call",
       "Weekly Dividend Capture",
       "Monthly Dividend Capture",
-      "Dividend Capture"
+      "Dividend Capture",
+      "Money Market / Cash Equivalent"
     )
 
     if (group_info$strategy_type[1] %in% no_projection_strategies) {
       log_info("Income Projection: Skipping projections for '{group_info$strategy_type[1]}' strategy group {group_id}")
+      log_projection_recalculation(group_id, "initial_creation", 0, 0)
+      return(TRUE)
+    }
+
+    # Also check if underlying is a cash equivalent ticker (belt-and-suspenders)
+    underlying_check <- members %>% filter(role %in% c("underlying_stock", "cash_equivalent")) %>% pull(symbol)
+    if (length(underlying_check) > 0 && is_cash_equivalent(underlying_check[1])) {
+      log_info("Income Projection: Skipping projections for cash equivalent '{underlying_check[1]}'")
       log_projection_recalculation(group_id, "initial_creation", 0, 0)
       return(TRUE)
     }
@@ -329,11 +339,20 @@ regenerate_projections_after_roll <- function(group_id, new_option_symbol, conn 
       "Legacy Covered Call",
       "Weekly Dividend Capture",
       "Monthly Dividend Capture",
-      "Dividend Capture"
+      "Dividend Capture",
+      "Money Market / Cash Equivalent"
     )
 
     if (group_info$strategy_type[1] %in% no_projection_strategies) {
       log_info("Income Projection: Strategy '{group_info$strategy_type[1]}' does not use projections - skipping regeneration")
+      return(TRUE)
+    }
+
+    # Also check if underlying is a cash equivalent ticker
+    members <- get_group_members(group_id)
+    underlying_check <- members %>% filter(role %in% c("underlying_stock", "cash_equivalent")) %>% pull(symbol)
+    if (length(underlying_check) > 0 && is_cash_equivalent(underlying_check[1])) {
+      log_info("Income Projection: Skipping projections for cash equivalent '{underlying_check[1]}'")
       return(TRUE)
     }
 

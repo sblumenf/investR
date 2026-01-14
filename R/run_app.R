@@ -130,6 +130,7 @@ run_app <- function(
       page_portfolio_groups(),
       page_portfolio_risk(),
       page_cash_flow_projection(),
+      page_money_market_rotation(),
       page_extrinsic_value_scanner(),
       page_raw_activities(),
       page_token_settings(),

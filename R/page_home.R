@@ -173,6 +173,15 @@ page_home <- function() {
         button_text = "View Cash Flows"
       ),
       list(
+        title = "Money Market Rotation",
+        description = c(
+          "Track the money market dividend capture rotation strategy.",
+          "Monitor performance, rotation history, and dividends across cash equivalent ETFs. Independent tracker with time-weighted returns."
+        ),
+        href = "/portfolio/money-market-rotation",
+        button_text = "View Rotation"
+      ),
+      list(
         title = "Raw Activity Log",
         description = c(
           "View all raw, unfiltered transaction records from the `account_activities` database table.",

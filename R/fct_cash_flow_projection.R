@@ -53,7 +53,7 @@ get_actual_cash_flows_from_activities <- function() {
         AND aa.symbol = pgm.symbol
       WHERE aa.group_id IS NOT NULL
         AND aa.type IN ('Dividends', 'Trades', 'Other')
-        AND COALESCE(aa.ignore_for_grouping, FALSE) = FALSE
+        AND (COALESCE(aa.ignore_for_grouping, FALSE) = FALSE OR aa.type = 'Dividends')
         AND pg.status != 'ignored'
       ORDER BY aa.trade_date ASC
     ") %>% as_tibble()
@@ -132,7 +132,10 @@ get_actual_cash_flows_from_activities <- function() {
         }),
         # Determine cash flow type based on strategy
         cash_flow_type = case_when(
-          # Dividends count for "Other" and "Legacy Covered Call" strategies ONLY (named strategies use position_group_cash_flows)
+          # Money market dividends get their own type for distinct coloring
+          type == "Dividends" & strategy_type == "Money Market / Cash Equivalent" ~ "mm_dividend",
+          # Equity dividends for "Other" and "Legacy Covered Call" strategies
+          # Named strategies (Covered Calls, CSPs, etc.) use position_group_cash_flows for projections
           type == "Dividends" & strategy_type %in% c("Other", "Legacy Covered Call") ~ "dividend",
           # Option premiums for Legacy Covered Call - use group context, not just symbol parsing
           # Any Trades activity that is NOT the underlying stock is an option trade
@@ -177,6 +180,235 @@ get_actual_cash_flows_from_activities <- function() {
       description = character()
     ))
   })
+}
+
+################################################################################
+# UNGROUPED DIVIDENDS (including ignored)
+################################################################################
+
+#' Get dividends that are not assigned to any group
+#'
+#' Retrieves dividend transactions that have no group_id assigned.
+#' These are typically ignored dividends or dividends from positions
+#' not tracked in position groups.
+#'
+#' @return Tibble with columns: event_date, ticker, type, amount, group_id, group_name, source, description
+#' @noRd
+get_ungrouped_dividends <- function() {
+ conn <- get_portfolio_db_connection()
+  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+
+  tryCatch({
+    result <- dbGetQuery(conn, "
+      SELECT
+        aa.trade_date,
+        aa.symbol,
+        aa.net_amount,
+        aa.description
+      FROM account_activities aa
+      WHERE aa.type = 'Dividends'
+        AND aa.group_id IS NULL
+      ORDER BY aa.trade_date ASC
+    ") %>% as_tibble()
+
+    if (nrow(result) == 0) {
+      log_debug("Cash Flow Projection: No ungrouped dividends found")
+      return(empty_cash_flow_tibble())
+    }
+
+    # Format as cash flow entries
+    cash_flows <- result %>%
+      transmute(
+        event_date = as.Date(trade_date),
+        ticker = symbol,
+        type = "dividend",
+        amount = net_amount,
+        group_id = NA_character_,
+        group_name = "Ungrouped",
+        source = "actual",
+        description = description
+      )
+
+    log_debug("Cash Flow Projection: Found {nrow(cash_flows)} ungrouped dividend events")
+    return(cash_flows)
+
+  }, error = function(e) {
+    log_warn("Cash Flow Projection: Failed to get ungrouped dividends - {e$message}")
+    return(empty_cash_flow_tibble())
+  })
+}
+
+################################################################################
+# CASH EQUIVALENT CAPITAL GAINS
+################################################################################
+
+#' Get capital gains/losses from cash equivalent position closures
+#'
+#' For Money Market / Cash Equivalent strategy positions, calculates realized
+#' capital gains/losses when positions are sold. Uses FIFO matching of buys to sells.
+#'
+#' @return Tibble with columns: event_date, ticker, type, amount, group_id, group_name, source, description
+#' @noRd
+get_cash_equivalent_capital_gains <- function() {
+  conn <- get_portfolio_db_connection()
+  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+
+  tryCatch({
+    # Get cash equivalent tickers
+    ce_tickers <- get_cash_equivalent_tickers()
+    if (length(ce_tickers) == 0) {
+      log_debug("Cash Flow Projection: No cash equivalent tickers configured")
+      return(empty_cash_flow_tibble())
+    }
+
+    ce_tickers_sql <- paste0("'", paste(ce_tickers, collapse = "','"), "'")
+
+    # Query all buy/sell transactions for cash equivalent tickers
+    # in Money Market / Cash Equivalent strategy groups
+    result <- dbGetQuery(conn, paste0("
+      SELECT
+        aa.trade_date,
+        aa.symbol,
+        aa.action,
+        aa.quantity,
+        aa.price,
+        aa.net_amount,
+        aa.group_id,
+        pg.group_name
+      FROM account_activities aa
+      INNER JOIN position_groups pg ON aa.group_id = pg.group_id
+      WHERE aa.type = 'Trades'
+        AND aa.action IN ('Buy', 'Sell')
+        AND UPPER(aa.symbol) IN (", ce_tickers_sql, ")
+        AND pg.strategy_type = 'Money Market / Cash Equivalent'
+        AND pg.status != 'ignored'
+        AND COALESCE(aa.ignore_for_grouping, FALSE) = FALSE
+      ORDER BY aa.symbol, aa.trade_date ASC
+    ")) %>% as_tibble()
+
+    if (nrow(result) == 0) {
+      log_debug("Cash Flow Projection: No cash equivalent trades found")
+      return(empty_cash_flow_tibble())
+    }
+
+    # Calculate capital gains using FIFO matching per symbol
+    capital_gains <- result %>%
+      group_by(symbol) %>%
+      group_modify(~ calculate_fifo_gains(.x)) %>%
+      ungroup()
+
+    if (nrow(capital_gains) == 0) {
+      log_debug("Cash Flow Projection: No closed cash equivalent positions found")
+      return(empty_cash_flow_tibble())
+    }
+
+    # Format as cash flow entries
+    cash_flows <- capital_gains %>%
+      transmute(
+        event_date = as.Date(sell_date),
+        ticker = symbol,
+        type = "capital_gain",
+        amount = capital_gain,
+        group_id = group_id,
+        group_name = group_name,
+        source = "actual",
+        description = paste0("Capital gain/loss on ", symbol, " sale")
+      )
+
+    log_debug("Cash Flow Projection: Found {nrow(cash_flows)} cash equivalent capital gain events")
+    return(cash_flows)
+
+  }, error = function(e) {
+    log_warn("Cash Flow Projection: Failed to get cash equivalent capital gains - {e$message}")
+    return(empty_cash_flow_tibble())
+  })
+}
+
+#' Calculate FIFO capital gains for a single symbol
+#'
+#' @param trades Data frame of buy/sell trades for one symbol, ordered by date
+#' @return Data frame with sell_date, capital_gain, group_id, group_name, symbol
+#' @noRd
+calculate_fifo_gains <- function(trades) {
+  if (nrow(trades) == 0) return(tibble())
+
+  # Separate buys and sells
+  buys <- trades %>% filter(action == "Buy") %>% arrange(trade_date)
+  sells <- trades %>% filter(action == "Sell") %>% arrange(trade_date)
+
+  if (nrow(sells) == 0) {
+    # No sells = no realized gains
+    return(tibble())
+  }
+
+  gains <- list()
+  buy_queue <- list()
+
+  # Build initial buy queue
+ for (i in seq_len(nrow(buys))) {
+    buy_queue[[length(buy_queue) + 1]] <- list(
+      date = buys$trade_date[i],
+      quantity = buys$quantity[i],
+      price = buys$price[i],
+      remaining = buys$quantity[i]
+    )
+  }
+
+  # Process each sell using FIFO
+  for (i in seq_len(nrow(sells))) {
+    sell_qty <- sells$quantity[i]
+    sell_price <- sells$price[i]
+    sell_date <- sells$trade_date[i]
+    sell_group_id <- sells$group_id[i]
+    sell_group_name <- sells$group_name[i]
+    symbol <- sells$symbol[i]
+
+    total_cost_basis <- 0
+    qty_matched <- 0
+
+    # Match against buys in FIFO order
+    for (j in seq_along(buy_queue)) {
+      if (sell_qty <= 0) break
+      if (is.null(buy_queue[[j]]) || buy_queue[[j]]$remaining <= 0) next
+
+      match_qty <- min(buy_queue[[j]]$remaining, sell_qty)
+      total_cost_basis <- total_cost_basis + (match_qty * buy_queue[[j]]$price)
+      buy_queue[[j]]$remaining <- buy_queue[[j]]$remaining - match_qty
+      sell_qty <- sell_qty - match_qty
+      qty_matched <- qty_matched + match_qty
+    }
+
+    if (qty_matched > 0) {
+      sell_proceeds <- qty_matched * sell_price
+      capital_gain <- sell_proceeds - total_cost_basis
+
+      gains[[length(gains) + 1]] <- tibble(
+        sell_date = sell_date,
+        capital_gain = capital_gain,
+        group_id = sell_group_id,
+        group_name = sell_group_name,
+        symbol = symbol
+      )
+    }
+  }
+
+  if (length(gains) == 0) return(tibble())
+  bind_rows(gains)
+}
+
+#' Create empty cash flow tibble with standard schema
+#' @noRd
+empty_cash_flow_tibble <- function() {
+  tibble(
+    event_date = as.Date(character()),
+    ticker = character(),
+    type = character(),
+    amount = numeric(),
+    group_id = character(),
+    group_name = character(),
+    source = character(),
+    description = character()
+  )
 }
 
 ################################################################################
@@ -392,6 +624,8 @@ get_combined_cash_flows <- function() {
   # Get actual and projected flows
   actuals <- get_actual_cash_flows_from_activities()
   projections <- get_projected_cash_flows_from_database()
+  ce_capital_gains <- get_cash_equivalent_capital_gains()
+  ungrouped_divs <- get_ungrouped_dividends()
 
   # Combine datasets
   # Actuals have description column, projections have confidence
@@ -403,7 +637,13 @@ get_combined_cash_flows <- function() {
   projections_standardized <- projections %>%
     select(event_date, ticker, type, amount, group_id, group_name, source)
 
-  all_flows <- bind_rows(actuals_standardized, projections_standardized)
+  ce_gains_standardized <- ce_capital_gains %>%
+    select(event_date, ticker, type, amount, group_id, group_name, source)
+
+  ungrouped_divs_standardized <- ungrouped_divs %>%
+    select(event_date, ticker, type, amount, group_id, group_name, source)
+
+  all_flows <- bind_rows(actuals_standardized, projections_standardized, ce_gains_standardized, ungrouped_divs_standardized)
 
   if (nrow(all_flows) == 0) {
     log_info("Cash Flow Projection: No cash flows found (actual or projected)")

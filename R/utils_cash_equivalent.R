@@ -19,7 +19,7 @@ NULL
 #' @export
 get_cash_equivalent_tickers <- function() {
   tickers <- tryCatch({
-    golem::get_golem_config("cash_equivalents")$tickers
+    get_golem_config("cash_equivalents")$tickers
   }, error = function(e) {
     log_warn("Cash Equivalents: Failed to read config, using defaults - {e$message}")
     NULL

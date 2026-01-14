@@ -217,9 +217,11 @@ mod_cash_flow_projection_server <- function(id){
       } else {
         # Define colors for each transaction type
         color_map <- c(
-          "dividend" = "#28a745",        # Green
+          "dividend" = "#28a745",        # Green - equity dividends
+          "mm_dividend" = "#6f42c1",     # Purple - money market dividends
           "option_premium" = "#007bff",  # Blue
-          "option_gain" = "#ffc107"      # Yellow/Gold
+          "option_gain" = "#ffc107",     # Yellow/Gold
+          "capital_gain" = "#17a2b8"     # Teal/Cyan - for cash equivalent capital gains
         )
 
         # Calculate monthly totals for annotations
