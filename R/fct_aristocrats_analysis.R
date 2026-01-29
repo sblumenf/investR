@@ -5,7 +5,7 @@
 #'
 #' @name aristocrats-analysis
 #' @import dplyr
-#' @importFrom purrr map_dfr compact possibly
+#' @importFrom purrr map_dfr compact possibly keep
 #' @importFrom tibble tibble
 #' @importFrom stringr str_extract
 #' @importFrom rvest read_html html_nodes html_attr html_table

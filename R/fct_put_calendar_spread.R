@@ -8,7 +8,7 @@
 #'
 #' @name put-calendar-spread
 #' @import dplyr
-#' @importFrom purrr map_dfr compact possibly
+#' @importFrom purrr map_dfr compact possibly keep
 #' @importFrom tibble tibble
 #' @importFrom logger log_info log_warn log_success log_debug log_error
 #' @importFrom furrr future_map furrr_options

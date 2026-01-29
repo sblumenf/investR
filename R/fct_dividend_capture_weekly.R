@@ -9,7 +9,7 @@
 #' @importFrom tibble tibble
 #' @importFrom zoo index
 #' @importFrom quantmod Op Cl
-#' @importFrom purrr map_dfr compact
+#' @importFrom purrr map_dfr compact keep
 #' @importFrom furrr future_map furrr_options
 #' @importFrom future plan multisession
 #' @importFrom logger log_info log_success
