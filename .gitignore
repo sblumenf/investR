@@ -19,3 +19,10 @@ inst/portfolio*.duckdb
 backup_databases_*/
 *.csv
 Screenshot*.png
+
+# SQLite databases
+*.db
+
+# Local AI/tooling config
+.playwright-mcp/
+GEMINI.md
