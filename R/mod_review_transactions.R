@@ -444,23 +444,45 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
       # Get strategy types
       strategy_types <- get_strategy_types()
 
+      # Get cash equivalent tickers for conditional dropdown
+      cash_tickers <- get_cash_equivalent_tickers()
+
       # Show confirmation modal
       showModal(modalDialog(
         title = "Create New Position Group",
         size = "m",
-
-        textInput(
-          ns("new_group_name"),
-          "Group Name (leave blank for auto-naming):",
-          value = "",
-          placeholder = "e.g., Dynamic Covered Calls - ALB - Dec 2027 @ $55"
-        ),
 
         selectInput(
           ns("new_group_strategy"),
           "Strategy Type:",
           choices = strategy_types,
           selected = "Other"
+        ),
+
+        # Conditional: Cash equivalent ticker selector (only for Money Market strategy)
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'Money Market / Cash Equivalent'", ns("new_group_strategy")),
+          selectInput(
+            ns("cash_equivalent_ticker"),
+            "Cash Equivalent Ticker:",
+            choices = cash_tickers,
+            selected = if (toupper(current_ticker) %in% cash_tickers) toupper(current_ticker) else cash_tickers[1]
+          ),
+          tags$p(
+            class = "text-muted small",
+            "Group name will be auto-generated: Cash Equivalent - [TICKER] - [DATE]"
+          )
+        ),
+
+        # Conditional: Manual group name (hidden for Money Market strategy)
+        conditionalPanel(
+          condition = sprintf("input['%s'] != 'Money Market / Cash Equivalent'", ns("new_group_strategy")),
+          textInput(
+            ns("new_group_name"),
+            "Group Name (leave blank for auto-naming):",
+            value = "",
+            placeholder = "e.g., Dynamic Covered Calls - ALB - Dec 2027 @ $55"
+          )
         ),
 
         footer = tagList(
@@ -475,8 +497,16 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
       req(length(selected_rows()) > 0)
 
       # Get values from form
-      group_name <- input$new_group_name
       strategy_type <- input$new_group_strategy
+
+      # Special handling for Money Market / Cash Equivalent strategy
+      if (strategy_type == "Money Market / Cash Equivalent") {
+        cash_ticker <- input$cash_equivalent_ticker
+        group_name <- sprintf("Cash Equivalent - %s - %s", cash_ticker, format(Sys.Date(), "%Y-%m-%d"))
+        log_info(sprintf("Money Market group: Auto-generated name '%s'", group_name))
+      } else {
+        group_name <- input$new_group_name
+      }
 
       # Get current ticker-account key and SELECTED activities only
       current_key <- names(ticker_data())[current_index()]
@@ -611,6 +641,11 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
       members <- net_quantities %>%
         mutate(
           role = purrr::map2_chr(symbol, net_quantity, function(sym, net_qty) {
+            # Force cash_equivalent role for Money Market strategy
+            if (strategy_type == "Money Market / Cash Equivalent") {
+              return("cash_equivalent")
+            }
+
             # Check for cash equivalent tickers first
             if (is_cash_equivalent(sym)) {
               return("cash_equivalent")

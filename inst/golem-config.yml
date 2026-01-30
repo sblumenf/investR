@@ -209,6 +209,7 @@ default:
       - USFR       # WisdomTree Floating Rate Treasury Fund
       - GSY        # Invesco Ultra Short Duration ETF
       - ARCM       # Arrow Reserve Capital Management ETF
+      - CSHI       # NEOS Enhanced Income Cash Alternative ETF
 
   # Portfolio management configuration
   portfolio:
@@ -234,11 +235,13 @@ default:
         - "Weekly Dividend Capture"
         - "Monthly Dividend Capture"
         - "Russell 2000 High-Yield"
+        - "Money Market / Cash Equivalent"
         - "Other"
       position_roles:
         - "underlying_stock"
         - "short_call"
         - "short_put"
+        - "cash_equivalent"
       match_confidence_threshold: 0.7
 
 production:

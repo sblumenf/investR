@@ -139,20 +139,18 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
         NULL
       }
 
-      # Extract option details from activities
-      option_activity <- activities %>%
+      # Extract option details from activities (get ALL option trades, not just one)
+      option_activities <- activities %>%
         filter(type == "Trades") %>%
-        filter(purrr::map_lgl(symbol, is_option_symbol)) %>%
-        arrange(desc(trade_date)) %>%
-        slice(1)
+        filter(purrr::map_lgl(symbol, is_option_symbol))
 
-      if (nrow(option_activity) == 0) {
+      if (nrow(option_activities) == 0) {
         showNotification("No option data found for this group", type = "warning")
         return()
       }
 
-      # Parse option symbol to get strike and expiration
-      option_details <- parse_option_details(option_activity$symbol)
+      # Parse option symbol to get strike and expiration (use first option for symbol parsing)
+      option_details <- parse_option_details(option_activities$symbol[1])
 
       # Extract cost basis from stock purchase activities
       stock_purchases <- activities %>%
@@ -200,15 +198,14 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
         log_info("DEBUG: First trade date = {first_trade_date} for group {group_id}")
       }
 
+      # Calculate premium per contract (sum ALL option activities)
+      total_premium <- sum(abs(option_activities$net_amount), na.rm = TRUE)
+      num_contracts <- sum(abs(option_activities$quantity), na.rm = TRUE)
+
+      # DEBUG: Check totals across all option trades
+      log_info("DEBUG: Option activities - total_premium=${sprintf('%.2f', total_premium)}, num_contracts={num_contracts}, num_trades={nrow(option_activities)}")
+
       # Calculate premium per contract
-      total_premium <- abs(option_activity$net_amount)
-      option_quantity <- abs(option_activity$quantity)
-
-      # DEBUG: Check if quantity is in shares or contracts
-      log_info("DEBUG: Option activity - total_premium=${sprintf('%.2f', total_premium)}, quantity={option_quantity}")
-
-      # Quantity is stored as CONTRACTS (not shares) - use directly
-      num_contracts <- option_quantity
       premium_per_contract <- total_premium / num_contracts
 
       log_info("DEBUG: Calculated premium = ${sprintf('%.2f', premium_per_contract)} per contract ({num_contracts} contracts)")
