@@ -1,0 +1,20 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/home/sergeblumenfeld/investR/money_market_analysis/logs/.78b4b54d83c88c5962d75cdda226883f8066948e-audit.json",
+    "files": [
+        {
+            "date": 1768107388462,
+            "name": "/home/sergeblumenfeld/investR/money_market_analysis/logs/mcp-puppeteer-2026-01-10.log",
+            "hash": "c54192dd58a0ce48651d1f49aac74ffaabec8cdb1c5b4117d88d4984ea52d858"
+        },
+        {
+            "date": 1768171552141,
+            "name": "/home/sergeblumenfeld/investR/money_market_analysis/logs/mcp-puppeteer-2026-01-11.log",
+            "hash": "0332a31208c6a44895ca9b8116a2a22d62a03f9ce8aeb0aea25b28dec41f5f25"
+        }
+    ],
+    "hashType": "sha256"
+}
