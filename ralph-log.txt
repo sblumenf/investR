@@ -10,3 +10,27 @@
 
 === Iteration 1 of 10 === 18:46:26 ===
 
+
+## Summary
+
+Completed 2 of 9 batches in this Ralph iteration:
+
+**Batch 1: Cash-Secured Puts (11 files)**
+- 4 Critical findings: NA propagation in calculations, unvalidated option data structures
+- 7 High findings: Silent API failures, no Questrade fallback notifications, reactive side effects  
+- 8 Medium findings: Hardcoded config values, code duplication, missing rate limiting
+- 3 Low findings: Verbose logging, code style issues
+
+**Batch 2: Covered Calls / Dynamic Covered Calls (9 files)**
+- 3 Critical findings: Unvalidated drawdown metrics, config validation gaps, cache TTL enforcement missing
+- 5 High findings: Error swallowing in async execution, missing fallback notifications, zero-dividend filter logic error
+- 6 Medium findings: Hardcoded values breaking config chain, inconsistent error handling patterns
+- 2 Low findings: Verbose logging
+
+Both audit documents saved to `docs/audit/` with detailed file:line references for each finding. Progress tracked in `ralph-progress.md`. 
+
+Next iteration should continue with Batch 3 (Dividend Capture - 20 files) per the spec workflow.
+--- Iteration 1 finished, tasks remain ---
+
+=== Iteration 2 of 10 === 18:52:02 ===
+
