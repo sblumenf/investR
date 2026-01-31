@@ -1,0 +1,105 @@
+{
+  "feature": "code-review",
+  "title": "Full Codebase Audit — investR",
+  "created": "2026-01-31",
+  "status": "approved",
+  "phases": [
+    {
+      "id": "batch-1",
+      "name": "Cash-Secured Puts",
+      "files": 11,
+      "output": "docs/audit/batch-01-csp.md",
+      "status": "pending"
+    },
+    {
+      "id": "batch-2",
+      "name": "Covered Calls / Dynamic Covered Calls",
+      "files": 9,
+      "output": "docs/audit/batch-02-covered-calls.md",
+      "status": "pending"
+    },
+    {
+      "id": "batch-3",
+      "name": "Dividend Capture",
+      "files": 20,
+      "output": "docs/audit/batch-03-dividend-capture.md",
+      "status": "pending"
+    },
+    {
+      "id": "batch-4",
+      "name": "Collars",
+      "files": 6,
+      "output": "docs/audit/batch-04-collars.md",
+      "status": "pending"
+    },
+    {
+      "id": "batch-5",
+      "name": "Calendar Spreads",
+      "files": 5,
+      "output": "docs/audit/batch-05-calendar-spreads.md",
+      "status": "pending"
+    },
+    {
+      "id": "batch-6",
+      "name": "Portfolio Core",
+      "files": 40,
+      "output": "docs/audit/batch-06-portfolio-core.md",
+      "status": "pending"
+    },
+    {
+      "id": "batch-7",
+      "name": "Questrade API + Market Data",
+      "files": 12,
+      "output": "docs/audit/batch-07-questrade-api.md",
+      "status": "pending"
+    },
+    {
+      "id": "batch-8",
+      "name": "Aristocrats / Zero-Dividend / Other Analysis",
+      "files": 24,
+      "output": "docs/audit/batch-08-other-analysis.md",
+      "status": "pending"
+    },
+    {
+      "id": "batch-9",
+      "name": "UI Infrastructure + Config + Shared Utilities",
+      "files": 17,
+      "output": "docs/audit/batch-09-ui-infra.md",
+      "status": "pending"
+    },
+    {
+      "id": "summary",
+      "name": "Master Summary + Quality Gates",
+      "files": 0,
+      "output": "docs/audit/summary.md",
+      "status": "pending",
+      "depends_on": ["batch-1", "batch-2", "batch-3", "batch-4", "batch-5", "batch-6", "batch-7", "batch-8", "batch-9"]
+    }
+  ],
+  "severity_levels": ["Critical", "High", "Medium", "Low"],
+  "review_dimensions": [
+    {"name": "Correctness", "weight": "Critical"},
+    {"name": "Data Integrity", "weight": "Critical"},
+    {"name": "Error Handling", "weight": "High"},
+    {"name": "Maintainability", "weight": "Medium"},
+    {"name": "Performance", "weight": "Medium"},
+    {"name": "Security", "weight": "Medium"},
+    {"name": "Code Style", "weight": "Low"}
+  ],
+  "checklist": [
+    "NA/NULL handling in calculations",
+    "Error propagation (tryCatch vs silent failure)",
+    "DB connection lifecycle (on.exit cleanup)",
+    "Hardcoded values that should be config",
+    "Correct use of parse_option_details() vs manual parsing",
+    "Consistent use of shared_risk_engine for simulations",
+    "Proper reactive isolation in modules",
+    "Dead/unreachable code paths"
+  ],
+  "outputs": {
+    "per_batch": "docs/audit/batch-{NN}-{slug}.md",
+    "summary": "docs/audit/summary.md",
+    "quality_gates": "docs/audit/quality-gates.md"
+  },
+  "total_files": 144
+}

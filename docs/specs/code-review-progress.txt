@@ -1,0 +1,13 @@
+code-review Progress
+====================
+
+[PENDING] Batch 1: Cash-Secured Puts (11 files) -> docs/audit/batch-01-csp.md
+[PENDING] Batch 2: Covered Calls / Dynamic Covered Calls (9 files) -> docs/audit/batch-02-covered-calls.md
+[PENDING] Batch 3: Dividend Capture (20 files) -> docs/audit/batch-03-dividend-capture.md
+[PENDING] Batch 4: Collars (6 files) -> docs/audit/batch-04-collars.md
+[PENDING] Batch 5: Calendar Spreads (5 files) -> docs/audit/batch-05-calendar-spreads.md
+[PENDING] Batch 6: Portfolio Core (40 files) -> docs/audit/batch-06-portfolio-core.md
+[PENDING] Batch 7: Questrade API + Market Data (12 files) -> docs/audit/batch-07-questrade-api.md
+[PENDING] Batch 8: Aristocrats / Zero-Dividend / Other Analysis (24 files) -> docs/audit/batch-08-other-analysis.md
+[PENDING] Batch 9: UI Infrastructure + Config + Shared Utilities (17 files) -> docs/audit/batch-09-ui-infra.md
+[PENDING] Master Summary + Quality Gates -> docs/audit/summary.md

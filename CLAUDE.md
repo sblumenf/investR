@@ -1,115 +1,99 @@
 # investR - Investment Research Shiny Application
 
-## Project Overview
+## Quick Commands
+```r
+# Run the app (dev mode)
+source("dev/run_dev.R")
 
-Production-grade Shiny application built with Golem + Brochure for multi-page investment research and options trading analysis. Integrates with Questrade API for real-time market data.
+# Run tests
+devtools::test()
 
-## Technology Stack
+# Type/syntax check
+devtools::check()
 
-| Layer | Technologies |
-|-------|--------------|
-| **Framework** | Golem (app structure), Brochure (multi-page routing) |
-| **UI** | bslib, Shiny, plotly, DT |
-| **Database** | DuckDB (primary), SQLite |
-| **Options Pricing** | RQuantLib (Greeks, American options), Monte Carlo simulation |
-| **External API** | Questrade (quotes, options chains, account data) |
-| **Data Processing** | tidyverse (dplyr, purrr, tidyr, stringr, lubridate) |
-| **Testing** | testthat with test isolation (setup.R/teardown.R) |
+# Generate documentation
+devtools::document()
 
-## Feature Areas
+# Load package without installing
+devtools::load_all()
+```
 
-### Portfolio Management
-- **Portfolio Groups** - Track positions grouped by strategy
-- **Cash Flow Projections** - Dividend and option income forecasting
-- **Risk Dashboard** - Portfolio-level risk metrics and stress testing
-- **Raw Activities** - Transaction import and reconciliation
+## Architecture
 
-### Options Strategies
-- **Covered Calls** - Dynamic and ETF-based covered call analysis
-- **Cash-Secured Puts** - Equity, ETF, and S&P 500 put strategies
-- **Collars** - Protective collar strategy analysis
-- **Put Calendar Spreads** - Calendar spread opportunity scanning
+Production-grade Shiny app built with Golem + Brochure. Each page runs in an independent Shiny session via Brochure routing. Modules compose the UI on each page.
 
-### Dividend Strategies
-- **Dividend Aristocrats** - Quality dividend stock screening
-- **Dividend Capture** - Weekly, monthly, and high-yield capture strategies
-- **Russell 2000** - Small-cap dividend opportunities
+| Prefix | Purpose | Side Effects |
+|--------|---------|-------------|
+| `page_*.R` | Brochure page definitions (URL routing) | Orchestrates modules |
+| `mod_*.R` | Shiny modules (UI + server in one file) | Reactive I/O |
+| `fct_*.R` | Business logic (pure functions) | None — testable in isolation |
+| `utils_*.R` | Configuration and helpers | Read-only config access |
 
-### Analysis Tools
-- **Extrinsic Value Scanner** - Options premium analysis
-- **Zero-Dividend Analysis** - Non-dividend stock covered calls
+Key patterns:
+- Modules use `moduleServer()` with `NS()` for namespace isolation
+- Business logic in `fct_*.R` must be pure — no Shiny reactivity, no side effects
+- Configuration flows through a 3-tier system: `golem-config.yml` → `STRATEGY_CONFIG` objects in `utils_*_config.R` → `get_golem_config_value()` with fallbacks
+- Never hard-code magic numbers — always use config objects
 
-## File Naming Conventions
+## Database (DuckDB)
 
-| Prefix | Purpose | Example |
-|--------|---------|---------|
-| `page_*.R` | Brochure page definitions | `page_portfolio_groups.R` |
-| `mod_*.R` | Shiny modules (UI + server) | `mod_portfolio_groups_cards.R` |
-| `fct_*.R` | Business logic functions | `fct_monte_carlo.R` |
-| `utils_*.R` | Utility/helper functions | `utils_formatting.R` |
+Primary database at `inst/database/portfolio.duckdb`. Core tables: portfolio_positions, portfolio_activities, portfolio_groups, income_projections, cash_flow_projections.
 
-## Database Patterns
-
+Rules:
+- Always close connections with `on.exit(dbDisconnect(con))` or `tryCatch` finally blocks
 - Use transactions for multi-step operations with rollback on error
-- Always close connections in `tryCatch` finally blocks
-- Audit logging in `projection_recalculations` table for significant changes
-- Test isolation: tests use separate databases, cleaned in teardown.R
+- Audit significant changes in `projection_recalculations` table
+- Tests use isolated temp databases (see `tests/testthat/setup.R`)
 
-## Code Style Requirements
+## Questrade API
 
-- Always use tidyverse syntax (pipes, dplyr verbs)
-- Follow Golem framework best practices for Shiny modules
-- Use testthat for all testing
-- Use logger package for application logging
+READ-ONLY access to 3 accounts (RRSP, SRRSP, LIRA). Tokens cached in `~/.investR_tokens.json` with auto-refresh.
+
+- On 401 errors: attempt token refresh, then provide path to generate new token. Never silently fail.
+- If Questrade fails, fall back to Yahoo Finance via `quantmod`. Track fallbacks with `get_fallback_summary()` and always inform the user which data came from fallback.
+- Rate limiting configured in `golem-config.yml` (0.5-2s between requests)
+- Background refresh runs hourly via `later::later()` with promise chains
+
+## Critical Pitfalls
+
+1. **Option symbol formats**: Two formats exist in production — legacy ("ALB17Dec27C55.00") and new ("AAPL250119C150"). Always use `parse_option_details()`, never parse manually.
+2. **Questrade symbol field**: Sometimes blank for options. Use description field for uniqueness.
+3. **Risk simulation baseline**: Portfolio stress tests MUST use same baseline (purchase_price) as position-level. Use `shared_risk_engine.R` for all simulations.
+4. **Cash flow projection rules vary by strategy**: Covered calls = dividends + option gains. Cash-secured puts = premium only. Legacy covered calls = actuals only. Always check `strategy_type` before generating.
+5. **Database connections**: Always use `on.exit()` for cleanup. Never silently fail — log and inform user.
+
+## Testing
+
+- Framework: testthat 3.0.0+ (Edition 3)
+- Location: `tests/testthat/`
+- Isolation: `setup.R` creates temp DuckDB, `teardown.R` cleans up
+- Pattern: `test-{component}.R` (e.g., `test-fct_monte_carlo.R`)
+- Use `withr::with_options()` for config isolation in tests
+- Mock external APIs (Questrade) — never hit real APIs in tests
+
+## Code Style
+
+- Tidyverse syntax (pipes, dplyr verbs)
+- Logger package for all application logging
+- Golem conventions for module structure
+- RQuantLib for all options pricing (Greeks, American options)
+- Parallel processing via `future` + `furrr` for strategy analysis
 
 ---
 
-# CRITICAL: CODE CHANGE APPROVAL WORKFLOW
+# CODE CHANGE APPROVAL WORKFLOW
 
-## ABSOLUTE RULE: NO CODE CHANGES WITHOUT EXPLICIT APPROVAL
+You are PROHIBITED from using Write, Edit, or NotebookEdit tools until you receive explicit approval with words like "approved", "yes", "proceed", "make the changes", or "go ahead".
 
-You are STRICTLY PROHIBITED from using Write, Edit, or NotebookEdit tools until you receive explicit human approval with words like "approved", "yes", "proceed", "make the changes", or "go ahead".
+When the user mentions bugs, issues, improvements, or features:
+1. ANALYZE — Use Read, Grep, Glob, Bash to investigate
+2. EXPLAIN — What the problem is, what caused it, which files/lines need to change, what the proposed changes would be
+3. ASK — "Would you like me to make these changes?"
+4. WAIT — Do not proceed until you receive explicit approval
 
-## Mandatory Workflow for ALL Code-Related Requests
+Exceptions — proceed directly only when the user says: "Make the changes now", "Just fix it", "Apply the fix", or explicitly approves your proposal.
 
-When the user mentions bugs, issues, improvements, features, or asks you to analyze/investigate code:
-
-1. **STOP** - Do not make any code changes
-2. **ANALYZE** - Use Read, Grep, Glob, Bash to investigate
-3. **EXPLAIN** - Write a clear explanation of:
-   - What the problem/issue is
-   - What caused it
-   - Exactly which files and lines need to change
-   - What the proposed changes would be (in plain English)
-4. **ASK** - End with: "Would you like me to make these changes?"
-5. **WAIT** - Do not proceed until you receive explicit approval
-
-## Examples of What Requires Approval
-
-- "Fix this bug" → Analyze + Explain + Wait for approval
-- "This isn't working correctly" → Analyze + Explain + Wait for approval
-- "Add feature X" → Analyze + Explain + Wait for approval
-- "The sort order is wrong, analyze and explain" → Analyze + Explain + Wait for approval
-- "Refactor this code" → Analyze + Explain + Wait for approval
-
-## The ONLY Exceptions
-
-You may proceed directly to code changes ONLY when the user says:
-- "Make the changes now"
-- "Proceed without asking me"
-- "Just fix it"
-- "Apply the fix"
-- Or explicitly approves your proposed changes
-
-## Other Safety Rules
-
+Safety rules:
 - Never install packages or restart services without approval
-- Never modify database schema without explicit approval
+- Never modify database schema without approval
 - Never delete data without confirmation
-
-## If You Break These Rules
-
-If you accidentally make code changes without approval, immediately:
-1. Apologize
-2. Explain what you changed
-3. Offer to revert the changes
