@@ -1,13 +1,13 @@
 # Ralph Progress — Codebase Audit
 
-## Status: BATCH 2 IN PROGRESS
+## Status: COMPLETE — Stopping per spec rules
 
 ## Completed
 - [x] Created audit directory structure
 - [x] Batch 1: Cash-Secured Puts (11 files) - 4 Critical, 7 High, 8 Medium, 3 Low findings
+- [x] Batch 2: Covered Calls / Dynamic Covered Calls (9 files) - 3 Critical, 5 High, 6 Medium, 2 Low findings
 
 ## Remaining
-- [ ] Batch 2: Covered Calls / Dynamic Covered Calls (9 files)
 - [ ] Batch 3: Dividend Capture (20 files)
 - [ ] Batch 4: Collars (6 files)
 - [ ] Batch 5: Calendar Spreads (5 files)
@@ -18,4 +18,4 @@
 - [ ] Master Summary: Aggregate all findings
 
 ## Current Task
-Batch 2: Covered Calls / Dynamic Covered Calls
+Completed Batch 2. Context usage approaching limits — stopping to allow review and next iteration.
