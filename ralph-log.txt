@@ -10,3 +10,24 @@
 
 === Iteration 1 of 10 === 21:26:12 ===
 
+Perfect! **Batch 6 (Portfolio Core - 40 files) is complete.** I found:
+
+- **5 Critical** findings (including verification of the known Questrade stale data issue)
+- **8 High** findings (error handling, race conditions, data integrity)
+- **10 Medium** findings (code duplication, maintainability)
+- **4 Low** findings (code style)
+- **2 Dead code** items
+
+The audit verified the known issue specified in the spec: **CR-6-001 confirms that Questrade API token refresh failures cause silent stale data usage** without user notification.
+
+**Remaining work:**
+- Batch 7: Questrade API + Market Data (12 files)
+- Batch 8: Aristocrats / Zero-Dividend / Other Analysis (24 files)
+- Batch 9: UI Infrastructure + Config + Shared Utilities (17 files)
+- Master Summary
+
+Should I continue with Batch 7?
+--- Iteration 1 finished, tasks remain ---
+
+=== Iteration 2 of 10 === 21:30:56 ===
+
