@@ -31,3 +31,19 @@ Should I continue with Batch 7?
 
 === Iteration 2 of 10 === 21:30:56 ===
 
+
+[2026-01-31 21:35] Batch 7 Complete: Questrade API + Market Data
+- Reviewed 12 files (fct_questrade_api.R, fct_questrade_options.R, fct_questrade_quotes.R, fct_background_refresh.R, fct_implied_volatility.R, utils_questrade_healthcheck.R, utils_quote_source_toggle.R, utils_market_data.R, utils_options_cache.R, utils_sector_cache.R, mod_token_settings.R, page_token_settings.R)
+- Findings: 3 Critical, 7 High, 7 Medium, 4 Low, 1 Dead code
+- Critical: CR-7-001 (silent 401 failures), CR-7-002 (token race condition), CR-7-003 (NULL auth propagation)
+- High: HI-7-004 (no rate limiting), HI-7-002 (premature token refresh), HI-7-005 (NA handling)
+- Key issue: Rate limiting documented in spec but not implemented anywhere
+- Code duplication: 401 retry logic copy-pasted across 6 functions (ME-7-003)
+- Security concern: Token prefixes logged excessively (ME-7-001)
+- Output: docs/audit/batch-07-questrade-api.md (11K)
+- Status: 7/9 batches complete (103 files reviewed), 2 batches + summary remaining
+Batch 7 complete! The audit has now covered 103 files across 7 batches. Two batches remain (Batch 8 with 24 files and Batch 9 with 17 files), plus the master summary. The Ralph loop will continue automatically in the next iteration.
+--- Iteration 2 finished, tasks remain ---
+
+=== Iteration 3 of 10 === 21:36:36 ===
+
