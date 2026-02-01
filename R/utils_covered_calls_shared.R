@@ -8,7 +8,7 @@
 #' @importFrom logger log_info log_warn log_success log_debug
 #' @importFrom furrr future_map furrr_options
 #' @importFrom future plan multisession
-#' @importFrom purrr compact
+#' @importFrom purrr compact map
 #' @importFrom dplyr bind_rows arrange desc %>%
 NULL
 
@@ -79,8 +79,8 @@ process_stocks_parallel_generic <- function(stock_universe, strike_threshold_pct
   quote_source <- get_quote_source()
   log_info("Quote source for this analysis: {toupper(quote_source)}")
 
-  # Export package to workers to ensure they have access to all functions
-  results <- future_map(stock_universe, function(ticker) {
+  # Analysis function for each ticker (used by both parallel and sequential paths)
+  analyze_ticker <- function(ticker) {
     # Ensure package is loaded in worker
     if (!"investR" %in% loadedNamespaces()) {
       suppressPackageStartupMessages(loadNamespace("investR"))
@@ -114,10 +114,20 @@ process_stocks_parallel_generic <- function(stock_universe, strike_threshold_pct
     }, error = function(e) {
       list(ticker = ticker, status = "error", error = e$message, result = NULL)
     })
-  }, .options = furrr_options(
-    seed = TRUE,
-    packages = "investR"  # Load investR package in each worker
-  ))
+  }
+
+  # Try parallel first, fall back to sequential on failure
+  results <- tryCatch({
+    future_map(stock_universe, analyze_ticker, .options = furrr_options(
+      seed = TRUE,
+      packages = "investR",
+      chunk_size = 5L
+    ))
+  }, error = function(e) {
+    log_warn("Parallel processing failed: {e$message}")
+    log_warn("Falling back to sequential processing...")
+    map(stock_universe, analyze_ticker)
+  })
 
   # Log summary after workers complete (since worker logs don't appear in console)
   log_info("\n=== Worker Results Summary ===")

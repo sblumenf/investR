@@ -22,7 +22,7 @@ default:
 
   # Aristocrats strategy configuration
   aristocrats:
-    max_workers: 10
+    max_workers: 4
     max_stock_price: 300
     strike_threshold_pct: 0.8
     target_days: null
