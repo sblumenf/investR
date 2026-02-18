@@ -21,15 +21,11 @@ dbBegin(conn)
 
 tryCatch({
 
-  # Step 1: Delete position group members
+  # Step 1: Delete position group members (direct match catches orphans too)
   cat("Step 1: Deleting position group members...\n")
   members_deleted <- dbExecute(conn, "
     DELETE FROM position_group_members
-    WHERE group_id IN (
-      SELECT group_id
-      FROM position_groups
-      WHERE group_id LIKE 'TEST_%'
-    )
+    WHERE group_id LIKE 'TEST_%'
   ")
   cat(sprintf("  ✓ Deleted %d position group members\n\n", members_deleted))
 
@@ -41,8 +37,16 @@ tryCatch({
   ")
   cat(sprintf("  ✓ Deleted %d position groups\n\n", groups_deleted))
 
+  # Step 3: Delete test account activities
+  cat("Step 3: Deleting test account activities...\n")
+  activities_deleted <- dbExecute(conn, "
+    DELETE FROM account_activities
+    WHERE account_number = 'TEST123'
+  ")
+  cat(sprintf("  ✓ Deleted %d test account activities\n\n", activities_deleted))
+
   # Commit transaction
-  cat("Step 3: Committing changes...\n")
+  cat("Step 4: Committing changes...\n")
   dbCommit(conn)
   cat("  ✓ Transaction committed successfully\n\n")
 
@@ -53,6 +57,7 @@ tryCatch({
   cat("Summary:\n")
   cat(sprintf("  - Position groups removed: %d\n", groups_deleted))
   cat(sprintf("  - Position group members removed: %d\n", members_deleted))
+  cat(sprintf("  - Account activities removed: %d\n", activities_deleted))
   cat("\n")
 
   # Verify cleanup
@@ -73,7 +78,6 @@ tryCatch({
   cat("\nNext steps:\n")
   cat("1. Your Portfolio Risk Analysis should no longer try to fetch quotes for test symbols\n")
   cat("2. Consider fixing the test suite to use a separate test database\n")
-  cat("3. Optionally clean up the 6 test transactions in account_activities\n")
   cat("\n")
 
 }, error = function(e) {
