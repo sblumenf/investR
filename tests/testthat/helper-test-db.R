@@ -16,7 +16,7 @@
 
 local_test_db <- function(env = parent.frame()) {
   # 1. Create a unique temp path for this test's isolated DuckDB file.
-  test_db_path <- tempfile(pattern = "investR_test_", fileext = ".duckdb")
+  test_db_path <- tempfile(pattern = "investR_test_", fileext = ".sqlite")
 
   # 2. Mock get_portfolio_db_path in the investR package namespace.
   # This ensures all internal package calls (e.g. get_portfolio_db_connection)
@@ -31,13 +31,13 @@ local_test_db <- function(env = parent.frame()) {
   # We open a direct connection here (bypassing get_portfolio_db_connection so
   # we control shutdown), run both schema initializers, then disconnect cleanly
   # before any test code runs.
-  conn <- DBI::dbConnect(duckdb::duckdb(), dbdir = test_db_path, read_only = FALSE)
+  conn <- DBI::dbConnect(RSQLite::SQLite(), test_db_path)
   tryCatch({
     initialize_portfolio_database(conn)
     initialize_income_projection_schema(conn)
     initialize_activities_schema(conn)
   }, finally = {
-    DBI::dbDisconnect(conn, shutdown = TRUE)
+    DBI::dbDisconnect(conn)
   })
 
   # 4. Register cleanup: remove the temp file when the calling test finishes.

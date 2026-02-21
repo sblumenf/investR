@@ -17,7 +17,7 @@ Imports:
     dbplyr,
     dplyr,
     DT,
-    duckdb,
+    RSQLite,
     furrr,
     future,
     golem (>= 0.4.1),

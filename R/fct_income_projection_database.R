@@ -5,7 +5,7 @@
 #'
 #' @name income-projection-database
 #' @import dplyr
-#' @importFrom duckdb duckdb dbConnect dbDisconnect
+#' @importFrom RSQLite SQLite
 #' @importFrom DBI dbExecute dbWriteTable dbGetQuery
 #' @importFrom logger log_info log_warn log_error log_debug
 #' @importFrom lubridate year month
@@ -109,7 +109,7 @@ save_cash_flow_event <- function(group_id, event_date, event_type, amount,
   }
 
   if (should_close) {
-    on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+    on.exit(dbDisconnect(conn), add = TRUE)
   }
 
   tryCatch({
@@ -123,11 +123,11 @@ save_cash_flow_event <- function(group_id, event_date, event_type, amount,
                        format(event_date, "%Y%m%d"),
                        timestamp, random_suffix)
 
-    timestamp <- Sys.time()
+    timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
     event_data <- tibble::tibble(
       event_id = event_id,
       group_id = group_id,
-      event_date = as.Date(event_date),
+      event_date = format(as.Date(event_date), "%Y-%m-%d"),
       event_type = event_type,
       amount = amount,
       status = status,
@@ -156,7 +156,7 @@ save_cash_flow_event <- function(group_id, event_date, event_type, amount,
 #' @noRd
 delete_group_cash_flows <- function(group_id, status_filter = NULL) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     if (!is.null(status_filter)) {
@@ -200,7 +200,7 @@ delete_projected_cash_flows_by_month <- function(group_id, event_type, event_dat
   }
 
   if (should_close) {
-    on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+    on.exit(dbDisconnect(conn), add = TRUE)
   }
 
   tryCatch({
@@ -214,8 +214,8 @@ delete_projected_cash_flows_by_month <- function(group_id, event_type, event_dat
       WHERE group_id = ?
         AND event_type = ?
         AND status = 'projected'
-        AND EXTRACT(YEAR FROM event_date) = ?
-        AND EXTRACT(MONTH FROM event_date) = ?
+        AND CAST(strftime('%Y', event_date) AS INTEGER) = ?
+        AND CAST(strftime('%m', event_date) AS INTEGER) = ?
     "
 
     rows_affected <- dbExecute(conn, sql, params = list(
@@ -257,7 +257,7 @@ delete_projected_option_gains <- function(group_id, conn = NULL) {
   }
 
   if (should_close) {
-    on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+    on.exit(dbDisconnect(conn), add = TRUE)
   }
 
   tryCatch({
@@ -304,7 +304,7 @@ get_group_cash_flows <- function(group_id, conn = NULL) {
   }
 
   if (should_close) {
-    on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+    on.exit(dbDisconnect(conn), add = TRUE)
   }
 
   tryCatch({
@@ -344,7 +344,13 @@ get_group_cash_flows <- function(group_id, conn = NULL) {
     }
 
     log_debug("Income Projection DB: Retrieved {nrow(result)} cash flows for group {group_id}")
-    return(tibble::as_tibble(result))
+    result <- tibble::as_tibble(result) %>%
+      dplyr::mutate(
+        event_date = as.Date(event_date),
+        created_at = as.POSIXct(created_at),
+        updated_at = as.POSIXct(updated_at)
+      )
+    return(result)
   }, error = function(e) {
     log_error("Income Projection DB: Failed to get cash flows for {group_id} - {e$message}")
     # Return empty tibble with correct schema even on error
@@ -386,7 +392,7 @@ get_cash_flows_for_groups <- function(group_ids) {
   }
 
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Build IN clause for SQL
@@ -425,7 +431,13 @@ get_cash_flows_for_groups <- function(group_ids) {
     }
 
     log_debug("Income Projection DB: Retrieved {nrow(result)} cash flows for {length(group_ids)} groups")
-    return(tibble::as_tibble(result))
+    result <- tibble::as_tibble(result) %>%
+      dplyr::mutate(
+        event_date = as.Date(event_date),
+        created_at = as.POSIXct(created_at),
+        updated_at = as.POSIXct(updated_at)
+      )
+    return(result)
 
   }, error = function(e) {
     log_error("Income Projection DB: Failed to get cash flows for groups - {e$message}")
@@ -452,7 +464,7 @@ get_cash_flows_for_groups <- function(group_ids) {
 #' @noRd
 get_projected_income_summary <- function(group_id) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     result <- dbGetQuery(conn, "
@@ -496,7 +508,7 @@ get_projected_income_summary <- function(group_id) {
 #' @noRd
 log_projection_recalculation <- function(group_id, reason, old_count = 0, new_count = 0) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists
@@ -507,7 +519,7 @@ log_projection_recalculation <- function(group_id, reason, old_count = 0, new_co
     recalc_data <- tibble::tibble(
       recalc_id = recalc_id,
       group_id = group_id,
-      recalc_date = Sys.time(),
+      recalc_date = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
       reason = reason,
       old_projection_count = as.integer(old_count),
       new_projection_count = as.integer(new_count)

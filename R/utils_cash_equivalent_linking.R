@@ -4,13 +4,13 @@
 #' cash equivalent groups by account number.
 #'
 #' @importFrom DBI dbConnect dbDisconnect dbGetQuery dbExecute
-#' @importFrom duckdb duckdb
+#' @importFrom RSQLite SQLite
 #' @importFrom logger log_info
 #' @importFrom shiny showNotification
 #' @noRd
 auto_link_cash_equivalents <- function() {
   con <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
 
   # Get unlinked cash equivalent activities
   cash_tickers_sql <- get_cash_equivalent_sql_list()

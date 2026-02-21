@@ -21,7 +21,7 @@
 # Date: 2025-12-10
 
 library(DBI)
-library(duckdb)
+library(RSQLite)
 library(dplyr)
 library(stringr)
 
@@ -32,7 +32,7 @@ cat_info <- function(...) cat("\033[34m", ..., "\033[0m\n", sep = "")
 cat_warn <- function(...) cat("\033[33m", ..., "\033[0m\n", sep = "")
 
 # Database connection
-DB_PATH <- "inst/database/portfolio.duckdb"
+DB_PATH <- "inst/database/portfolio.sqlite"
 
 cat_info("=================================================")
 cat_info("CSP Database Repair Script")
@@ -40,7 +40,7 @@ cat_info("=================================================\n")
 
 # Connect to database
 cat_info("Connecting to database: ", DB_PATH)
-conn <- dbConnect(duckdb::duckdb(), DB_PATH)
+conn <- dbConnect(RSQLite::SQLite(), DB_PATH)
 
 tryCatch({
 
@@ -72,7 +72,7 @@ tryCatch({
     cat_warn("  - The issue has already been fixed")
     cat_warn("  - The corruption pattern has changed")
     cat_info("\nExiting without making changes.")
-    dbDisconnect(conn, shutdown = TRUE)
+    dbDisconnect(conn)
     quit(status = 0)
   }
 
@@ -80,7 +80,7 @@ tryCatch({
     cat_error("Multiple corrupted groups found! Expected only 1.")
     cat_error("Please investigate manually before running this script.")
     print(corrupted_members)
-    dbDisconnect(conn, shutdown = TRUE)
+    dbDisconnect(conn)
     quit(status = 1)
   }
 
@@ -119,7 +119,7 @@ tryCatch({
   if (nrow(activities) == 0) {
     cat_error("No activities found for group ", group_id)
     cat_error("Cannot determine correct symbol. Manual intervention required.")
-    dbDisconnect(conn, shutdown = TRUE)
+    dbDisconnect(conn)
     quit(status = 1)
   }
 
@@ -138,7 +138,7 @@ tryCatch({
   if (is.na(symbol_match[1, 2])) {
     cat_error("Could not extract symbol from description: ", description)
     cat_error("Expected format: 'PUT <SYMBOL> <DATE> <STRIKE>'")
-    dbDisconnect(conn, shutdown = TRUE)
+    dbDisconnect(conn)
     quit(status = 1)
   }
 
@@ -284,6 +284,6 @@ tryCatch({
   cat_error("Error: ", conditionMessage(e))
   cat_error("\nNo changes were made to the database.")
 }, finally = {
-  dbDisconnect(conn, shutdown = TRUE)
+  dbDisconnect(conn)
   cat_info("\nDatabase connection closed.")
 })

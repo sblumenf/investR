@@ -204,7 +204,7 @@ mod_money_market_rotation_server <- function(id) {
         ))
       }
 
-      on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+      on.exit(dbDisconnect(conn), add = TRUE)
 
       # Fetch data
       transactions <- fetch_mm_rotation_transactions(conn)

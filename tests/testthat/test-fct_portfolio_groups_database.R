@@ -2,8 +2,8 @@ test_that("initialize_groups_schema creates tables", {
   skip_on_cran()
 
   # Create in-memory database
-  conn <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(conn, shutdown = TRUE))
+  conn <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(conn))
 
   # Initialize schema
   result <- initialize_groups_schema(conn)

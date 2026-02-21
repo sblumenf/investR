@@ -3,10 +3,10 @@
 
 library(DBI)
 library(dplyr)
-library(duckdb)
+library(RSQLite)
 
-db_path <- "inst/database/portfolio.duckdb"
-conn <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
+db_path <- "inst/database/portfolio.sqlite"
+conn <- dbConnect(RSQLite::SQLite(), db_path)
 
 group_id <- "OTHER_53238853_20251008235947_2223"
 
@@ -256,4 +256,4 @@ if (exists("cost_basis") && nrow(current_position) > 0) {
   }
 }
 
-dbDisconnect(conn, shutdown = TRUE)
+dbDisconnect(conn)

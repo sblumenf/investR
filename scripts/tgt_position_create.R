@@ -9,14 +9,14 @@
 library(dplyr)
 library(tibble)
 library(DBI)
-library(duckdb)
+library(RSQLite)
 
 cat("========================================\n")
 cat("TGT POSITION CREATION - EXECUTION\n")
 cat("========================================\n\n")
 
 # Connect to database (read-write mode)
-conn <- dbConnect(duckdb::duckdb(), 'inst/database/portfolio.duckdb')
+conn <- dbConnect(RSQLite::SQLite(), 'inst/database/portfolio.sqlite')
 
 # Wrap everything in a transaction for safety
 tryCatch({
@@ -359,5 +359,5 @@ tryCatch({
   cat("Error message: ", e$message, "\n")
   cat("\nNo changes were made to the database.\n")
 }, finally = {
-  dbDisconnect(conn, shutdown = TRUE)
+  dbDisconnect(conn)
 })

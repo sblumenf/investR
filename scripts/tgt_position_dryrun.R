@@ -9,14 +9,14 @@
 library(dplyr)
 library(tibble)
 library(DBI)
-library(duckdb)
+library(RSQLite)
 
 cat("========================================\n")
 cat("TGT POSITION CREATION - DRY RUN\n")
 cat("========================================\n\n")
 
 # Connect to database (read-only for verification)
-conn <- dbConnect(duckdb::duckdb(), 'inst/database/portfolio.duckdb', read_only = TRUE)
+conn <- dbConnect(RSQLite::SQLite(), 'inst/database/portfolio.sqlite', flags = RSQLite::SQLITE_RO)
 
 # =============================================================================
 # STEP 1: Show Current State
@@ -283,4 +283,4 @@ cat("NO DATA HAS BEEN WRITTEN TO THE DATABASE.\n\n")
 
 cat("If this looks correct, I will create the actual execution script.\n")
 
-dbDisconnect(conn, shutdown = TRUE)
+dbDisconnect(conn)

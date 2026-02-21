@@ -6,7 +6,7 @@
 #'
 #' @name activities-database
 #' @import dplyr
-#' @importFrom duckdb duckdb dbConnect dbDisconnect
+#' @importFrom RSQLite SQLite
 #' @importFrom DBI dbExecute dbWriteTable dbGetQuery
 #' @importFrom logger log_info log_warn log_error log_debug
 #' @importFrom purrr map_chr
@@ -94,16 +94,11 @@ initialize_activities_schema <- function(conn) {
     ")
 
     # Migration: Add ignore_for_grouping column if it doesn't exist
-    tryCatch({
-      dbExecute(conn, "
-        ALTER TABLE account_activities
-        ADD COLUMN IF NOT EXISTS ignore_for_grouping BOOLEAN DEFAULT FALSE
-      ")
+    cols <- DBI::dbGetQuery(conn, "PRAGMA table_info(account_activities)")
+    if (!"ignore_for_grouping" %in% cols$name) {
+      dbExecute(conn, "ALTER TABLE account_activities ADD COLUMN ignore_for_grouping BOOLEAN DEFAULT FALSE")
       log_debug("Activities DB: Added ignore_for_grouping column (migration)")
-    }, error = function(e) {
-      # Column might already exist in older databases, that's okay
-      log_debug("Activities DB: ignore_for_grouping column already exists")
-    })
+    }
 
     log_debug("Activities DB: Schema initialized successfully")
     return(TRUE)
@@ -132,7 +127,7 @@ save_activities_batch <- function(activities_df) {
   }
 
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     initialize_activities_schema(conn)
@@ -153,6 +148,7 @@ save_activities_batch <- function(activities_df) {
       SELECT account_number, description, trade_date, action, quantity, net_amount
       FROM account_activities
     ") %>%
+      dplyr::mutate(trade_date = as.POSIXct(trade_date, origin = "1970-01-01", tz = "UTC")) %>%
       as_tibble()
 
     # 3. Perform the anti_join on native data types for robust duplicate detection.
@@ -208,7 +204,7 @@ save_activities_batch <- function(activities_df) {
 #' @noRd
 enrich_blank_symbols_unlinked <- function() {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Find unlinked transactions with blank symbols
@@ -302,7 +298,7 @@ enrich_blank_symbols_unlinked <- function() {
 #' @noRd
 get_unprocessed_activities <- function() {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists
@@ -337,7 +333,7 @@ get_unprocessed_activities <- function() {
 #' @export
 get_last_activities_update <- function() {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists
@@ -371,7 +367,7 @@ get_last_activities_update <- function() {
 #' @noRd
 get_activities_by_group <- function(group_id) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     result <- dbGetQuery(conn, "
@@ -409,7 +405,7 @@ get_activities_for_groups <- function(group_ids) {
   }
 
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Build IN clause for SQL
@@ -447,7 +443,7 @@ get_activities_for_groups <- function(group_ids) {
 #' @noRd
 get_unlinked_activities_for_ticker <- function(ticker, account_number) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     result <- dbGetQuery(conn, "
@@ -487,7 +483,7 @@ mark_activities_processed <- function(activity_ids) {
   }
 
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Create placeholders for IN clause
@@ -520,7 +516,7 @@ mark_activities_processed <- function(activity_ids) {
 #' @noRd
 link_activity_to_group <- function(activity_id, group_id) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # First, get activity details to check if reconciliation is needed
@@ -550,7 +546,7 @@ link_activity_to_group <- function(activity_id, group_id) {
         delete_projected_cash_flows_by_month(
           group_id = group_id,
           event_type = "dividend",
-          event_date = as.Date(activity$transaction_date[1]),
+          event_date = as.Date(as.POSIXct(activity$transaction_date[1], origin = "1970-01-01")),
           conn = conn
         )
       }
@@ -619,7 +615,7 @@ link_activity_to_group <- function(activity_id, group_id) {
 get_activities <- function(type_filter = NULL, symbol_filter = NULL,
                            start_date = NULL, end_date = NULL) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists

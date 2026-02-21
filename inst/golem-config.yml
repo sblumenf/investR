@@ -213,7 +213,7 @@ default:
 
   # Portfolio management configuration
   portfolio:
-    database_path: portfolio.duckdb  # DuckDB file name (stored in inst/database/)
+    database_path: portfolio.sqlite  # SQLite file name (stored in inst/database/)
     stale_threshold_minutes: 15  # Auto-refresh if data older than this
     default_visible_columns:
       - symbol

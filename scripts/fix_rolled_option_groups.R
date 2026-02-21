@@ -19,7 +19,7 @@
 #
 
 library(DBI)
-library(duckdb)
+library(RSQLite)
 library(dplyr)
 library(logger)
 library(devtools)
@@ -41,7 +41,7 @@ if (dry_run) {
 }
 
 # Connect to database
-db_path <- file.path(getwd(), "inst", "database", "portfolio.duckdb")
+db_path <- file.path(getwd(), "inst", "database", "portfolio.sqlite")
 
 if (!file.exists(db_path)) {
   stop("Database file not found: ", db_path)
@@ -49,8 +49,12 @@ if (!file.exists(db_path)) {
 
 log_info("Connecting to database: {db_path}")
 
-conn <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = dry_run)
-on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+conn <- if (dry_run) {
+  dbConnect(RSQLite::SQLite(), db_path, flags = RSQLite::SQLITE_RO)
+} else {
+  dbConnect(RSQLite::SQLite(), db_path)
+}
+on.exit(dbDisconnect(conn), add = TRUE)
 
 # Get all open groups
 log_info("Fetching open position groups...")

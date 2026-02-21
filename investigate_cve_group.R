@@ -5,15 +5,15 @@
 
 library(dplyr)
 library(DBI)
-library(duckdb)
+library(RSQLite)
 library(logger)
 
 # Set log level
 log_threshold(INFO)
 
 # Connect directly to database
-db_path <- "inst/database/portfolio.duckdb"
-conn <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
+db_path <- "inst/database/portfolio.sqlite"
+conn <- dbConnect(RSQLite::SQLite(), db_path)
 
 cat("\n=================================================================\n")
 cat("INVESTIGATION: CVE Group Capital Deployed Calculation\n")
@@ -260,4 +260,4 @@ cat("END OF INVESTIGATION\n")
 cat("=================================================================\n")
 
 # Close database connection
-dbDisconnect(conn, shutdown = TRUE)
+dbDisconnect(conn)

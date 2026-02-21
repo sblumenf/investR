@@ -781,7 +781,7 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
 
       # Get database connection
       conn <- get_portfolio_db_connection()
-      on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+      on.exit(dbDisconnect(conn), add = TRUE)
 
       # Get preview data
       preview <- preview_legacy_conversion(conn, group_id)
@@ -883,7 +883,7 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
 
       # Get database connection
       conn <- get_portfolio_db_connection()
-      on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+      on.exit(dbDisconnect(conn), add = TRUE)
 
       # Execute conversion
       result <- convert_to_legacy_covered_call(conn, group_id)

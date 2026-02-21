@@ -11,7 +11,7 @@
 #
 
 library(DBI)
-library(duckdb)
+library(RSQLite)
 library(dplyr)
 library(logger)
 
@@ -25,14 +25,14 @@ log_info("Proceeding with cleanup...")
 
 # Connect to database (READ-WRITE mode)
 # Use inst/database directly since we're running from source, not installed package
-db_path <- file.path(getwd(), "inst", "database", "portfolio.duckdb")
+db_path <- file.path(getwd(), "inst", "database", "portfolio.sqlite")
 
 if (!file.exists(db_path)) {
   stop("Database file not found: ", db_path)
 }
 
-conn <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
-on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+conn <- dbConnect(RSQLite::SQLite(), db_path)
+on.exit(dbDisconnect(conn), add = TRUE)
 
 # Get all activities
 log_info("Fetching all transactions...")

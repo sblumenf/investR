@@ -7,7 +7,7 @@
 #' @name cash-flow-projection
 #' @import dplyr
 #' @importFrom DBI dbGetQuery dbConnect dbDisconnect
-#' @importFrom duckdb duckdb
+#' @importFrom RSQLite SQLite
 #' @importFrom tibble tibble as_tibble
 #' @importFrom lubridate floor_date year month
 #' @importFrom purrr map_chr
@@ -29,7 +29,7 @@ NULL
 #' @noRd
 get_actual_cash_flows_from_activities <- function() {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Query activities that are linked to groups
@@ -196,7 +196,7 @@ get_actual_cash_flows_from_activities <- function() {
 #' @noRd
 get_ungrouped_dividends <- function() {
  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     result <- dbGetQuery(conn, "
@@ -251,7 +251,7 @@ get_ungrouped_dividends <- function() {
 #' @noRd
 get_cash_equivalent_capital_gains <- function() {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Get cash equivalent tickers
@@ -424,7 +424,7 @@ empty_cash_flow_tibble <- function() {
 #' @noRd
 get_projected_cash_flows_from_database <- function() {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists
@@ -541,7 +541,7 @@ get_projected_cash_flows_from_database <- function() {
 #' @noRd
 get_cash_flow_date_range <- function() {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Get earliest activity date

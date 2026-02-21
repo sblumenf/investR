@@ -6,10 +6,16 @@
 #'
 #' @name portfolio-groups-database
 #' @import dplyr
-#' @importFrom duckdb duckdb dbConnect dbDisconnect
+#' @importFrom RSQLite SQLite
 #' @importFrom DBI dbExecute dbWriteTable dbGetQuery
 #' @importFrom logger log_info log_warn log_error log_debug
 NULL
+
+# Helper: check if a column exists in a SQLite table
+.column_exists <- function(conn, table_name, column_name) {
+  cols <- DBI::dbGetQuery(conn, paste0("PRAGMA table_info(", table_name, ")"))
+  column_name %in% cols$name
+}
 
 ################################################################################
 # SCHEMA INITIALIZATION
@@ -90,14 +96,7 @@ initialize_groups_schema <- function(conn) {
 migrate_groups_schema_for_pnl <- function(conn) {
   tryCatch({
     # Check if status column exists
-    result <- dbGetQuery(conn, "
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'position_groups'
-        AND column_name = 'status'
-    ")
-
-    if (nrow(result) == 0) {
+    if (!.column_exists(conn, "position_groups", "status")) {
       # Add status column (open, closed)
       dbExecute(conn, "
         ALTER TABLE position_groups
@@ -107,14 +106,7 @@ migrate_groups_schema_for_pnl <- function(conn) {
     }
 
     # Check if total_return_pct column exists
-    result <- dbGetQuery(conn, "
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'position_groups'
-        AND column_name = 'total_return_pct'
-    ")
-
-    if (nrow(result) == 0) {
+    if (!.column_exists(conn, "position_groups", "total_return_pct")) {
       # Add total_return_pct column
       dbExecute(conn, "
         ALTER TABLE position_groups
@@ -124,14 +116,7 @@ migrate_groups_schema_for_pnl <- function(conn) {
     }
 
     # Check if total_return_amount column exists
-    result <- dbGetQuery(conn, "
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'position_groups'
-        AND column_name = 'total_return_amount'
-    ")
-
-    if (nrow(result) == 0) {
+    if (!.column_exists(conn, "position_groups", "total_return_amount")) {
       # Add total_return_amount column
       dbExecute(conn, "
         ALTER TABLE position_groups
@@ -141,14 +126,7 @@ migrate_groups_schema_for_pnl <- function(conn) {
     }
 
     # Check if annualized_return_pct column exists
-    result <- dbGetQuery(conn, "
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'position_groups'
-        AND column_name = 'annualized_return_pct'
-    ")
-
-    if (nrow(result) == 0) {
+    if (!.column_exists(conn, "position_groups", "annualized_return_pct")) {
       # Add annualized_return_pct column
       dbExecute(conn, "
         ALTER TABLE position_groups
@@ -177,14 +155,7 @@ migrate_groups_schema_for_pnl <- function(conn) {
 migrate_members_schema_for_allocation <- function(conn) {
   tryCatch({
     # Check if allocated_quantity column exists
-    result <- dbGetQuery(conn, "
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'position_group_members'
-        AND column_name = 'allocated_quantity'
-    ")
-
-    if (nrow(result) == 0) {
+    if (!.column_exists(conn, "position_group_members", "allocated_quantity")) {
       # Add allocated_quantity column (NULL for options, quantity for stocks)
       dbExecute(conn, "
         ALTER TABLE position_group_members
@@ -225,7 +196,7 @@ create_position_group <- function(group_id, group_name = NULL, strategy_type,
                                   auto_name = TRUE) {
 
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists
@@ -321,7 +292,7 @@ update_position_group <- function(group_id, group_name = NULL,
                                   strategy_type = NULL) {
 
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Build dynamic UPDATE statement
@@ -395,7 +366,7 @@ update_group_option_member <- function(group_id, old_symbol, new_symbol, conn = 
   }
 
   if (should_close) {
-    on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+    on.exit(dbDisconnect(conn), add = TRUE)
   }
 
   tryCatch({
@@ -447,7 +418,7 @@ update_group_option_member <- function(group_id, old_symbol, new_symbol, conn = 
 #' @noRd
 reopen_position_group <- function(group_id) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Update status to open
@@ -502,7 +473,7 @@ delete_position_group <- function(group_id) {
 #' @export
 unlink_position_group <- function(group_id) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     log_info("Unlink Group: Starting unlink operation for group {group_id}")
@@ -571,7 +542,7 @@ unlink_position_group <- function(group_id) {
 #' @noRd
 get_all_groups <- function(include_closed = FALSE) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists
@@ -635,7 +606,7 @@ get_all_groups <- function(include_closed = FALSE) {
 #' @noRd
 get_group_by_id <- function(group_id) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     result <- dbGetQuery(conn, "
@@ -661,7 +632,7 @@ get_group_by_id <- function(group_id) {
 #' @noRd
 get_group_members <- function(group_id) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     result <- dbGetQuery(conn, "
@@ -696,7 +667,7 @@ get_members_for_groups <- function(group_ids) {
   }
 
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Build IN clause for SQL
@@ -737,7 +708,7 @@ get_members_for_groups <- function(group_ids) {
 #' @noRd
 add_group_member <- function(group_id, account_number, symbol, role) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     member_data <- tibble::tibble(
@@ -770,7 +741,7 @@ add_group_member <- function(group_id, account_number, symbol, role) {
 #' @noRd
 remove_group_member <- function(group_id, symbol) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     rows_affected <- dbExecute(conn,
@@ -934,7 +905,7 @@ convert_to_legacy_covered_call <- function(conn = NULL, group_id) {
   }
 
   if (should_close) {
-    on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+    on.exit(dbDisconnect(conn), add = TRUE)
   }
 
   tryCatch({

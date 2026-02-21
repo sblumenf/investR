@@ -6,12 +6,12 @@
 #
 
 library(DBI)
-library(duckdb)
+library(RSQLite)
 library(dplyr)
 
 # Connect to database (read-only for dry run)
-db_path <- "inst/database/portfolio.duckdb"
-conn <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = TRUE)
+db_path <- "inst/database/portfolio.sqlite"
+conn <- dbConnect(RSQLite::SQLite(), db_path, flags = RSQLite::SQLITE_RO)
 
 # Fake account numbers used in tests
 fake_accounts_sql <- "('12345', '99999', '88888', 'TEST123', 'TEST456', 'TEST789', 'TEST222', 'TEST111', 'TEST999')"
@@ -201,4 +201,4 @@ if (total > 0) {
 cat("\n=================================================================\n")
 
 # Disconnect
-dbDisconnect(conn, shutdown = TRUE)
+dbDisconnect(conn)

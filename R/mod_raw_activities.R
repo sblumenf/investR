@@ -28,7 +28,7 @@ mod_raw_activities_server <- function(id){
     # Fetch all activities from the database
     all_activities <- reactive({
       conn <- get_portfolio_db_connection()
-      on.exit(dbDisconnect(conn, shutdown = TRUE))
+      on.exit(dbDisconnect(conn))
       dbGetQuery(conn, "SELECT * FROM account_activities ORDER BY trade_date DESC")
     })
 

@@ -585,7 +585,7 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
           }, error = function(e) {
             log_warn(sprintf("Error updating activity symbols in database: %s", e$message))
           }, finally = {
-            dbDisconnect(db_conn, shutdown = TRUE)
+            dbDisconnect(db_conn)
           })
         }
       } else {
@@ -730,7 +730,7 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
       saved_members <- tryCatch({
         dbGetQuery(conn, "SELECT symbol, role FROM position_group_members WHERE group_id = ?", params = list(group_id))
       }, finally = {
-        dbDisconnect(conn, shutdown = TRUE)
+        dbDisconnect(conn)
       })
 
       log_info(sprintf("[POINT E] Queried back %d members from database for group %s:", nrow(saved_members), group_id))

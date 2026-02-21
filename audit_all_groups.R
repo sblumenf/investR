@@ -5,11 +5,11 @@
 
 library(dplyr)
 library(DBI)
-library(duckdb)
+library(RSQLite)
 
 # Connect to database
-db_path <- "inst/database/portfolio.duckdb"
-conn <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
+db_path <- "inst/database/portfolio.sqlite"
+conn <- dbConnect(RSQLite::SQLite(), db_path)
 
 cat("\n=================================================================\n")
 cat("AUDIT: Position Groups Missing Activities\n")
@@ -140,4 +140,4 @@ if (length(groups_with_issues) > 0) {
 cat("\n=================================================================\n")
 
 # Close connection
-dbDisconnect(conn, shutdown = TRUE)
+dbDisconnect(conn)

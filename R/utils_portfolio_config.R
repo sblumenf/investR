@@ -36,7 +36,7 @@ get_portfolio_config <- function(key, default = NULL) {
 #' @return Character path to database file
 #' @noRd
 get_portfolio_db_path <- function() {
-  db_filename <- get_portfolio_config("database_path", "portfolio.duckdb")
+  db_filename <- get_portfolio_config("database_path", "portfolio.sqlite")
   db_dir <- app_sys("database")
 
   # Ensure directory exists

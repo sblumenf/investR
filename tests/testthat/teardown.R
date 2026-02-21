@@ -9,7 +9,7 @@ gc()
 # Remove any leftover temp databases matching the pattern used by helper-test-db.R
 leftover <- list.files(
   path      = tempdir(),
-  pattern   = "^investR_test_.*\\.duckdb",
+  pattern   = "^investR_test_.*\\.sqlite",
   full.names = TRUE
 )
 

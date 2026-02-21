@@ -204,7 +204,7 @@ update_group_pnl <- function(group_id) {
   }
 
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Update position_groups table with P&L metrics
@@ -255,7 +255,7 @@ close_position_group <- function(group_id) {
   }
 
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Delete ALL cash flows (both projected and actual)
@@ -338,7 +338,7 @@ auto_close_group <- function(group_id) {
   strategy_type <- group_info$strategy_type[1]
 
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Always delete ALL cash flows (both projected and actual)

@@ -5,7 +5,7 @@
 #'
 #' @name activity-linking-tracking
 #' @importFrom DBI dbConnect dbDisconnect dbGetQuery
-#' @importFrom duckdb duckdb
+#' @importFrom RSQLite SQLite
 #' @import dplyr
 #' @importFrom logger log_info log_warn
 NULL
@@ -19,7 +19,7 @@ NULL
 #' @export
 get_unlinked_activities <- function() {
   con <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
 
   unlinked <- dbGetQuery(con, "
     SELECT
@@ -50,7 +50,7 @@ get_unlinked_activities <- function() {
 #' @export
 get_linking_stats <- function() {
   con <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
 
   stats <- dbGetQuery(con, "
     SELECT
@@ -79,7 +79,7 @@ get_linking_stats <- function() {
 #' @export
 get_unlinked_by_symbol <- function() {
   con <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
 
   by_symbol <- dbGetQuery(con, "
     SELECT
@@ -107,7 +107,7 @@ get_unlinked_by_symbol <- function() {
 #' @export
 get_orphaned_activities <- function() {
   con <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
 
   orphaned <- dbGetQuery(con, "
     SELECT DISTINCT
@@ -143,7 +143,7 @@ get_orphaned_activities <- function() {
 link_activities_to_group <- function(activity_ids, group_id) {
   if (length(activity_ids) == 0) return(TRUE)
   con <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
 
   tryCatch({
     # Verify group exists
@@ -175,7 +175,7 @@ link_activities_to_group <- function(activity_ids, group_id) {
       dividend_months <- dividends %>%
         as_tibble() %>%
         mutate(
-          transaction_date = as.Date(transaction_date),
+          transaction_date = as.Date(as.POSIXct(transaction_date, origin = "1970-01-01")),
           year = lubridate::year(transaction_date),
           month = lubridate::month(transaction_date)
         ) %>%
@@ -412,7 +412,7 @@ link_activities_to_group <- function(activity_ids, group_id) {
 #' @export
 unlink_activity <- function(activity_id) {
   con <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   tryCatch({
     dbExecute(con, "UPDATE account_activities SET group_id = NULL WHERE activity_id = ?", params = list(activity_id))
     log_info("Unlinked activity {activity_id}")
@@ -445,7 +445,7 @@ ignore_activity <- function(activity_id) {
 batch_ignore_activities <- function(activity_ids) {
   if (length(activity_ids) == 0) return(TRUE)
   con <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   tryCatch({
     query <- "UPDATE account_activities SET ignore_for_grouping = TRUE WHERE activity_id IN (?)"
     dbExecute(con, query, params = list(activity_ids))
@@ -467,7 +467,7 @@ batch_ignore_activities <- function(activity_ids) {
 #' @export
 unignore_activity <- function(activity_id) {
   con <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   tryCatch({
     dbExecute(con, "UPDATE account_activities SET ignore_for_grouping = FALSE WHERE activity_id = ?", params = list(activity_id))
     log_info("Cleared ignore flag for activity {activity_id}")

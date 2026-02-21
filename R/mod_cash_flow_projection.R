@@ -79,7 +79,7 @@ mod_cash_flow_projection_server <- function(id){
         initialize_groups_schema(conn)
         initialize_income_projection_schema(conn)
         initialize_activities_schema(conn)
-        dbDisconnect(conn, shutdown = TRUE)
+        dbDisconnect(conn)
         schema_initialized(TRUE)
         log_info("Cash Flow Projection: Database schemas initialized")
       }

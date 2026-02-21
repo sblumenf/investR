@@ -5,7 +5,7 @@
 #'
 #' @name suggestions-database
 #' @import dplyr
-#' @importFrom duckdb duckdb dbConnect dbDisconnect
+#' @importFrom RSQLite SQLite
 #' @importFrom DBI dbExecute dbWriteTable dbGetQuery
 #' @importFrom logger log_info log_warn log_error log_debug
 #' @importFrom jsonlite toJSON fromJSON
@@ -83,7 +83,7 @@ save_suggestion <- function(pattern_type, activity_ids, suggested_group_name,
                             suggested_strategy_type, reasoning) {
 
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists
@@ -127,7 +127,7 @@ save_suggestion <- function(pattern_type, activity_ids, suggested_group_name,
 #' @noRd
 get_pending_suggestions <- function() {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists
@@ -171,7 +171,7 @@ get_pending_suggestions <- function() {
 #' @noRd
 get_suggestion_by_id <- function(suggestion_id) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     result <- dbGetQuery(conn, "
@@ -211,7 +211,7 @@ get_suggestion_by_id <- function(suggestion_id) {
 #' @noRd
 approve_suggestion <- function(suggestion_id, created_group_id) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     rows_affected <- dbExecute(conn, "
@@ -245,7 +245,7 @@ approve_suggestion <- function(suggestion_id, created_group_id) {
 #' @noRd
 reject_suggestion <- function(suggestion_id) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     rows_affected <- dbExecute(conn, "
@@ -277,7 +277,7 @@ reject_suggestion <- function(suggestion_id) {
 #' @noRd
 get_suggestion_counts <- function() {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists
@@ -315,7 +315,7 @@ get_suggestion_counts <- function() {
 #' @noRd
 get_suggestion_history <- function(limit = NULL) {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists

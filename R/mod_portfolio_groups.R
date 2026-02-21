@@ -117,7 +117,7 @@ mod_portfolio_groups_server <- function(id){
         initialize_groups_schema(conn)
         initialize_income_projection_schema(conn)
         initialize_activities_schema(conn)
-        dbDisconnect(conn, shutdown = TRUE)
+        dbDisconnect(conn)
         schema_initialized(TRUE)
       }
     })

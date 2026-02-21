@@ -1,10 +1,10 @@
 #' Portfolio Database Operations
 #'
-#' Functions for managing portfolio position data in DuckDB
+#' Functions for managing portfolio position data in SQLite
 #'
 #' @name portfolio-database
 #' @import dplyr
-#' @importFrom duckdb duckdb dbConnect dbDisconnect
+#' @importFrom RSQLite SQLite
 #' @importFrom DBI dbExecute dbWriteTable dbGetQuery
 #' @importFrom logger log_info log_warn log_error log_debug
 NULL
@@ -25,7 +25,11 @@ get_portfolio_db_connection <- function(read_only = FALSE) {
   db_path <- get_portfolio_db_path()
 
   tryCatch({
-    conn <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = read_only)
+    if (read_only) {
+      conn <- dbConnect(RSQLite::SQLite(), db_path, flags = RSQLite::SQLITE_RO)
+    } else {
+      conn <- dbConnect(RSQLite::SQLite(), db_path)
+    }
     log_debug("Portfolio DB: Connected to {db_path} (read_only={read_only})")
     return(conn)
   }, error = function(e) {
@@ -183,7 +187,7 @@ save_positions_snapshot <- function(positions_df, snapshot_timestamp) {
   }
 
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists
@@ -239,7 +243,7 @@ save_positions_snapshot <- function(positions_df, snapshot_timestamp) {
 #' @noRd
 get_latest_snapshot_timestamp <- function() {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists
@@ -272,7 +276,7 @@ get_latest_snapshot_timestamp <- function() {
 #' @noRd
 get_latest_positions <- function() {
   conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(conn), add = TRUE)
 
   tryCatch({
     # Ensure schema exists

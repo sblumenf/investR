@@ -4,14 +4,14 @@
 
 library(DBI)
 library(dplyr)
-library(duckdb)
+library(RSQLite)
 library(tidyr)
 library(purrr)
 library(logger)
 
 # Simple override for the database path function
 get_portfolio_db_path <- function() {
-  db_path <- "inst/database/portfolio.duckdb"
+  db_path <- "inst/database/portfolio.sqlite"
   if (!file.exists(db_path)) {
     stop("Database not found at: ", db_path)
   }
@@ -21,7 +21,7 @@ get_portfolio_db_path <- function() {
 # Get connection
 get_portfolio_db_connection <- function() {
   db_path <- get_portfolio_db_path()
-  conn <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
+  conn <- dbConnect(RSQLite::SQLite(), db_path)
   return(conn)
 }
 
@@ -109,7 +109,7 @@ print(current_positions %>%
          total_cost, current_market_value, open_pnl))
 cat("\n")
 
-dbDisconnect(conn, shutdown = TRUE)
+dbDisconnect(conn)
 
 # 5. Get cash flows
 cat("--- 5. CASH FLOWS FOR GROUP ---\n")
@@ -128,7 +128,7 @@ if (nrow(cash_flows) > 0) {
   cat("No cash flows found for this group.\n")
 }
 cat("\n")
-dbDisconnect(conn, shutdown = TRUE)
+dbDisconnect(conn)
 
 # 6. Calculate metrics using the function
 cat("--- 6. CALCULATED METRICS FROM calculate_open_group_metrics() ---\n")

@@ -13,7 +13,7 @@
 #' Once all historical transactions are loaded, regular API fetching will maintain the database.
 
 library(DBI)
-library(duckdb)
+library(RSQLite)
 library(dplyr)
 library(lubridate)
 library(logger)
@@ -25,11 +25,11 @@ source("R/fct_activities_database.R")
 
 # For standalone scripts, define simplified db path function
 get_portfolio_db_connection <- function() {
-  db_path <- "inst/database/portfolio.duckdb"
+  db_path <- "inst/database/portfolio.sqlite"
   if (!file.exists(db_path)) {
     stop("Database not found at: ", db_path)
   }
-  conn <- dbConnect(duckdb(), dbdir = db_path, read_only = FALSE)
+  conn <- dbConnect(RSQLite::SQLite(), db_path)
   return(conn)
 }
 
@@ -208,7 +208,7 @@ cat(sprintf("Processing %d transactions...\n\n", length(transactions)))
 
 # Connect to database
 conn <- get_portfolio_db_connection()
-on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
+on.exit(dbDisconnect(conn), add = TRUE)
 
 # Ensure schema exists
 initialize_activities_schema(conn)

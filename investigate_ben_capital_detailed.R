@@ -4,12 +4,12 @@
 
 library(DBI)
 library(dplyr)
-library(duckdb)
+library(RSQLite)
 library(tidyr)
 
 # Database connection
-db_path <- "inst/database/portfolio.duckdb"
-conn <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
+db_path <- "inst/database/portfolio.sqlite"
+conn <- dbConnect(RSQLite::SQLite(), db_path)
 
 group_id <- "OTHER_53238853_20251008235947_2223"
 
@@ -195,4 +195,4 @@ cat("\n=================================================================\n")
 cat("END OF DETAILED INVESTIGATION\n")
 cat("=================================================================\n")
 
-dbDisconnect(conn, shutdown = TRUE)
+dbDisconnect(conn)
