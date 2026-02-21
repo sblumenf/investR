@@ -4,5 +4,5 @@
 \alias{portfolio-database}
 \title{Portfolio Database Operations}
 \description{
-Functions for managing portfolio position data in DuckDB
+Functions for managing portfolio position data in SQLite
 }
