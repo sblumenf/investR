@@ -1,5 +1,6 @@
 test_that("linking single dividend activity deletes projected dividend", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create test group with projected dividend
   test_group_id <- paste0("TEST_RECON_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -72,13 +73,11 @@ test_that("linking single dividend activity deletes projected dividend", {
   # Verify projected dividend was deleted
   cash_flows_after <- get_group_cash_flows(test_group_id)
   expect_equal(nrow(cash_flows_after), 0)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("linking batch of dividend activities deletes multiple months", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create test group with projected dividends for multiple months
   test_group_id <- paste0("TEST_BATCH_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -192,13 +191,11 @@ test_that("linking batch of dividend activities deletes multiple months", {
   cash_flows_after <- get_group_cash_flows(test_group_id)
   expect_equal(nrow(cash_flows_after), 1)
   expect_equal(lubridate::month(cash_flows_after$event_date[1]), 5)  # May
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("linking non-dividend activities does not trigger reconciliation", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create test group with projected dividend
   test_group_id <- paste0("TEST_NONDIV_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -270,13 +267,11 @@ test_that("linking non-dividend activities does not trigger reconciliation", {
   cash_flows_after <- get_group_cash_flows(test_group_id)
   expect_equal(nrow(cash_flows_after), 1)
   expect_equal(cash_flows_after$status[1], "projected")
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("linking dividend when no projection exists does not error", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create test group with NO projected dividends
   test_group_id <- paste0("TEST_NOPROJ_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -337,6 +332,4 @@ test_that("linking dividend when no projection exists does not error", {
   # Verify still no projected dividends
   cash_flows_after <- get_group_cash_flows(test_group_id)
   expect_equal(nrow(cash_flows_after), 0)
-
-  # Cleanup (nothing to clean up for cash flows)
 })

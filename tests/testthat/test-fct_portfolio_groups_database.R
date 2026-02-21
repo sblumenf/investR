@@ -22,21 +22,7 @@ test_that("initialize_groups_schema creates tables", {
 
 test_that("create_position_group works correctly", {
   skip_on_cran()
-
-  # Setup mock database path
-  temp_db <- tempfile(fileext = ".duckdb")
-  on.exit(unlink(temp_db))
-
-  # Override get_portfolio_db_connection for testing
-  # This is a simplified test - in real scenario would use dependency injection
-
-  # Clean up any existing test group first
-  tryCatch({
-    conn <- get_portfolio_db_connection()
-    DBI::dbExecute(conn, "DELETE FROM position_group_members WHERE group_id = 'TEST_001'")
-    DBI::dbExecute(conn, "DELETE FROM position_groups WHERE group_id = 'TEST_001'")
-    DBI::dbDisconnect(conn)
-  }, error = function(e) NULL)
+  local_test_db()
 
   # Create a simple group
   members <- tibble::tibble(
@@ -69,6 +55,7 @@ test_that("create_position_group works correctly", {
 
 test_that("update_position_group updates metadata", {
   skip_on_cran()
+  local_test_db()
 
   # Create a group first
   members <- tibble::tibble(
@@ -99,7 +86,7 @@ test_that("update_position_group updates metadata", {
 
 test_that("close_position_group marks group as closed without deleting data", {
   skip_on_cran()
-  skip("Database integration test - requires isolated test database to avoid transaction conflicts")
+  local_test_db()
 
   # Create a group
   members <- tibble::tibble(
@@ -140,6 +127,7 @@ test_that("close_position_group marks group as closed without deleting data", {
 
 test_that("reopen_position_group restores closed group to open", {
   skip_on_cran()
+  local_test_db()
 
   # Create and close a group
   members <- tibble::tibble(
@@ -173,6 +161,7 @@ test_that("reopen_position_group restores closed group to open", {
 
 test_that("delete_position_group throws error (deprecated)", {
   skip_on_cran()
+  local_test_db()
 
   # Attempting to delete should throw an error
   expect_error(
@@ -183,6 +172,7 @@ test_that("delete_position_group throws error (deprecated)", {
 
 test_that("check_group_integrity detects missing positions", {
   skip_on_cran()
+  local_test_db()
 
   # Create a group in the database
   members <- tibble::tibble(
@@ -214,7 +204,7 @@ test_that("check_group_integrity detects missing positions", {
 
 test_that("add_group_member adds position to group", {
   skip_on_cran()
-  skip("Database integration test - requires isolated test database to avoid transaction conflicts")
+  local_test_db()
 
   # Create a group
   create_position_group(
@@ -243,7 +233,7 @@ test_that("add_group_member adds position to group", {
 
 test_that("remove_group_member removes position from group", {
   skip_on_cran()
-  skip("Database integration test - requires isolated test database to avoid transaction conflicts")
+  local_test_db()
 
   # Create a group with multiple members
   members <- tibble::tibble(
@@ -275,6 +265,7 @@ test_that("remove_group_member removes position from group", {
 
 test_that("get_all_groups returns all groups", {
   skip_on_cran()
+  local_test_db()
 
   # Create multiple groups
   create_position_group(
@@ -306,6 +297,7 @@ test_that("get_all_groups returns all groups", {
 
 test_that("get_position_group_name finds group for symbol", {
   skip_on_cran()
+  local_test_db()
 
   # Create a group with multiple members
   create_position_group(

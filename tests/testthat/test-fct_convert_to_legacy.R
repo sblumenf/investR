@@ -14,6 +14,7 @@
 
 test_that("can_convert_to_legacy returns valid=TRUE for Dynamic Covered Calls with projections", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create Dynamic Covered Calls group with projected cash flows
   test_group_id <- paste0("TEST_CONV_VALID_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -57,13 +58,11 @@ test_that("can_convert_to_legacy returns valid=TRUE for Dynamic Covered Calls wi
   expect_true(result$valid)
   expect_equal(result$projected_count, 2)
   expect_equal(result$projected_amount, 350)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("can_convert_to_legacy accepts any strategy type with projected cash flows", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create Zero-Dividend Stocks group with projected cash flows
   test_group_id <- paste0("TEST_CONV_ANY_STRATEGY_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -98,13 +97,11 @@ test_that("can_convert_to_legacy accepts any strategy type with projected cash f
   expect_true(result$valid)
   expect_equal(result$projected_count, 1)
   expect_equal(result$projected_amount, 250)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("can_convert_to_legacy returns valid=FALSE for closed groups", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create Dynamic Covered Calls group
   test_group_id <- paste0("TEST_CONV_CLOSED_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -139,6 +136,7 @@ test_that("can_convert_to_legacy returns valid=FALSE for closed groups", {
 
 test_that("can_convert_to_legacy returns valid=FALSE when no projected cash flows exist", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create Dynamic Covered Calls group WITHOUT projected cash flows
   test_group_id <- paste0("TEST_CONV_NOPROJ_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -168,6 +166,7 @@ test_that("can_convert_to_legacy returns valid=FALSE when no projected cash flow
 
 test_that("can_convert_to_legacy returns valid=FALSE for non-existent group_id", {
   skip_on_cran()
+  local_test_db()
 
   conn <- get_portfolio_db_connection()
   on.exit(DBI::dbDisconnect(conn, shutdown = TRUE))
@@ -184,6 +183,7 @@ test_that("can_convert_to_legacy returns valid=FALSE for non-existent group_id",
 
 test_that("preview_legacy_conversion returns correct breakdown of projected events", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create group with multiple projected events
   test_group_id <- paste0("TEST_PREV_DETAIL_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -236,13 +236,11 @@ test_that("preview_legacy_conversion returns correct breakdown of projected even
   expect_equal(preview$by_type$dividend$amount, 300)
   expect_equal(preview$by_type$option_gain$count, 1)
   expect_equal(preview$by_type$option_gain$amount, 500)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("preview_legacy_conversion handles groups with no projections gracefully", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create group without projected events
   test_group_id <- paste0("TEST_PREV_EMPTY_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -274,6 +272,7 @@ test_that("preview_legacy_conversion handles groups with no projections graceful
 
 test_that("convert_to_legacy_covered_call successfully converts Dynamic to Legacy", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create Dynamic Covered Calls group with projected and actual events
   test_group_id <- paste0("TEST_CONV_SUCCESS_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -341,13 +340,11 @@ test_that("convert_to_legacy_covered_call successfully converts Dynamic to Legac
   # Verify actual events preserved
   expect_equal(cash_flows_after$event_type, "dividend")
   expect_equal(cash_flows_after$amount, 100)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("convert_to_legacy_covered_call updates updated_at timestamp", {
   skip_on_cran()
+  local_test_db()
 
   # Setup
   test_group_id <- paste0("TEST_CONV_TIMESTAMP_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -388,13 +385,11 @@ test_that("convert_to_legacy_covered_call updates updated_at timestamp", {
   new_timestamp <- group_after$updated_at
 
   expect_true(new_timestamp > original_timestamp)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("convert_to_legacy_covered_call creates projection_recalculations log entry", {
   skip_on_cran()
+  local_test_db()
 
   # Setup
   test_group_id <- paste0("TEST_CONV_LOG_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -447,9 +442,6 @@ test_that("convert_to_legacy_covered_call creates projection_recalculations log 
   expect_equal(log_entries$old_projection_count, 2)
   expect_equal(log_entries$new_projection_count, 0)
   expect_true(!is.na(log_entries$recalc_id))
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 ################################################################################
@@ -458,6 +450,7 @@ test_that("convert_to_legacy_covered_call creates projection_recalculations log 
 
 test_that("convert_to_legacy_covered_call rolls back transaction on validation failure", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create group without projected cash flows (invalid for conversion)
   test_group_id <- paste0("TEST_CONV_ROLLBACK1_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -487,6 +480,7 @@ test_that("convert_to_legacy_covered_call rolls back transaction on validation f
 
 test_that("convert_to_legacy_covered_call handles non-existent group gracefully", {
   skip_on_cran()
+  local_test_db()
 
   # Attempt conversion on non-existent group
   result <- convert_to_legacy_covered_call(group_id = "NONEXISTENT_GROUP_99999")
@@ -496,6 +490,7 @@ test_that("convert_to_legacy_covered_call handles non-existent group gracefully"
 
 test_that("convert_to_legacy_covered_call handles connection management correctly", {
   skip_on_cran()
+  local_test_db()
 
   # Setup
   test_group_id <- paste0("TEST_CONV_CONN_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -544,9 +539,6 @@ test_that("convert_to_legacy_covered_call handles connection management correctl
   # Connection should still be valid (not closed by function)
   expect_true(DBI::dbIsValid(conn))
   DBI::dbDisconnect(conn, shutdown = TRUE)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 ################################################################################
@@ -555,6 +547,7 @@ test_that("convert_to_legacy_covered_call handles connection management correctl
 
 test_that("End-to-End: Complete conversion workflow", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create realistic Dynamic Covered Calls position
   test_group_id <- paste0("TEST_E2E_WORKFLOW_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -653,9 +646,6 @@ test_that("End-to-End: Complete conversion workflow", {
   validation2 <- can_convert_to_legacy(conn, test_group_id)
   expect_false(validation2$valid)
   expect_match(validation2$reason, "No projected cash flows")
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 ################################################################################
@@ -664,6 +654,7 @@ test_that("End-to-End: Complete conversion workflow", {
 
 test_that("Edge Case: Multiple projected events of same type", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create group with many projected dividends
   test_group_id <- paste0("TEST_EDGE_MULTI_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -702,13 +693,11 @@ test_that("Edge Case: Multiple projected events of same type", {
   # Verify all deleted
   flows_after <- get_group_cash_flows(test_group_id)
   expect_equal(nrow(flows_after), 0)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("Edge Case: Mixed projected and actual events of same type", {
   skip_on_cran()
+  local_test_db()
 
   # Setup
   test_group_id <- paste0("TEST_EDGE_MIXED_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -771,13 +760,11 @@ test_that("Edge Case: Mixed projected and actual events of same type", {
   expect_equal(nrow(flows_after), 2)
   expect_true(all(flows_after$status == "actual"))
   expect_true(all(flows_after$event_date < as.Date("2025-03-01")))
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("Edge Case: Large amounts (precision testing)", {
   skip_on_cran()
+  local_test_db()
 
   # Setup
   test_group_id <- paste0("TEST_EDGE_PRECISION_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -827,9 +814,6 @@ test_that("Edge Case: Large amounts (precision testing)", {
   # Verify deletion successful
   flows_after <- get_group_cash_flows(test_group_id)
   expect_equal(nrow(flows_after), 0)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 ################################################################################
@@ -838,6 +822,7 @@ test_that("Edge Case: Large amounts (precision testing)", {
 
 test_that("Transaction Safety: No orphaned records after failed conversion", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create group that will fail validation (closed)
   test_group_id <- paste0("TEST_SAFETY_ORPHAN_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -888,13 +873,11 @@ test_that("Transaction Safety: No orphaned records after failed conversion", {
   expect_equal(flows_before_count, flows_after_count)
   expect_equal(group_before$strategy_type, group_after$strategy_type)
   expect_equal(group_before$status, group_after$status)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("Audit Trail: projection_recalculations entry contains correct metadata", {
   skip_on_cran()
+  local_test_db()
 
   # Setup
   test_group_id <- paste0("TEST_AUDIT_META_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -947,7 +930,4 @@ test_that("Audit Trail: projection_recalculations entry contains correct metadat
   expect_true(log_entry$recalc_date >= time_before)
   expect_true(log_entry$recalc_date <= time_after)
   expect_match(log_entry$recalc_id, test_group_id)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })

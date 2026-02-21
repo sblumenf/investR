@@ -1,6 +1,5 @@
 test_that("calculate_group_pnl computes correct total and annualized returns", {
-  # Setup: Create test group and activities in database
-  skip_on_ci()
+  local_test_db()
   skip_on_cran()
 
   # Create test group
@@ -84,16 +83,10 @@ test_that("calculate_group_pnl computes correct total and annualized returns", {
   expect_equal(pnl$annualized_return_pct, annualized, tolerance = 0.01)
 
   expect_equal(pnl$hold_days, 100)
-
-  # Cleanup
-  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
-  dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
-  dbExecute(conn, "DELETE FROM account_activities WHERE account_number = 'TEST123'")
 })
 
 test_that("calculate_group_pnl includes commissions in total cost", {
-  skip_on_ci()
+  local_test_db()
   skip_on_cran()
 
   # Create test group
@@ -154,16 +147,10 @@ test_that("calculate_group_pnl includes commissions in total cost", {
 
   # Net P&L = 55100 - 55010 = 90
   expect_equal(pnl$net_pnl, 90)
-
-  # Cleanup
-  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
-  dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
-  dbExecute(conn, "DELETE FROM account_activities WHERE account_number = 'TEST456'")
 })
 
 test_that("close_position_group marks group closed and calculates final P&L", {
-  skip_on_ci()
+  local_test_db()
   skip_on_cran()
 
   # Create test group
@@ -239,17 +226,10 @@ test_that("close_position_group marks group closed and calculates final P&L", {
   # Verify projected cash flows are deleted
   cash_flows_after <- get_group_cash_flows(group_id)
   expect_equal(nrow(cash_flows_after %>% filter(status == "projected")), 0)
-
-  # Cleanup
-  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
-  dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
-  dbExecute(conn, "DELETE FROM account_activities WHERE account_number = 'TEST789'")
-  dbExecute(conn, "DELETE FROM position_group_cash_flows WHERE group_id = ?", params = list(group_id))
 })
 
 test_that("calculate_group_pnl handles groups with only dividends correctly", {
-  skip_on_ci()
+  local_test_db()
   skip_on_cran()
 
   # Create test group
@@ -299,16 +279,10 @@ test_that("calculate_group_pnl handles groups with only dividends correctly", {
   expect_equal(pnl$total_proceeds, 50)
   expect_equal(pnl$total_dividends, 50)
   expect_equal(pnl$total_return_pct, 0)  # Avoid division by zero
-
-  # Cleanup
-  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
-  dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
-  dbExecute(conn, "DELETE FROM account_activities WHERE account_number = 'TEST999'")
 })
 
 test_that("calculate_group_pnl uses legacy accounting for Other strategy", {
-  skip_on_ci()
+  local_test_db()
   skip_on_cran()
 
   # Test that "Other" strategy keeps legacy behavior: premiums as income
@@ -370,15 +344,10 @@ test_that("calculate_group_pnl uses legacy accounting for Other strategy", {
 
   # Return % = (750 / 15000) * 100 = 5%
   expect_equal(pnl$total_return_pct, (750 / 15000) * 100, tolerance = 0.01)
-
-  # Cleanup
-  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
-  dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
-  dbExecute(conn, "DELETE FROM account_activities WHERE account_number = 'TEST111'")
 })
 
 test_that("calculate_group_pnl handles buy-to-close option transactions correctly", {
+  local_test_db()
   # Test the user's reported bug scenario:
   # - Sold call for $7,153.01
   # - Bought call back for $13,882.99
@@ -477,12 +446,6 @@ test_that("calculate_group_pnl handles buy-to-close option transactions correctl
 
   # Net P&L = proceeds - cost = 30920 - 30374.98 = 545.02
   expect_equal(pnl$net_pnl, 545.02, tolerance = 0.01)
-
-  # Cleanup
-  conn <- get_portfolio_db_connection()
-  on.exit(dbDisconnect(conn, shutdown = TRUE), add = TRUE)
-  dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
-  dbExecute(conn, "DELETE FROM account_activities WHERE account_number = 'TEST222'")
 })
 
 test_that("annualized return calculation is correct for various hold periods", {

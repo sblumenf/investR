@@ -231,6 +231,7 @@ test_that("get_missing_members returns empty when all exist", {
 
 test_that("build_group_name_lookup returns correct structure", {
   skip_on_cran()
+  local_test_db()
 
   # Create test groups in database
   create_position_group(
@@ -278,6 +279,7 @@ test_that("build_group_name_lookup returns correct structure", {
 
 test_that("build_group_name_lookup handles empty database", {
   skip_on_cran()
+  local_test_db()
 
   # This will use the actual database which may have groups
   # Just verify it returns a valid tibble structure

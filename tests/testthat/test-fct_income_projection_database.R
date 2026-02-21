@@ -1,5 +1,6 @@
 test_that("delete_projected_cash_flows_by_month deletes correct events", {
   skip_on_cran()
+  local_test_db()
 
   # Setup: Create a test group with projected dividend events
   test_group_id <- paste0("TEST_GROUP_", format(Sys.time(), "%Y%m%d%H%M%S"))
@@ -65,13 +66,11 @@ test_that("delete_projected_cash_flows_by_month deletes correct events", {
   expect_true(3 %in% remaining_months)  # March still there
   expect_false(4 %in% remaining_months) # April deleted
   expect_true(5 %in% remaining_months)  # May still there
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("delete_projected_cash_flows_by_month only deletes projected status", {
   skip_on_cran()
+  local_test_db()
 
   test_group_id <- paste0("TEST_GROUP_", format(Sys.time(), "%Y%m%d%H%M%S"))
 
@@ -124,13 +123,11 @@ test_that("delete_projected_cash_flows_by_month only deletes projected status", 
   expect_equal(nrow(cash_flows_after), 1)
   expect_equal(cash_flows_after$status[1], "actual")
   expect_equal(cash_flows_after$amount[1], 105)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("delete_projected_cash_flows_by_month deletes all projected events in month", {
   skip_on_cran()
+  local_test_db()
 
   test_group_id <- paste0("TEST_GROUP_", format(Sys.time(), "%Y%m%d%H%M%S"))
 
@@ -190,13 +187,11 @@ test_that("delete_projected_cash_flows_by_month deletes all projected events in 
   # Verify all were deleted
   cash_flows_after <- get_group_cash_flows(test_group_id)
   expect_equal(nrow(cash_flows_after), 0)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })
 
 test_that("delete_projected_cash_flows_by_month handles non-existent group/month gracefully", {
   skip_on_cran()
+  local_test_db()
 
   # Try to delete from non-existent group
   rows_deleted <- delete_projected_cash_flows_by_month(
@@ -235,6 +230,7 @@ test_that("delete_projected_cash_flows_by_month handles non-existent group/month
 
 test_that("delete_projected_cash_flows_by_month only deletes matching event_type", {
   skip_on_cran()
+  local_test_db()
 
   test_group_id <- paste0("TEST_GROUP_", format(Sys.time(), "%Y%m%d%H%M%S"))
 
@@ -287,7 +283,4 @@ test_that("delete_projected_cash_flows_by_month only deletes matching event_type
   expect_equal(nrow(cash_flows_after), 1)
   expect_equal(cash_flows_after$event_type[1], "option_gain")
   expect_equal(cash_flows_after$amount[1], 500)
-
-  # Cleanup
-  delete_group_cash_flows(test_group_id)
 })

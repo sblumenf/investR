@@ -1,5 +1,6 @@
 test_that("create_group_card returns NULL for non-existent group", {
   skip_on_cran()
+  local_test_db()
 
   card <- create_group_card("NONEXISTENT_GROUP")
 
@@ -8,6 +9,7 @@ test_that("create_group_card returns NULL for non-existent group", {
 
 test_that("create_group_card generates valid HTML structure", {
   skip_on_cran()
+  local_test_db()
 
   # Create a test group
   group_id <- "TEST_CARD_GROUP"

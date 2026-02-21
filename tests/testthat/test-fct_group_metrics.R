@@ -1,5 +1,6 @@
 test_that("calculate_open_group_metrics returns correct structure", {
   skip_on_cran()
+  local_test_db()
 
   # Create a test group with activities
   group_id <- "TEST_METRICS_GROUP"
@@ -32,13 +33,11 @@ test_that("calculate_open_group_metrics returns correct structure", {
     expect_true("days_held" %in% names(metrics))
     expect_true("projected_annualized_return_pct" %in% names(metrics))
   }
-
-  # Clean up
-  close_position_group(group_id)
 })
 
 test_that("calculate_open_group_metrics handles groups with no activities", {
   skip_on_cran()
+  local_test_db()
 
   # Create a group without activities
   group_id <- "TEST_NO_ACTIVITIES"
@@ -57,13 +56,11 @@ test_that("calculate_open_group_metrics handles groups with no activities", {
 
   # Should return empty tibble
   expect_equal(nrow(metrics), 0)
-
-  # Clean up
-  close_position_group(group_id)
 })
 
 test_that("get_group_summary_for_card routes correctly by status", {
   skip_on_cran()
+  local_test_db()
 
   # Create an open group
   group_id <- "TEST_SUMMARY_GROUP"
@@ -101,6 +98,7 @@ test_that("get_group_summary_for_card routes correctly by status", {
 
 test_that("calculate_dashboard_metrics returns correct structure", {
   skip_on_cran()
+  local_test_db()
 
   # Calculate metrics for all groups
   metrics <- calculate_dashboard_metrics()
@@ -124,6 +122,7 @@ test_that("calculate_dashboard_metrics returns correct structure", {
 
 test_that("calculate_dashboard_metrics filters correctly", {
   skip_on_cran()
+  local_test_db()
 
   # Test open filter
   open_metrics <- calculate_dashboard_metrics(status_filter = "open")
@@ -138,6 +137,7 @@ test_that("calculate_dashboard_metrics filters correctly", {
 
 test_that("get_strategy_breakdown groups correctly", {
   skip_on_cran()
+  local_test_db()
 
   breakdown <- get_strategy_breakdown()
 
@@ -154,6 +154,7 @@ test_that("get_strategy_breakdown groups correctly", {
 
 test_that("calculate_open_group_metrics applies correct accounting for covered call strategies", {
   skip_on_cran()
+  local_test_db()
 
   # This test verifies that for non-"Other" strategies:
   # - Option premiums reduce cost basis (not added to cash collected)

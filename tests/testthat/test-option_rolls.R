@@ -87,17 +87,10 @@ test_that("detect_option_roll handles different underlying tickers", {
 
 test_that("update_group_option_member updates symbol successfully", {
   skip_on_cran()
+  local_test_db()
 
   # Create test group
   group_id <- paste0("TEST_ROLL_", format(Sys.time(), "%Y%m%d%H%M%S"))
-
-  # Clean up first
-  tryCatch({
-    conn <- get_portfolio_db_connection()
-    DBI::dbExecute(conn, "DELETE FROM position_group_members WHERE group_id = ?", params = list(group_id))
-    DBI::dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
-    DBI::dbDisconnect(conn, shutdown = TRUE)
-  }, error = function(e) NULL)
 
   # Create group with old option
   members <- tibble::tibble(
@@ -130,29 +123,14 @@ test_that("update_group_option_member updates symbol successfully", {
 
   option_member <- updated_members %>% filter(role == "short_call")
   expect_equal(option_member$symbol, "BAC21Nov25C52.00")
-
-  # Clean up
-  tryCatch({
-    conn <- get_portfolio_db_connection()
-    DBI::dbExecute(conn, "DELETE FROM position_group_members WHERE group_id = ?", params = list(group_id))
-    DBI::dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
-    DBI::dbDisconnect(conn, shutdown = TRUE)
-  }, error = function(e) NULL)
 })
 
 test_that("update_group_option_member handles missing old symbol", {
   skip_on_cran()
+  local_test_db()
 
   # Create test group
   group_id <- paste0("TEST_ROLL_MISSING_", format(Sys.time(), "%Y%m%d%H%M%S"))
-
-  # Clean up first
-  tryCatch({
-    conn <- get_portfolio_db_connection()
-    DBI::dbExecute(conn, "DELETE FROM position_group_members WHERE group_id = ?", params = list(group_id))
-    DBI::dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
-    DBI::dbDisconnect(conn, shutdown = TRUE)
-  }, error = function(e) NULL)
 
   # Create group with different option
   members <- tibble::tibble(
@@ -183,14 +161,6 @@ test_that("update_group_option_member handles missing old symbol", {
   members_after <- get_group_members(group_id)
   option_member <- members_after %>% filter(role == "short_call")
   expect_equal(option_member$symbol, "BAC15Nov25C50.00")  # Still the original
-
-  # Clean up
-  tryCatch({
-    conn <- get_portfolio_db_connection()
-    DBI::dbExecute(conn, "DELETE FROM position_group_members WHERE group_id = ?", params = list(group_id))
-    DBI::dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
-    DBI::dbDisconnect(conn, shutdown = TRUE)
-  }, error = function(e) NULL)
 })
 
 test_that("detect_option_roll handles expiration as closing event", {
@@ -217,19 +187,10 @@ test_that("detect_option_roll handles expiration as closing event", {
 
 test_that("Zero-Dividend Stocks: initial premium is NOT a cash flow, roll premium IS", {
   skip_on_cran()
+  local_test_db()
 
   # Create test group
   group_id <- paste0("TEST_ZERODIV_CF_", format(Sys.time(), "%Y%m%d%H%M%S"))
-
-  # Clean up first
-  tryCatch({
-    conn <- get_portfolio_db_connection()
-    DBI::dbExecute(conn, "DELETE FROM account_activities WHERE group_id = ?", params = list(group_id))
-    DBI::dbExecute(conn, "DELETE FROM position_group_cash_flows WHERE group_id = ?", params = list(group_id))
-    DBI::dbExecute(conn, "DELETE FROM position_group_members WHERE group_id = ?", params = list(group_id))
-    DBI::dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
-    DBI::dbDisconnect(conn, shutdown = TRUE)
-  }, error = function(e) NULL)
 
   # Create Zero-Dividend Stocks group
   members <- tibble::tibble(
@@ -349,14 +310,4 @@ test_that("Zero-Dividend Stocks: initial premium is NOT a cash flow, roll premiu
   roll_premiums <- cash_flows_after_roll %>% filter(event_type == "option_premium", status == "actual")
   expect_equal(nrow(roll_premiums), 1)  # Should be ONE (roll premium is income)
   expect_equal(roll_premiums$amount[1], 356.03)
-
-  # Clean up
-  tryCatch({
-    conn <- get_portfolio_db_connection()
-    DBI::dbExecute(conn, "DELETE FROM account_activities WHERE group_id = ?", params = list(group_id))
-    DBI::dbExecute(conn, "DELETE FROM position_group_cash_flows WHERE group_id = ?", params = list(group_id))
-    DBI::dbExecute(conn, "DELETE FROM position_group_members WHERE group_id = ?", params = list(group_id))
-    DBI::dbExecute(conn, "DELETE FROM position_groups WHERE group_id = ?", params = list(group_id))
-    DBI::dbDisconnect(conn, shutdown = TRUE)
-  }, error = function(e) NULL)
 })
