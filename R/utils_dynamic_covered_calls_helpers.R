@@ -288,9 +288,21 @@ pre_filter_stocks_by_price <- function(tickers, max_price = 250) {
   log_info("Pre-filtering {length(tickers)} stocks by price (<= ${max_price})...")
 
   tryCatch({
-    # Fetch current quotes for all tickers in batch
-    # This is much more efficient than individual calls
-    quotes <- fetch_current_quote(tickers, fields = "Last Trade (Price Only)")
+    quote_source <- getOption("investR.quote_source", default = "questrade")
+
+    if (quote_source == "questrade") {
+      quotes <- purrr::map_dfr(tickers, function(t) {
+        tryCatch(
+          fetch_current_quote(t, fields = "Last Trade (Price Only)"),
+          error = function(e) {
+            log_warn("Price filter: failed to fetch quote for {t} ({e$message})")
+            NULL
+          }
+        )
+      })
+    } else {
+      quotes <- fetch_current_quote(tickers, fields = "Last Trade (Price Only)")
+    }
 
     if (is.null(quotes) || nrow(quotes) == 0) {
       log_warn("Failed to fetch quotes, returning all tickers")

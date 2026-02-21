@@ -437,7 +437,7 @@ get_options_chain <- function(ticker, current_price) {
 
       # Filter for ITM calls with valid bids
       itm_calls <- calls %>%
-        filter(Strike < current_price | ITM == TRUE) %>%
+        filter(Strike < current_price) %>%
         filter(!is.na(Bid) & Bid > ARISTOCRATS_CONFIG$min_option_bid) %>%
         mutate(
           expiration = as.Date(exp_date, format = "%b.%d.%Y"),
