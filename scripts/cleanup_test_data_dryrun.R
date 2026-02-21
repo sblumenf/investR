@@ -13,12 +13,15 @@ library(dplyr)
 db_path <- "inst/database/portfolio.duckdb"
 conn <- dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = TRUE)
 
+# Fake account numbers used in tests
+fake_accounts_sql <- "('12345', '99999', '88888', 'TEST123', 'TEST456', 'TEST789', 'TEST222', 'TEST111', 'TEST999')"
+
 cat("\n=================================================================\n")
 cat("DRY RUN: Test Data Cleanup Analysis\n")
 cat("=================================================================\n\n")
 
-# Find all TEST_ position groups
-test_groups <- dbGetQuery(conn, "
+# Find all test position groups (by fake account number or TEST% group_id)
+test_groups <- dbGetQuery(conn, sprintf("
   SELECT
     group_id,
     group_name,
@@ -27,9 +30,10 @@ test_groups <- dbGetQuery(conn, "
     account_number,
     created_at
   FROM position_groups
-  WHERE group_id LIKE 'TEST_%'
+  WHERE account_number IN %s
+     OR group_id LIKE 'TEST%%'
   ORDER BY created_at DESC
-")
+", fake_accounts_sql))
 
 cat("POSITION GROUPS TO DELETE:\n")
 cat("---------------------------\n")
@@ -61,24 +65,24 @@ if (nrow(test_groups) > 0) {
   print(timestamps, row.names = FALSE)
 
 } else {
-  cat("No TEST_ groups found in database.\n")
+  cat("No test groups found in database.\n")
 }
 
 cat("\n=================================================================\n\n")
 
-# Find all members of TEST_ groups
-test_members <- dbGetQuery(conn, "
+# Find all test position group members (by fake account number or TEST% group_id)
+test_members <- dbGetQuery(conn, sprintf("
   SELECT
-    pgm.group_id,
-    pgm.symbol,
-    pgm.role,
-    pgm.added_at,
-    pg.group_name
-  FROM position_group_members pgm
-  JOIN position_groups pg ON pgm.group_id = pg.group_id
-  WHERE pg.group_id LIKE 'TEST_%'
-  ORDER BY pgm.added_at DESC
-")
+    group_id,
+    symbol,
+    role,
+    account_number,
+    added_at
+  FROM position_group_members
+  WHERE account_number IN %s
+     OR group_id LIKE 'TEST%%'
+  ORDER BY added_at DESC
+", fake_accounts_sql))
 
 cat("POSITION GROUP MEMBERS TO DELETE:\n")
 cat("----------------------------------\n")
@@ -95,13 +99,58 @@ if (nrow(test_members) > 0) {
   cat("Symbols: ", paste(unique_symbols$symbol, collapse = ", "), "\n")
 
 } else {
-  cat("No members found for TEST_ groups.\n")
+  cat("No members found for test groups.\n")
 }
 
 cat("\n=================================================================\n\n")
 
-# Check for any TEST_ symbols in account_activities
-test_activities <- dbGetQuery(conn, "
+# Check projection_recalculations for TEST% group_ids
+test_projections <- dbGetQuery(conn, "
+  SELECT
+    group_id,
+    reason,
+    recalc_date
+  FROM projection_recalculations
+  WHERE group_id LIKE 'TEST%'
+  ORDER BY recalc_date DESC
+")
+
+cat("PROJECTION RECALCULATIONS TO DELETE:\n")
+cat("-------------------------------------\n")
+if (nrow(test_projections) > 0) {
+  print(test_projections, row.names = FALSE)
+  cat(sprintf("\nTotal projection recalculations to delete: %d\n", nrow(test_projections)))
+} else {
+  cat("No test projection recalculations found.\n")
+}
+
+cat("\n=================================================================\n\n")
+
+# Check position_group_cash_flows for TEST% group_ids
+test_cash_flows <- dbGetQuery(conn, "
+  SELECT
+    group_id,
+    event_date,
+    amount,
+    event_type
+  FROM position_group_cash_flows
+  WHERE group_id LIKE 'TEST%'
+  ORDER BY event_date DESC
+")
+
+cat("POSITION GROUP CASH FLOWS TO DELETE:\n")
+cat("-------------------------------------\n")
+if (nrow(test_cash_flows) > 0) {
+  print(test_cash_flows, row.names = FALSE)
+  cat(sprintf("\nTotal cash flows to delete: %d\n", nrow(test_cash_flows)))
+} else {
+  cat("No test cash flows found.\n")
+}
+
+cat("\n=================================================================\n\n")
+
+# Check for test account activities by fake account number
+test_activities <- dbGetQuery(conn, sprintf("
   SELECT
     activity_id,
     account_number,
@@ -111,18 +160,17 @@ test_activities <- dbGetQuery(conn, "
     quantity,
     price
   FROM account_activities
-  WHERE symbol LIKE 'TEST%' OR symbol IN ('ABC', 'XYZ')
+  WHERE account_number IN %s
   ORDER BY transaction_date DESC
   LIMIT 20
-")
+", fake_accounts_sql))
 
 cat("TEST TRANSACTIONS IN ACCOUNT_ACTIVITIES:\n")
 cat("-----------------------------------------\n")
 if (nrow(test_activities) > 0) {
   cat("WARNING: Found test transactions in account_activities table:\n\n")
   print(test_activities, row.names = FALSE)
-  cat("\nNote: These are in account_activities and won't be deleted by the cleanup script.\n")
-  cat("They should be removed separately if needed.\n")
+  cat(sprintf("\nTotal test activities to delete: %d\n", nrow(test_activities)))
 } else {
   cat("No test transactions found in account_activities (this is good).\n")
 }
@@ -132,11 +180,14 @@ cat("\n=================================================================\n\n")
 # Summary
 cat("SUMMARY:\n")
 cat("--------\n")
-cat(sprintf("Position groups to delete: %d\n", nrow(test_groups)))
-cat(sprintf("Position group members to delete: %d\n", nrow(test_members)))
-cat(sprintf("Test transactions in account_activities: %d\n", nrow(test_activities)))
+cat(sprintf("Position groups to delete:               %d\n", nrow(test_groups)))
+cat(sprintf("Position group members to delete:        %d\n", nrow(test_members)))
+cat(sprintf("Projection recalculations to delete:     %d\n", nrow(test_projections)))
+cat(sprintf("Position group cash flows to delete:     %d\n", nrow(test_cash_flows)))
+cat(sprintf("Account activities to delete:            %d\n", nrow(test_activities)))
 
-if (nrow(test_groups) > 0) {
+total <- nrow(test_groups) + nrow(test_members) + nrow(test_projections) + nrow(test_cash_flows) + nrow(test_activities)
+if (total > 0) {
   cat("\n")
   cat("NEXT STEPS:\n")
   cat("-----------\n")
