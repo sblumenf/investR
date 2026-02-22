@@ -238,7 +238,7 @@ DIVIDEND_CAPTURE_MONTHLY_HIGH_YIELD_CONFIG <- list(
   rate_limit_seconds = get_golem_config_value("monthly_high_yield_capture", "rate_limit_seconds", 2),
 
   # Parallel Processing (from golem-config.yml)
-  max_workers = get_golem_config_value("monthly_high_yield_capture", "max_workers", 4),
+  max_workers = get_golem_config_value("monthly_high_yield_capture", "max_workers", 10),
   min_workers = get_golem_config_value("shared", "min_workers", 1),
   max_workers_limit = get_golem_config_value("shared", "max_workers_limit", 10)
 )

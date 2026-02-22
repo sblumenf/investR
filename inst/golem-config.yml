@@ -16,13 +16,13 @@ default:
   shared:
     days_per_year: 365
     trading_days_per_year: 252
-    default_max_workers: 4
+    default_max_workers: 10
     max_workers_limit: 10
     min_workers: 1
 
   # Aristocrats strategy configuration
   aristocrats:
-    max_workers: 4
+    max_workers: 10
     max_stock_price: 300
     strike_threshold_pct: 0.8
     target_days: null
@@ -49,7 +49,7 @@ default:
     min_success_rate: 70.0
     exclude_negative_returns: true
     rate_limit_seconds: 2
-    max_workers: 4
+    max_workers: 10
     # Dynamic ticker fetching configuration
     ticker_source_url: "https://stockanalysis.com/list/weekly-dividend-etfs/"
     ticker_cache_hours: 24
@@ -72,7 +72,7 @@ default:
     min_success_rate: 70.0
     exclude_negative_returns: true
     rate_limit_seconds: 2
-    max_workers: 4
+    max_workers: 10
 
   # Monthly high-yield dividend capture strategy configuration
   monthly_high_yield_capture:
@@ -83,7 +83,7 @@ default:
     min_success_rate: 70.0
     exclude_negative_returns: true
     rate_limit_seconds: 2
-    max_workers: 4
+    max_workers: 10
     # Dynamic ticker fetching configuration
     ticker_source_url: "https://stockanalysis.com/list/monthly-dividend-etfs/"
     ticker_cache_hours: 24
@@ -151,11 +151,11 @@ default:
     min_success_rate: 70.0
     exclude_negative_returns: true
     max_days_until_ex_div: 2
-    max_workers: 4
+    max_workers: 10
 
   # Dynamic covered calls strategy configuration
   dynamic_covered_calls:
-    max_workers: 4  # Balanced parallel processing (increased from 1)
+    max_workers: 10  # Balanced parallel processing
     default_max_price: 250  # Default maximum stock price filter
     default_lookback_years: 5  # Years of history for drawdown calculation
     default_min_strike_pct: 0.50  # Minimum strike as % of current price

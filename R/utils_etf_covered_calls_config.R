@@ -16,7 +16,7 @@ ETF_SCREENER_CONFIG <- list(
   max_days = 120,              # Default maximum 120 days to expiration
 
   # Parallel Processing
-  max_workers = 4  # Default 4 workers for ETF screening
+  max_workers = 10  # Default 10 workers for ETF screening
 )
 
 #' Validate ETF Screener Strategy Configuration

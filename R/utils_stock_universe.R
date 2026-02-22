@@ -291,7 +291,7 @@ stock_pays_dividend <- function(ticker, lookback_years = 2) {
 #'   # Test with limit
 #'   zero_div_stocks <- get_zero_dividend_stocks(limit = 50)
 #' }
-get_zero_dividend_stocks <- function(limit = NULL, max_workers = 4) {
+get_zero_dividend_stocks <- function(limit = NULL, max_workers = 10) {
   cache_file <- "zero_dividend_stocks.rds"
 
   # Check cache first (unless limit specified, which is for testing)
@@ -357,7 +357,7 @@ get_zero_dividend_stocks <- function(limit = NULL, max_workers = 4) {
 #'   # Test with limit
 #'   div_stocks <- get_dividend_paying_sp500(limit = 50)
 #' }
-get_dividend_paying_sp500 <- function(limit = NULL, max_workers = 4) {
+get_dividend_paying_sp500 <- function(limit = NULL, max_workers = 10) {
   cache_file <- "dividend_paying_stocks.rds"
 
   # Check cache first (unless limit specified, which is for testing)

@@ -66,7 +66,7 @@ get_russell_2000_high_yield_config <- function() {
     max_days_until_ex_div = get_golem_config_value_hy_r2000("high_yield_capture", "max_days_until_ex_div", 2),
 
     # Parallel Processing
-    max_workers = get_golem_config_value_hy_r2000("high_yield_capture", "max_workers", 4),
+    max_workers = get_golem_config_value_hy_r2000("high_yield_capture", "max_workers", 10),
     min_workers = get_golem_config_value_hy_r2000("shared", "min_workers", 1),
     max_workers_limit = get_golem_config_value_hy_r2000("shared", "max_workers_limit", 10)
   )

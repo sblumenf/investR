@@ -15,7 +15,7 @@ NULL
 
 DYNAMIC_CONFIG <- list(
   # Parallel Processing (from golem-config.yml)
-  max_workers = get_golem_config_value("dynamic_covered_calls", "max_workers", 4),
+  max_workers = get_golem_config_value("dynamic_covered_calls", "max_workers", 10),
 
   # Price Filtering (from golem-config.yml)
   default_max_price = get_golem_config_value("dynamic_covered_calls", "default_max_price", 250),

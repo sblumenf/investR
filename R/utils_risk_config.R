@@ -80,7 +80,7 @@ RISK_CONFIG <- list(
   cvar_confidence_level = 0.95,           # Expected shortfall at 95%
 
   # Performance settings
-  max_workers = 4,           # Conservative for API rate limits
+  max_workers = 10,
 
   # UI settings
   show_progress = TRUE,

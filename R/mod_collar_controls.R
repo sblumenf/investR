@@ -70,7 +70,7 @@ mod_collar_controls_ui <- function(id){
         "Parallel Workers",
         min = 1,
         max = 20,
-        value = 4,  # Default to 4 for production
+        value = 10,  # Default to 10 for production
         step = 1
       ),
       helpText("Note: Use 1 worker during development with devtools::load_all()"),
