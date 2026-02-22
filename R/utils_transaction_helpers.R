@@ -15,7 +15,7 @@ NULL
 #' @return Date object
 #' @noRd
 get_trade_date_calendar <- function(activity) {
-  as.Date(activity$trade_date)
+  as.Date(as.POSIXct(activity$trade_date, origin = "1970-01-01", tz = "UTC"))
 }
 
 #' Check if two activities occurred on same calendar day
@@ -97,7 +97,7 @@ detect_option_roll <- function(activity, group_activities) {
   }
 
   new_symbol <- activity$symbol[1]
-  trade_date <- as.Date(activity$trade_date[1])
+  trade_date <- as.Date(as.POSIXct(activity$trade_date[1], origin = "1970-01-01", tz = "UTC"))
 
   # Extract underlying ticker from the new option
   underlying <- parse_option_symbol(new_symbol)
@@ -113,7 +113,7 @@ detect_option_roll <- function(activity, group_activities) {
       action %in% c("Buy", "EXP"),  # Handle both buy-to-close and expirations
       !is.na(symbol),
       is_option_symbol(symbol),
-      as.Date(trade_date) == !!trade_date,
+      as.Date(as.POSIXct(trade_date, origin = "1970-01-01", tz = "UTC")) == !!trade_date,
       symbol != new_symbol  # Different option symbol (different strike/expiry)
     )
 

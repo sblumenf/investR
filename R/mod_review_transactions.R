@@ -253,7 +253,7 @@ mod_review_transactions_server <- function(id, trigger, virgin_by_ticker){
     # Render the transaction table for the current ticker
     output$transaction_table <- DT::renderDataTable({
       displayed_transactions() %>%
-        mutate(trade_date = format(as.Date(trade_date), "%b %d, %Y")) %>%
+        mutate(trade_date = format(as.Date(as.POSIXct(trade_date, origin = "1970-01-01", tz = "UTC")), "%b %d, %Y")) %>%
         select(activity_id, trade_date, action, description, quantity, net_amount)
     }, options = list(
       dom = 't',

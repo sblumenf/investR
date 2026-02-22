@@ -264,14 +264,14 @@ create_delayed_covered_call_suggestion <- function(match, activities) {
   if (is.null(group_name)) {
     group_name <- sprintf("%s Covered Call - %s",
                          match$ticker,
-                         format(as.Date(option$trade_date), "%b %Y"))
+                         format(as.Date(as.POSIXct(option$trade_date, origin = "1970-01-01", tz = "UTC")), "%b %Y"))
   }
 
   reasoning <- sprintf(
     "Sold %g %s call option on %s. You currently own %g shares at avg price $%.2f (purchased before transaction history). This pattern indicates a traditional covered call position.",
     abs(option$quantity),
     match$ticker,
-    format(as.Date(option$trade_date), "%b %d"),
+    format(as.Date(as.POSIXct(option$trade_date, origin = "1970-01-01", tz = "UTC")), "%b %d"),
     match$position_quantity,
     match$position_avg_price
   )

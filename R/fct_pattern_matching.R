@@ -46,7 +46,7 @@ detect_same_day_strategy <- function(activities) {
 
   # Prepare stock buys for join
   stock_data <- stock_buys %>%
-    mutate(trade_date = as.Date(trade_date)) %>%
+    mutate(trade_date = as.Date(as.POSIXct(trade_date, origin = "1970-01-01", tz = "UTC"))) %>%
     select(
       stock_activity_id = activity_id,
       ticker = symbol,
@@ -57,7 +57,7 @@ detect_same_day_strategy <- function(activities) {
   option_data <- option_sells %>%
     mutate(
       ticker = map_chr(symbol, parse_option_symbol),
-      trade_date = as.Date(trade_date)
+      trade_date = as.Date(as.POSIXct(trade_date, origin = "1970-01-01", tz = "UTC"))
     ) %>%
     filter(!is.na(ticker)) %>%  # Remove options we couldn't parse
     select(
@@ -117,7 +117,7 @@ detect_dividend_capture <- function(activities) {
 
   # Prepare buys for join
   buy_data <- stock_buys %>%
-    mutate(buy_date = as.Date(trade_date)) %>%
+    mutate(buy_date = as.Date(as.POSIXct(trade_date, origin = "1970-01-01", tz = "UTC"))) %>%
     select(
       buy_activity_id = activity_id,
       ticker = symbol,
@@ -127,7 +127,7 @@ detect_dividend_capture <- function(activities) {
 
   # Prepare sells for join
   sell_data <- stock_sells %>%
-    mutate(sell_date = as.Date(trade_date)) %>%
+    mutate(sell_date = as.Date(as.POSIXct(trade_date, origin = "1970-01-01", tz = "UTC"))) %>%
     select(
       sell_activity_id = activity_id,
       ticker = symbol,
@@ -247,7 +247,7 @@ detect_late_dividends <- function(activities, closed_groups) {
 
   # Prepare dividends for join
   div_data <- dividends %>%
-    mutate(dividend_date = as.Date(trade_date)) %>%
+    mutate(dividend_date = as.Date(as.POSIXct(trade_date, origin = "1970-01-01", tz = "UTC"))) %>%
     select(
       dividend_activity_id = activity_id,
       ticker = symbol,

@@ -135,6 +135,7 @@ calculate_group_pnl <- function(group_id) {
       arrange(trade_date) %>%
       slice(1) %>%
       pull(trade_date) %>%
+      as.POSIXct(origin = "1970-01-01", tz = "UTC") %>%
       as.Date()
 
     last_trade_date <- activities %>%
@@ -142,6 +143,7 @@ calculate_group_pnl <- function(group_id) {
       arrange(desc(trade_date)) %>%
       slice(1) %>%
       pull(trade_date) %>%
+      as.POSIXct(origin = "1970-01-01", tz = "UTC") %>%
       as.Date()
 
     hold_days <- as.numeric(last_trade_date - first_trade_date)
@@ -271,7 +273,7 @@ close_position_group <- function(group_id) {
     ", params = list(group_id))
 
     if (nrow(latest_activity) > 0 && !is.na(latest_activity$close_date[1])) {
-      close_date <- as.Date(latest_activity$close_date[1])
+      close_date <- as.Date(as.POSIXct(latest_activity$close_date[1], origin = "1970-01-01", tz = "UTC"))
 
       # Create actual cash flow event for the realized gain/loss
       save_cash_flow_event(
@@ -379,7 +381,7 @@ auto_close_group <- function(group_id) {
     ", params = list(group_id))
 
     if (nrow(latest_activity) > 0 && !is.na(latest_activity$close_date[1])) {
-      close_date <- as.Date(latest_activity$close_date[1])
+      close_date <- as.Date(as.POSIXct(latest_activity$close_date[1], origin = "1970-01-01", tz = "UTC"))
 
       save_cash_flow_event(
         group_id = group_id,

@@ -189,6 +189,7 @@ mod_group_cards_server <- function(id, filtered_groups, metrics = NULL){
           arrange(trade_date) %>%
           slice(1) %>%
           pull(trade_date) %>%
+          as.POSIXct(origin = "1970-01-01", tz = "UTC") %>%
           as.Date()
       } else {
         NULL

@@ -214,7 +214,7 @@ link_activities_to_group <- function(activity_ids, group_id) {
             div <- dividend_details[i, ]
             save_cash_flow_event(
               group_id = div$group_id,
-              event_date = as.Date(div$transaction_date),
+              event_date = as.Date(as.POSIXct(div$transaction_date, origin = "1970-01-01", tz = "UTC")),
               event_type = "dividend",
               amount = abs(div$net_amount),
               status = "actual",
@@ -291,7 +291,7 @@ link_activities_to_group <- function(activity_ids, group_id) {
               filter(!purrr::map_lgl(symbol, is_option_symbol))
 
             if (nrow(stock_buys) > 0) {
-              earliest_stock_buy_date <- as.Date(min(stock_buys$trade_date))
+              earliest_stock_buy_date <- as.Date(as.POSIXct(min(stock_buys$trade_date), origin = "1970-01-01", tz = "UTC"))
             }
           }
 
@@ -303,7 +303,7 @@ link_activities_to_group <- function(activity_ids, group_id) {
             if (!group_info$strategy_type[1] %in% c("Other", "Legacy Covered Call") &&
                 opt$action == "Sell" &&
                 !is.null(earliest_stock_buy_date)) {
-              option_sell_date <- as.Date(opt$trade_date)
+              option_sell_date <- as.Date(as.POSIXct(opt$trade_date, origin = "1970-01-01", tz = "UTC"))
               if (option_sell_date == earliest_stock_buy_date) {
                 # Initial premium - skip creating cash flow
                 log_debug("Activity Linking: Skipping initial premium cash flow for {group_info$strategy_type[1]} (cost reduction)")
@@ -320,7 +320,7 @@ link_activities_to_group <- function(activity_ids, group_id) {
 
             save_cash_flow_event(
               group_id = opt$group_id,
-              event_date = as.Date(opt$trade_date),
+              event_date = as.Date(as.POSIXct(opt$trade_date, origin = "1970-01-01", tz = "UTC")),
               event_type = "option_premium",
               amount = amount,
               status = "actual",

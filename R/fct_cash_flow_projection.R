@@ -153,7 +153,7 @@ get_actual_cash_flows_from_activities <- function() {
       filter(!is.na(cash_flow_type)) %>%
       # Select and rename columns
       transmute(
-        event_date = as.Date(trade_date),
+        event_date = as.Date(as.POSIXct(trade_date, origin = "1970-01-01", tz = "UTC")),
         ticker = ticker,
         type = cash_flow_type,
         # Use net_amount as-is (already has correct sign)
@@ -219,7 +219,7 @@ get_ungrouped_dividends <- function() {
     # Format as cash flow entries
     cash_flows <- result %>%
       transmute(
-        event_date = as.Date(trade_date),
+        event_date = as.Date(as.POSIXct(trade_date, origin = "1970-01-01", tz = "UTC")),
         ticker = symbol,
         type = "dividend",
         amount = net_amount,
@@ -305,7 +305,7 @@ get_cash_equivalent_capital_gains <- function() {
     # Format as cash flow entries
     cash_flows <- capital_gains %>%
       transmute(
-        event_date = as.Date(sell_date),
+        event_date = as.Date(as.POSIXct(sell_date, origin = "1970-01-01", tz = "UTC")),
         ticker = symbol,
         type = "capital_gain",
         amount = capital_gain,
