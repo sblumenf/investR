@@ -22,6 +22,10 @@ Screenshot*.png
 
 # SQLite databases
 *.db
+inst/database/portfolio.sqlite
+
+# Plan files
+.pm/
 
 # Local AI/tooling config
 .playwright-mcp/
