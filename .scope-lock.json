@@ -1,0 +1,10 @@
+{
+  "allowed_files": ["R/fct_cash_flow_projection.R"],
+  "denied_files": [],
+  "allow_new_files": false,
+  "allowed_new_dirs": [],
+  "allow_new_deps": false,
+  "created_by": "pm",
+  "spec_file": "inline",
+  "created_at": "2026-02-25T00:00:00Z"
+}

@@ -450,7 +450,7 @@ get_projected_cash_flows_from_database <- function() {
         AND pg.status != 'ignored'
         AND (cf.status = 'actual' OR cf.event_date >= ?)
       ORDER BY cf.event_date ASC
-    ", params = list(Sys.Date())) %>% as_tibble()
+    ", params = list(floor_date(Sys.Date(), "month"))) %>% as_tibble()
 
     if (nrow(result) == 0) {
       log_debug("Cash Flow Projection: No projected cash flows found")
