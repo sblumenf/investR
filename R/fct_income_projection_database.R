@@ -127,7 +127,7 @@ save_cash_flow_event <- function(group_id, event_date, event_type, amount,
     event_data <- tibble::tibble(
       event_id = event_id,
       group_id = group_id,
-      event_date = format(as.Date(event_date), "%Y-%m-%d"),
+      event_date = as.Date(event_date),
       event_type = event_type,
       amount = amount,
       status = status,
@@ -204,9 +204,13 @@ delete_projected_cash_flows_by_month <- function(group_id, event_type, event_dat
   }
 
   tryCatch({
-    # Extract year and month from event date
+    # Compute numeric range for the target month (R Date values stored as days since 1970-01-01)
     event_year <- lubridate::year(event_date)
     event_month <- lubridate::month(event_date)
+    month_start_date <- as.Date(paste0(event_year, "-", sprintf("%02d", event_month), "-01"))
+    month_end_date <- seq.Date(month_start_date, by = "month", length.out = 2)[2]
+    month_start <- as.numeric(month_start_date)
+    month_end <- as.numeric(month_end_date)
 
     # Delete all projected events in the same month
     sql <- "
@@ -214,15 +218,15 @@ delete_projected_cash_flows_by_month <- function(group_id, event_type, event_dat
       WHERE group_id = ?
         AND event_type = ?
         AND status = 'projected'
-        AND CAST(strftime('%Y', event_date) AS INTEGER) = ?
-        AND CAST(strftime('%m', event_date) AS INTEGER) = ?
+        AND event_date >= ?
+        AND event_date < ?
     "
 
     rows_affected <- dbExecute(conn, sql, params = list(
       group_id,
       event_type,
-      event_year,
-      event_month
+      month_start,
+      month_end
     ))
 
     if (rows_affected > 0) {

@@ -172,7 +172,7 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
     days_held <- as.numeric(Sys.Date() - first_trade_date)
   }
 
-  days_held <- if (length(days_held) == 0 || is.na(days_held) || days_held == 0) 1 else days_held
+  days_held <- if (length(days_held) == 0 || is.na(days_held) || days_held <= 0) 1 else days_held
 
   # Calculate projected annualized return
   # Formula: ((1 + return_ratio)^(365/days_held) - 1) * 100

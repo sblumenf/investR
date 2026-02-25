@@ -1,0 +1,14 @@
+{
+  "allowed_files": [
+    "R/fct_income_projection_database.R",
+    "R/fct_group_metrics.R",
+    "inst/database/portfolio.duckdb"
+  ],
+  "denied_files": [],
+  "allow_new_files": false,
+  "allowed_new_dirs": [],
+  "allow_new_deps": false,
+  "created_by": "pm",
+  "spec_file": "inline",
+  "created_at": "2026-02-24T21:00:00Z"
+}
