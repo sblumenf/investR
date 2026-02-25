@@ -448,8 +448,9 @@ get_projected_cash_flows_from_database <- function() {
       INNER JOIN position_groups pg ON cf.group_id = pg.group_id
       WHERE cf.status IN ('projected', 'actual')
         AND pg.status != 'ignored'
+        AND (cf.status = 'actual' OR cf.event_date >= ?)
       ORDER BY cf.event_date ASC
-    ") %>% as_tibble()
+    ", params = list(Sys.Date())) %>% as_tibble()
 
     if (nrow(result) == 0) {
       log_debug("Cash Flow Projection: No projected cash flows found")
