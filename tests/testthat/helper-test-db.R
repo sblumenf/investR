@@ -15,12 +15,12 @@
 # — sees the temp path. The binding is automatically restored when the test exits.
 
 local_test_db <- function(env = parent.frame()) {
-  # 1. Create a unique temp path for this test's isolated DuckDB file.
+  # 1. Create a unique temp path for this test's isolated SQLite file.
   test_db_path <- tempfile(pattern = "investR_test_", fileext = ".sqlite")
 
   # 2. Mock get_portfolio_db_path in the investR package namespace.
   # This ensures all internal package calls (e.g. get_portfolio_db_connection)
-  # route to the temp DB rather than the production DB at inst/database/portfolio.duckdb.
+  # route to the temp DB rather than the production DB at inst/database/portfolio.sqlite.
   local_mocked_bindings(
     get_portfolio_db_path = function() test_db_path,
     .package = "investR",

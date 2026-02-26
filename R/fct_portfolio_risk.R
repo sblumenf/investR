@@ -7,7 +7,6 @@
 #' @importFrom stats cor quantile rnorm
 #' @importFrom dplyr %>% filter select mutate group_by summarize arrange desc bind_rows
 #' @importFrom tibble tibble
-#' @importFrom PerformanceAnalytics VaR ES
 NULL
 
 #' Analyze portfolio risk using correlated Monte Carlo

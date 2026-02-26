@@ -35,9 +35,9 @@ Key patterns:
 - Configuration flows through a 3-tier system: `golem-config.yml` → `STRATEGY_CONFIG` objects in `utils_*_config.R` → `get_golem_config_value()` with fallbacks
 - Never hard-code magic numbers — always use config objects
 
-## Database (DuckDB)
+## Database (SQLite)
 
-Primary database at `inst/database/portfolio.duckdb`. Core tables: portfolio_positions, portfolio_activities, portfolio_groups, income_projections, cash_flow_projections.
+Primary database at `inst/database/portfolio.sqlite`. Core tables: portfolio_positions, portfolio_activities, portfolio_groups, income_projections, cash_flow_projections.
 
 Rules:
 - Always close connections with `on.exit(dbDisconnect(con))` or `tryCatch` finally blocks
@@ -66,7 +66,7 @@ READ-ONLY access to 3 accounts (RRSP, SRRSP, LIRA). Tokens cached in `~/.investR
 
 - Framework: testthat 3.0.0+ (Edition 3)
 - Location: `tests/testthat/`
-- Isolation: `setup.R` creates temp DuckDB, `teardown.R` cleans up
+- Isolation: `setup.R` creates temp SQLite databases, `teardown.R` cleans up
 - Pattern: `test-{component}.R` (e.g., `test-fct_monte_carlo.R`)
 - Use `withr::with_options()` for config isolation in tests
 - Mock external APIs (Questrade) — never hit real APIs in tests

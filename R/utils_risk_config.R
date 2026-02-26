@@ -325,7 +325,7 @@ TICKER_SECTOR_MAP <- list(
 
   # Technology
   "AAPL" = "Technology", "MSFT" = "Technology", "NVDA" = "Technology",
-  "GOOGL" = "Technology", "META" = "Technology", "TSLA" = "Technology",
+  "TSLA" = "Technology",
   "AMD" = "Technology", "INTC" = "Technology", "CRM" = "Technology",
 
   # Consumer Staples (many aristocrats here)

@@ -4,7 +4,7 @@
 \alias{get_zero_dividend_stocks}
 \title{Get zero-dividend S&P 500 stocks with caching}
 \usage{
-get_zero_dividend_stocks(limit = NULL, max_workers = 4)
+get_zero_dividend_stocks(limit = NULL, max_workers = 10)
 }
 \arguments{
 \item{limit}{Optional limit on number of stocks to check (for testing)}

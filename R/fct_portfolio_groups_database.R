@@ -1,6 +1,6 @@
 #' Portfolio Groups Database Operations
 #'
-#' Functions for managing position groups in DuckDB - allows combining
+#' Functions for managing position groups in SQLite - allows combining
 #' multiple positions (stock + options) into logical trading positions
 #' tied to investment strategies.
 #'

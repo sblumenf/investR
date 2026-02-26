@@ -13,9 +13,9 @@ NULL
 # DATABASE CONNECTION MANAGEMENT
 ################################################################################
 
-#' Get or create DuckDB connection
+#' Get or create SQLite connection
 #'
-#' Returns a connection to the portfolio DuckDB database. Creates the database
+#' Returns a connection to the portfolio SQLite database. Creates the database
 #' file if it doesn't exist. Connection should be closed when done.
 #'
 #' @param read_only Logical, if TRUE opens connection in read-only mode (default FALSE)

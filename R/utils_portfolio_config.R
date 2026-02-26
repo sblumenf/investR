@@ -31,7 +31,7 @@ get_portfolio_config <- function(key, default = NULL) {
 
 #' Get database file path
 #'
-#' Returns the full path to the portfolio DuckDB database file
+#' Returns the full path to the portfolio SQLite database file
 #'
 #' @return Character path to database file
 #' @noRd

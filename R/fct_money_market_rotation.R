@@ -49,7 +49,7 @@ get_always_included_tickers <- function() {
 
 #' Get first WEEK transaction date
 #'
-#' @param conn DuckDB connection
+#' @param conn SQLite database connection
 #' @return Date or NA if no WEEK transactions
 #' @export
 get_first_week_date <- function(conn) {
@@ -82,7 +82,7 @@ get_first_week_date <- function(conn) {
 #' Gets all buy/sell transactions for eligible tickers.
 #' SGOV is included only STRICTLY AFTER first WEEK transaction (same-day excluded).
 #'
-#' @param conn DuckDB connection
+#' @param conn SQLite database connection
 #' @return Data frame of filtered transactions
 #' @export
 fetch_mm_rotation_transactions <- function(conn) {
@@ -172,7 +172,7 @@ log_debug("MM Rotation: Fetching transactions with query")
 #' Gets all dividend payments for eligible tickers.
 #' SGOV dividends included only STRICTLY AFTER first WEEK transaction.
 #'
-#' @param conn DuckDB connection
+#' @param conn SQLite database connection
 #' @return Data frame of dividend payments
 #' @export
 fetch_mm_rotation_dividends <- function(conn) {
