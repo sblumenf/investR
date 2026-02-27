@@ -240,7 +240,7 @@ build_dividend_schedule <- function(ticker, days_to_expiry, is_aristocrat = FALS
 #' @param premium_received Premium received from selling option
 #' @param entry_stock_price Original stock purchase price (for calls) or strike (for puts)
 #' @param shares Number of shares (default 100)
-#' @param option_type Type of option: "call" (covered call) or "put" (cash-secured put)
+#' @param option_type Type of option: "call" (covered call), "put" (cash-secured put), or "collar"
 #' @return Profit/loss amount
 #' @noRd
 calculate_option_payoff <- function(stock_price,
@@ -271,8 +271,13 @@ calculate_option_payoff <- function(stock_price,
       # Not assigned: keep premium only
       total_pnl <- premium_received
     }
+  } else if (option_type == "collar") {
+    # Collar: own stock + sell call + buy put (same strike)
+    # Payoff is deterministic: stock always resolves to strike price
+    stock_pnl <- (strike - entry_stock_price) * shares
+    total_pnl <- stock_pnl + premium_received
   } else {
-    stop("Unknown option_type: ", option_type, ". Must be 'call' or 'put'.")
+    stop("Unknown option_type: ", option_type, ". Must be 'call', 'put', or 'collar'.")
   }
 
   total_pnl
@@ -595,6 +600,10 @@ run_monte_carlo_simulation <- function(ticker,
     # Some calculate net outlay as strike - premium, others as full strike
     # Using strike - premium to match the cash flow at inception
     net_outlay <- (strike * 100) - premium_received
+  } else if (option_type == "collar") {
+    # For collars, net outlay is stock cost minus net credit (call premium - put cost)
+    # premium_received already represents the net credit (call_bid - put_ask) * 100
+    net_outlay <- (entry_price * 100) - premium_received
   } else {
     # For covered calls, net outlay is stock purchase cost minus premium
     net_outlay <- (entry_price * 100) - premium_received

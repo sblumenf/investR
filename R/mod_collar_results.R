@@ -155,7 +155,15 @@ mod_collar_results_server <- function(id, results_data){
         } else NULL
       }),
       is_aristocrat = reactive(FALSE),  # Collar strategy
-      simulation_paths = reactive(10000)
+      simulation_paths = reactive(10000),
+      option_type = reactive("collar"),
+      cost_basis = reactive({
+        req(clicked_row(), results_data())
+        idx <- clicked_row()
+        if (!is.null(idx) && idx <= nrow(results_data())) {
+          results_data()$current_price[idx]  # Raw stock price; MC engine handles premium adjustment
+        } else NULL
+      })
     )
   })
 }

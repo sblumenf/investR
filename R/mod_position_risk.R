@@ -438,9 +438,13 @@ create_stress_tab <- function(results) {
     tags$div(
       class = "alert alert-secondary",
       tags$strong("Key Insight: "),
-      "Covered calls provide downside cushion from premium received, ",
-      "but gains are capped at strike price. In severe downturns, premium may not ",
-      "fully offset stock losses."
+      if (!is.null(results$option_type) && results$option_type == "collar") {
+        "Collar positions lock in a fixed outcome regardless of stock price movement. The long put floors downside at the strike while the short call caps upside. Stress scenarios do not affect the position P&L."
+      } else if (!is.null(results$option_type) && results$option_type == "put") {
+        "Cash-secured puts profit when the stock stays above the strike. In severe downturns, assignment risk increases and the purchased stock may be worth significantly less than the strike price."
+      } else {
+        "Covered calls provide downside cushion from premium received, but gains are capped at strike price. In severe downturns, premium may not fully offset stock losses."
+      }
     )
   )
 }

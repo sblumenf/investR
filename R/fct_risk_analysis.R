@@ -107,6 +107,7 @@ analyze_position_risk <- function(ticker,
     purchase_price = entry_price,  # Show what price was used for return calculations
     premium_received = premium_received,
     is_aristocrat = is_aristocrat,
+    option_type = option_type,
     simulation_paths = simulation_paths,
 
     # Dividend schedule
@@ -193,7 +194,8 @@ analyze_position_risk <- function(ticker,
     entry_price = entry_price,
     strike = strike,
     premium_received = premium_received,
-    is_aristocrat = is_aristocrat
+    is_aristocrat = is_aristocrat,
+    option_type = option_type
   )
 
   log_success("{ticker}: Risk analysis complete")
@@ -215,6 +217,7 @@ analyze_position_risk <- function(ticker,
 #' @param strike Strike price
 #' @param premium_received Premium received
 #' @param is_aristocrat Is dividend aristocrat
+#' @param option_type Type of option: "call", "put", or "collar"
 #' @return Tibble with stress test results
 #' @noRd
 run_position_stress_tests <- function(ticker,
@@ -222,7 +225,8 @@ run_position_stress_tests <- function(ticker,
                                       entry_price,
                                       strike,
                                       premium_received,
-                                      is_aristocrat) {
+                                      is_aristocrat,
+                                      option_type = "call") {
 
   # Get ticker sector for scenario-specific impacts
   sector <- get_ticker_sector(ticker)
@@ -245,17 +249,29 @@ run_position_stress_tests <- function(ticker,
     stressed_price <- current_price * (1 + price_change_pct)
 
     # Calculate P&L under stress (based on actual entry price)
-    # Covered call: stock P&L + premium
     shares <- 100
 
-    if (stressed_price >= strike) {
-      # Assigned
+    if (option_type == "collar") {
+      # Collar: stock always resolves to strike (put floors, call caps)
       stock_pnl <- (strike - entry_price) * shares
       total_pnl <- stock_pnl + premium_received
+    } else if (option_type == "put") {
+      # Cash-secured put
+      if (stressed_price <= strike) {
+        stock_pnl <- (stressed_price - strike) * shares
+        total_pnl <- stock_pnl + premium_received
+      } else {
+        total_pnl <- premium_received
+      }
     } else {
-      # Not assigned
-      stock_pnl <- (stressed_price - entry_price) * shares
-      total_pnl <- stock_pnl + premium_received
+      # Covered call (default)
+      if (stressed_price >= strike) {
+        stock_pnl <- (strike - entry_price) * shares
+        total_pnl <- stock_pnl + premium_received
+      } else {
+        stock_pnl <- (stressed_price - entry_price) * shares
+        total_pnl <- stock_pnl + premium_received
+      }
     }
 
     return_pct <- total_pnl / (entry_price * shares)
