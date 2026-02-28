@@ -7,7 +7,7 @@
 fetch_mm_rotation_transactions(conn)
 }
 \arguments{
-\item{conn}{DuckDB connection}
+\item{conn}{SQLite database connection}
 }
 \value{
 Data frame of filtered transactions

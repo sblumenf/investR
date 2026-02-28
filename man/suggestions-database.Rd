@@ -4,6 +4,6 @@
 \alias{suggestions-database}
 \title{Grouping Suggestions Database Operations}
 \description{
-Functions for managing position grouping suggestions in DuckDB.
+Functions for managing position grouping suggestions in SQLite.
 Stores pattern-matched suggestions awaiting user approval.
 }

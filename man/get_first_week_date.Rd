@@ -7,7 +7,7 @@
 get_first_week_date(conn)
 }
 \arguments{
-\item{conn}{DuckDB connection}
+\item{conn}{SQLite database connection}
 }
 \value{
 Date or NA if no WEEK transactions

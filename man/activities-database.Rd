@@ -5,6 +5,6 @@
 \title{Account Activities Database Operations}
 \description{
 Functions for managing account activity transactions (trades, dividends,
-option events) in DuckDB. Stores all transactions fetched from Questrade API
+option events) in SQLite. Stores all transactions fetched from Questrade API
 for pattern matching and P&L calculations.
 }

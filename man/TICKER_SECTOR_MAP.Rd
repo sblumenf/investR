@@ -5,7 +5,7 @@
 \alias{TICKER_SECTOR_MAP}
 \title{Map tickers to sectors (for stress testing)}
 \format{
-An object of class \code{list} of length 61.
+An object of class \code{list} of length 59.
 }
 \usage{
 TICKER_SECTOR_MAP

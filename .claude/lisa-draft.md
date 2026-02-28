@@ -1,228 +1,152 @@
-# Code Review - Full Codebase Audit (Draft)
+# Specification Draft: IV Skew Collar Screener
 
-## Feature Summary
-A systematic, full-codebase audit of the investR Shiny application, organized into strategy-based file-group batches, producing per-batch findings documents and a master summary. The audit covers all quality dimensions weighted by severity, with data integrity issues receiving highest priority.
+*Interview in progress - Started: 2026-02-26*
 
-## Motivation
-- Specific concerns about API/external dependencies, business logic, and UI/module layer
-- Need a structured tech debt inventory
-- Establish a quality baseline and propose ongoing quality gates
+## Overview
+Add a new collar variant "IV Skew Screener" to the existing collar strategy dropdown. This variant:
+1. Fetches equity holdings from the iShares Russell 1000 ETF holdings CSV
+2. Filters to Asset Class = Equity only
+3. For each equity, fetches ATM call IV and ATM put IV at the closest expiry to 45 days (within 45-60 day window)
+4. Computes call IV / put IV ratio per stock
+5. Returns the top 20 stocks by highest IV ratio
+6. Feeds those 20 into the standard collar analysis pipeline with 45-60 day target expiry
+7. Displays standard collar result cards (same as other variants)
+
+## Problem Statement
+The user wants to identify collar opportunities where call IV is elevated relative to put IV (favorable skew for selling covered calls + buying protective puts). Screening the Russell 1000 universe by this ratio surfaces the most attractive collar candidates.
 
 ## Scope
-- **In scope:** All R/ package code, tests/, inst/, config, plus actively-used root scripts
-- **Out of scope:** One-off investigation scripts (investigate_*.R), conversion_plans/, money_market_analysis/ (unless actively used)
-- **Test review:** Excluded (production code only)
-- **All strategies reviewed equally** — no shortcuts for less-used strategies
 
-## Priority Model
-- **Data integrity first** — anything that could corrupt DuckDB or produce incorrect financial calculations
-- Severity: Critical > High > Medium > Low
+### In Scope
+<!-- Explicit list of what IS included in this implementation -->
+- [To be filled during interview]
 
-## Review Dimensions (weighted)
-| Dimension | Weight | Focus |
-|-----------|--------|-------|
-| Correctness | Critical | Calculation accuracy, logic errors, formula verification (spot-check) |
-| Data Integrity | Critical | DB operations, transaction safety, write paths |
-| Error Handling | High | API failures, fallback behavior, silent failures |
-| Maintainability | Medium | Code duplication, dead code, unclear patterns |
-| Performance | Medium | Unnecessary computation, N+1 queries |
-| Security | Medium | Token handling, input validation |
-| Code Style | Low | Consistency, naming |
+### Out of Scope
+<!-- Explicit list of what is NOT included - future work, won't fix, etc. -->
+- [To be filled during interview]
 
-## Per-File Review Checklist
-1. NA/NULL handling in calculations
-2. Error propagation (tryCatch vs silent failure)
-3. DB connection lifecycle (on.exit cleanup)
-4. Hardcoded values that should be config
-5. Correct use of parse_option_details() vs manual parsing
-6. Consistent use of shared_risk_engine for simulations
-7. Proper reactive isolation in modules
-8. Dead/unreachable code paths
+## User Stories
 
-## Math Review
-- Spot-check key pricing formulas against theory (Black-Scholes, Greeks via RQuantLib)
-- Focus mainly on implementation correctness: wrong variables, type coercion, NA handling, edge cases
+<!--
+IMPORTANT: Each story must be small enough to complete in ONE focused coding session.
+If a story is too large, break it into smaller stories.
 
-## Batch Organization (by strategy)
+Format each story with VERIFIABLE acceptance criteria:
 
-### Batch 1: Cash-Secured Puts
-- fct_cash_secured_puts.R
-- fct_sp500_cash_secured_puts.R
-- fct_etf_cash_secured_puts_yfscreen.R
-- mod_cash_secured_puts.R
-- mod_cash_secured_puts_results_table.R
-- mod_sp500_cash_secured_puts.R
-- mod_etf_cash_secured_puts_yfscreen.R
-- utils_cash_secured_puts_config.R
-- page_cash_secured_puts.R
-- page_sp500_cash_secured_puts.R
-- page_etf_cash_secured_puts_yfscreen.R
+### US-1: [Story Title]
+**Description:** As a [user type], I want [action] so that [benefit].
 
-### Batch 2: Covered Calls / Dynamic Covered Calls
-- fct_dynamic_covered_calls_analysis.R
-- mod_dynamic_covered_calls_analysis.R
-- mod_etf_covered_calls_analysis.R
-- utils_covered_calls_shared.R
-- utils_dynamic_covered_calls_config.R
-- utils_dynamic_covered_calls_helpers.R
-- utils_etf_covered_calls_config.R
-- page_dynamic_covered_calls.R
-- page_etf_covered_calls.R
+**Acceptance Criteria:**
+- [ ] [Specific, verifiable criterion - e.g., "API returns 200 for valid input"]
+- [ ] [Another verifiable criterion - e.g., "Error message displayed for invalid email"]
+- [ ] Typecheck/lint passes
+- [ ] [If UI] Verify in browser
 
-### Batch 3: Dividend Capture (weekly/monthly/high-yield)
-- fct_dividend_capture_weekly.R
-- fct_dividend_capture_monthly.R
-- fct_dividend_capture_monthly_high_yield.R
-- fct_high_yield_dividend_capture.R
-- mod_dividend_capture_weekly_controls.R
-- mod_dividend_capture_weekly_results.R
-- mod_dividend_capture_monthly_controls.R
-- mod_dividend_capture_monthly_results.R
-- mod_dividend_capture_monthly_high_yield_controls.R
-- mod_dividend_capture_monthly_high_yield_results.R
-- mod_high_yield_dividend_capture_controls.R
-- mod_high_yield_dividend_capture_results.R
-- utils_dividend_capture.R
-- utils_dividend_capture_monthly_config.R
-- utils_dividend_capture_monthly_high_yield_config.R
-- utils_dividend_capture_weekly_config.R
-- page_dividend_capture_weekly.R
-- page_dividend_capture_monthly.R
-- page_dividend_capture_monthly_high_yield.R
-- page_dividend_capture_russell_2000.R
+BAD criteria (too vague): "Works correctly", "Is fast", "Handles errors"
+GOOD criteria: "Response time < 200ms", "Returns 404 for missing resource", "Form shows inline validation"
+-->
 
-### Batch 4: Collars
-- fct_collar_analysis.R
-- mod_collar_controls.R
-- mod_collar_results.R
-- utils_collar_config.R
-- utils_collar_etf_universe.R
-- page_collar.R
+[To be filled during interview]
 
-### Batch 5: Calendar Spreads
-- fct_put_calendar_spread.R
-- mod_put_calendar_spread.R
-- mod_put_calendar_spread_results_table.R
-- utils_put_calendar_spread_config.R
-- page_put_calendar_spread.R
+## Technical Design
 
-### Batch 6: Portfolio Core (DB, groups, risk, income, projections)
-- fct_portfolio_database.R
-- fct_portfolio_groups_database.R
-- fct_portfolio_groups_logic.R
-- fct_portfolio_risk.R
-- fct_portfolio_expected_return.R
-- fct_income_projection_database.R
-- fct_income_projection_engine.R
-- fct_cash_flow_projection.R
-- fct_activities_database.R
-- fct_group_metrics.R
-- fct_group_pnl.R
-- fct_shared_risk_engine.R
-- fct_risk_analysis.R
-- fct_monte_carlo.R
-- fct_lsm_engine.R
-- fct_early_exercise.R
-- fct_regime_detection.R
-- fct_pattern_matching.R
-- fct_suggestion_engine.R
-- fct_suggestions_database.R
-- mod_portfolio_groups.R
-- mod_portfolio_groups_cards.R
-- mod_portfolio_groups_dashboard.R
-- mod_portfolio_return_summary.R
-- mod_portfolio_risk_dashboard.R
-- mod_position_risk.R
-- mod_cash_flow_projection.R
-- mod_raw_activities.R
-- mod_review_transactions.R
-- utils_portfolio_config.R
-- utils_portfolio_groups_config.R
-- utils_risk_config.R
-- utils_risk_helpers.R
-- utils_risk_presets.R
-- utils_group_cards.R
-- page_portfolio_groups.R
-- page_portfolio_risk.R
-- page_cash_flow_projection.R
-- page_raw_activities.R
-- page_home.R
+### Data Model
+[To be filled during interview]
 
-### Batch 7: Questrade API + Market Data
-- fct_questrade_api.R
-- fct_questrade_options.R
-- fct_questrade_quotes.R
-- fct_background_refresh.R
-- fct_implied_volatility.R
-- utils_questrade_healthcheck.R
-- utils_quote_source_toggle.R
-- utils_market_data.R
-- utils_options_cache.R
-- utils_sector_cache.R
-- mod_token_settings.R
-- page_token_settings.R
+### API Endpoints
+[To be filled during interview]
 
-### Batch 8: Aristocrats / Zero-Dividend / Other Analysis
-- fct_aristocrats_analysis.R
-- fct_zero_dividend_analysis.R
-- fct_etf_yfscreen_analysis.R
-- fct_money_market_rotation.R
-- mod_aristocrats_analysis.R
-- mod_aristocrats_results_table.R
-- mod_zero_dividend_analysis.R
-- mod_zero_dividend_results_table.R
-- mod_money_market_rotation.R
-- mod_extrinsic_value_scanner.R
-- mod_extrinsic_value_scanner_fct.R
-- mod_extrinsic_value_scanner_controls.R
-- mod_extrinsic_value_scanner_controls_fct.R
-- utils_aristocrats_config.R
-- utils_aristocrats_helpers.R
-- utils_zero_dividend_config.R
-- utils_yfscreen_etf.R
-- utils_stock_universe.R
-- utils_custom_ticker_lists.R
-- page_aristocrats.R
-- page_zero_dividend.R
-- page_extrinsic_value_scanner.R
-- page_money_market_rotation.R
+### Integration Points
+[To be filled during interview]
 
-### Batch 9: UI Infrastructure + Config + Shared Utilities
-- app_config.R
-- app_ui.R
-- run_app.R
-- utils_00_config.R
-- utils_activity_linking.R
-- utils_analysis_controls_helper.R
-- utils_calculations.R
-- utils_cash_equivalent.R
-- utils_cash_equivalent_linking.R
-- utils_dividend_capture.R (if not in Batch 3)
-- utils_explainability.R
-- utils_formatting.R
-- utils_globals.R
-- utils_high_yield_capture_russell_2000.R
-- utils_transaction_helpers.R
-- utils_ui_components.R
-- page_about.R
-- _disable_autoload.R
+## User Experience
 
-## Output Format
-- **Per-batch:** Separate findings document (e.g., docs/audit/batch-01-csp.md)
-- **Master summary:** docs/audit/summary.md with aggregate statistics
-- Each finding: severity, description, file:line reference
-- Summary statistics: files reviewed, findings per severity, checklist item hit rates
+### User Flows
+[To be filled during interview]
 
-## Known Issues to Verify
-- Questrade API: silent stale data when token refresh fails (user-reported)
+### Edge Cases
+[To be filled during interview]
 
-## Quality Gates (to propose after audit)
-- Coding standards for new fct_*.R functions
-- DB operation patterns
-- Error handling requirements
-- Config usage patterns
+## Requirements
 
-## Verification
-- Summary statistics showing files reviewed, findings per severity, checklist item hit rates
-- Every batch produces a findings document
-- Master summary aggregates all batches
+### Functional Requirements
+<!--
+Use FR-IDs for each requirement:
+- FR-1: [Requirement description]
+- FR-2: [Requirement description]
+-->
+[To be filled during interview]
+
+### Non-Functional Requirements
+<!--
+Performance, security, scalability requirements:
+- NFR-1: [Requirement - e.g., "Response time < 500ms for 95th percentile"]
+- NFR-2: [Requirement - e.g., "Support 100 concurrent users"]
+-->
+[To be filled during interview]
+
+## Implementation Phases
+
+<!-- Break work into 2-4 incremental milestones Ralph can complete one at a time -->
+
+### Phase 1: [Foundation/Setup]
+- [ ] [Task 1]
+- [ ] [Task 2]
+- **Verification:** `[command to verify phase 1]`
+
+### Phase 2: [Core Implementation]
+- [ ] [Task 1]
+- [ ] [Task 2]
+- **Verification:** `[command to verify phase 2]`
+
+### Phase 3: [Integration/Polish]
+- [ ] [Task 1]
+- [ ] [Task 2]
+- **Verification:** `[command to verify phase 3]`
+
+<!-- Add Phase 4 if needed for complex features -->
+
+## Definition of Done
+
+This feature is complete when:
+- [ ] All acceptance criteria in user stories pass
+- [ ] All implementation phases verified
+- [ ] Tests pass: `[verification command]`
+- [ ] Types/lint check: `[verification command]`
+- [ ] Build succeeds: `[verification command]`
+
+## Ralph Loop Command
+
+<!-- Generated at finalization with phases and escape hatch -->
+
+```bash
+/ralph-loop "Implement I want your help to implement a variant to the existing collar strategy. I want this variant to be an option in the doptdown of the existing list. I will rpovide you with a list of stocks to analyze as well as criteria as you ask for them per spec at docs/specs/i-want-your-help-to-implement-a-variant-to-the-existing-coll.md
+
+PHASES:
+1. [Phase 1 name]: [tasks] - verify with [command]
+2. [Phase 2 name]: [tasks] - verify with [command]
+3. [Phase 3 name]: [tasks] - verify with [command]
+
+VERIFICATION (run after each phase):
+- [test command]
+- [lint/typecheck command]
+- [build command]
+
+ESCAPE HATCH: After 20 iterations without progress:
+- Document what's blocking in the spec file under 'Implementation Notes'
+- List approaches attempted
+- Stop and ask for human guidance
+
+Output <promise>COMPLETE</promise> when all phases pass verification." --max-iterations 30 --completion-promise "COMPLETE"
+```
+
+## Open Questions
+[To be filled during interview]
+
+## Implementation Notes
+[To be filled during interview]
+
+---
+*Interview notes will be accumulated below as the interview progresses*
+---
+

@@ -7,7 +7,7 @@
 fetch_mm_rotation_dividends(conn)
 }
 \arguments{
-\item{conn}{DuckDB connection}
+\item{conn}{SQLite database connection}
 }
 \value{
 Data frame of dividend payments

@@ -843,7 +843,7 @@ analyze_collar_iv_skew <- function(target_days = COLLAR_CONFIG$iv_skew_screening
       suppressPackageStartupMessages(loadNamespace("investR"))
     }
     options(investR.quote_source = quote_source)
-    investR::analyze_collar_single(ticker, target_days, strike_adjustment_pct)
+    investR::analyze_collar_single(ticker, COLLAR_CONFIG$iv_skew_screening_target_days, strike_adjustment_pct)
   }, .options = furrr_options(seed = TRUE, packages = "investR"))
 
   results_df <- compact(results) %>% bind_rows()
