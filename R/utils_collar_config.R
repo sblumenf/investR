@@ -44,7 +44,13 @@ COLLAR_CONFIG <- list(
 
   # Output (from golem-config.yml)
   default_top_n = get_golem_config_value("collar", "default_top_n", 50),
-  output_dir = get_golem_config_value("collar", "output_dir", "strategies")
+  output_dir = get_golem_config_value("collar", "output_dir", "strategies"),
+
+  # IV Skew Screener (from golem-config.yml)
+  iv_skew_holdings_url = get_golem_config_value("collar", "iv_skew.holdings_url", "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/1467271812596.ajax?fileType=csv&fileName=IWB_holdings&dataType=fund"),
+  iv_skew_top_n = get_golem_config_value("collar", "iv_skew.top_n", 20L),
+  iv_skew_screening_target_days = get_golem_config_value("collar", "iv_skew.screening_target_days", 45L),
+  iv_skew_screening_max_days = get_golem_config_value("collar", "iv_skew.screening_max_days", 60L)
 )
 
 #' Validate Collar Strategy Configuration

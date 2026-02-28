@@ -194,6 +194,12 @@ default:
     # Liquid ETFs configuration
     min_market_cap: 1000000000  # $1 billion
     min_avg_volume: 1000000  # 1 million shares
+    # IV Skew Screener configuration
+    iv_skew:
+      holdings_url: "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/1467271812596.ajax?fileType=csv&fileName=IWB_holdings&dataType=fund"
+      top_n: 20
+      screening_target_days: 45
+      screening_max_days: 60
 
   # Cash equivalent (money market) tickers configuration
   # These tickers are treated specially: no expiration required, SEC yield for returns

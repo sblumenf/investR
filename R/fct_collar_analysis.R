@@ -582,3 +582,278 @@ truncate_error <- function(message, max_length = COLLAR_CONFIG$error_truncate_le
     message
   }
 }
+
+################################################################################
+# IV SKEW SCREENER FUNCTIONS
+################################################################################
+
+#' Fetch IWB (iShares Russell 1000 ETF) holdings
+#'
+#' Downloads and parses the iShares Russell 1000 ETF holdings CSV, returning
+#' equity ticker symbols only. Falls back to the cached CSV at
+#' inst/cache/IWB_holdings.csv on download failure.
+#'
+#' @return Character vector of ticker symbols
+#' @export
+#' @examples
+#' \dontrun{
+#'   tickers <- fetch_iwb_holdings()
+#' }
+fetch_iwb_holdings <- function() {
+  fallback_path <- system.file("cache", "IWB_holdings.csv", package = "investR")
+  if (!nzchar(fallback_path)) {
+    fallback_path <- file.path("inst", "cache", "IWB_holdings.csv")
+  }
+
+  parse_iwb_csv <- function(path) {
+    df <- suppressWarnings(readr::read_csv(
+      path,
+      skip = 9,
+      col_types = readr::cols(.default = readr::col_character()),
+      show_col_types = FALSE,
+      name_repair = "minimal"
+    ))
+    # Keep only rows where Asset Class is Equity
+    equity_rows <- df[!is.na(df[["Asset Class"]]) & df[["Asset Class"]] == "Equity", ]
+    tickers <- equity_rows[["Ticker"]]
+    tickers <- tickers[!is.na(tickers) & nzchar(trimws(tickers))]
+    trimws(tickers)
+  }
+
+  # Try to download fresh CSV
+  holdings_url <- COLLAR_CONFIG$iv_skew_holdings_url
+  tickers <- tryCatch({
+    tmp <- tempfile(fileext = ".csv")
+    on.exit(unlink(tmp), add = TRUE)
+    httr::GET(
+      holdings_url,
+      httr::user_agent("Mozilla/5.0"),
+      httr::write_disk(tmp, overwrite = TRUE),
+      httr::timeout(30)
+    )
+    result <- parse_iwb_csv(tmp)
+    if (length(result) == 0) stop("Parsed empty ticker list from downloaded CSV")
+    log_info("Fetched {length(result)} Russell 1000 equity tickers from iShares")
+    result
+  }, error = function(e) {
+    log_warn("IWB holdings download failed ({e$message}); falling back to cached CSV")
+    if (!file.exists(fallback_path)) {
+      stop("IWB holdings download failed and no fallback CSV found at: ", fallback_path)
+    }
+    result <- parse_iwb_csv(fallback_path)
+    if (length(result) == 0) stop("Fallback CSV parsed empty ticker list")
+    log_info("Loaded {length(result)} Russell 1000 equity tickers from fallback cache")
+    result
+  })
+
+  tickers
+}
+
+#' Compute IV skew ratio for a single ticker
+#'
+#' Fetches ATM call IV and ATM put IV at the closest expiry to 45 days from
+#' today (within the 45-60 day window) and returns their ratio.
+#'
+#' @param ticker Stock ticker symbol
+#' @return List with ticker, call_iv, put_iv, iv_ratio, current_price,
+#'   expiry_date; or NULL if no valid data found
+#' @export
+#' @examples
+#' \dontrun{
+#'   result <- compute_iv_skew_ratio("AAPL")
+#' }
+compute_iv_skew_ratio <- function(ticker) {
+  tryCatch({
+    screening_target <- COLLAR_CONFIG$iv_skew_screening_target_days
+    screening_max <- COLLAR_CONFIG$iv_skew_screening_max_days
+
+    # 1. Get current price
+    quote <- fetch_current_quote(ticker, fields = c("Last Trade (Price Only)"))
+    if (is.null(quote)) {
+      log_debug("{ticker}: No quote data, skipping")
+      return(NULL)
+    }
+    current_price <- as.numeric(quote$Last)
+    if (is.na(current_price) || current_price <= 0) {
+      log_debug("{ticker}: No valid price, skipping")
+      return(NULL)
+    }
+
+    # 2. Get options structure to find expiry dates
+    opt_structure <- fetch_options_chain(ticker, expiration = NULL)
+    if (is.null(opt_structure) || length(opt_structure) == 0) {
+      log_debug("{ticker}: No options chain available, skipping")
+      return(NULL)
+    }
+
+    # 3. Find expiry closest to screening_target days, within [screening_target, screening_max]
+    today <- Sys.Date()
+    expiry_dates <- as.Date(names(opt_structure), format = "%b.%d.%Y")
+    days_to_expiry_vec <- as.integer(difftime(expiry_dates, today, units = "days"))
+
+    valid_idx <- which(
+      !is.na(days_to_expiry_vec) &
+      days_to_expiry_vec >= screening_target &
+      days_to_expiry_vec <= screening_max
+    )
+
+    if (length(valid_idx) == 0) {
+      log_debug("{ticker}: No expiry in {screening_target}-{screening_max} day window, skipping")
+      return(NULL)
+    }
+
+    # Pick closest to target within window
+    window_days <- days_to_expiry_vec[valid_idx]
+    best_in_window <- valid_idx[which.min(abs(window_days - screening_target))]
+    selected_expiry_str <- names(opt_structure)[best_in_window]
+
+    # 4. Extract ATM call and put from the options chain
+    exp_data <- opt_structure[[selected_expiry_str]]
+    if (is.null(exp_data)) {
+      log_debug("{ticker}: No data for expiry {selected_expiry_str}, skipping")
+      return(NULL)
+    }
+
+    calls <- exp_data$calls
+    puts  <- exp_data$puts
+
+    if (is.null(calls) || nrow(calls) == 0 || is.null(puts) || nrow(puts) == 0) {
+      log_debug("{ticker}: Empty calls or puts at {selected_expiry_str}, skipping")
+      return(NULL)
+    }
+
+    # Find ATM strike
+    valid_strikes <- unique(calls$Strike[!is.na(calls$Strike)])
+    if (length(valid_strikes) == 0) {
+      log_debug("{ticker}: No valid strikes, skipping")
+      return(NULL)
+    }
+    atm_strike <- valid_strikes[which.min(abs(valid_strikes - current_price))]
+
+    atm_call <- calls[calls$Strike == atm_strike, ]
+    atm_put  <- puts[puts$Strike == atm_strike, ]
+
+    if (nrow(atm_call) == 0 || nrow(atm_put) == 0) {
+      log_debug("{ticker}: ATM call or put not found at strike {atm_strike}, skipping")
+      return(NULL)
+    }
+
+    # 5. Extract IV values (column may be named IV or impliedVolatility)
+    get_iv <- function(opt_row) {
+      if ("IV" %in% names(opt_row)) return(as.numeric(opt_row$IV[1]))
+      if ("impliedVolatility" %in% names(opt_row)) return(as.numeric(opt_row$impliedVolatility[1]))
+      NA_real_
+    }
+
+    call_iv <- get_iv(atm_call)
+    put_iv  <- get_iv(atm_put)
+
+    if (is.na(call_iv) || is.na(put_iv) || put_iv == 0) {
+      log_debug("{ticker}: Invalid IV (call_iv={call_iv}, put_iv={put_iv}), skipping")
+      return(NULL)
+    }
+
+    iv_ratio <- call_iv / put_iv
+
+    list(
+      ticker        = ticker,
+      call_iv       = call_iv,
+      put_iv        = put_iv,
+      iv_ratio      = iv_ratio,
+      current_price = current_price,
+      expiry_date   = as.character(as.Date(selected_expiry_str, format = "%b.%d.%Y"))
+    )
+  }, error = function(e) {
+    log_debug("{ticker}: Error computing IV skew - {truncate_error(e$message)}")
+    return(NULL)
+  })
+}
+
+#' Analyze Russell 1000 universe for IV skew collar opportunities
+#'
+#' Screens the Russell 1000 equity universe for stocks where ATM call IV is
+#' high relative to ATM put IV, then runs standard collar analysis on the top N
+#' results.
+#'
+#' @param target_days Target days to expiry for collar analysis (from UI slider)
+#' @param strike_adjustment_pct Strike adjustment as decimal (0 = ATM)
+#' @param max_workers Number of parallel workers
+#' @return Tibble with collar opportunities sorted by annualized_return
+#' @export
+#' @examples
+#' \dontrun{
+#'   results <- analyze_collar_iv_skew(target_days = 45, strike_adjustment_pct = 0)
+#' }
+analyze_collar_iv_skew <- function(target_days = COLLAR_CONFIG$iv_skew_screening_target_days,
+                                   strike_adjustment_pct = 0,
+                                   max_workers = COLLAR_CONFIG$max_workers) {
+
+  log_analysis_header_generic("Collar Strategy - IV Skew Screener (Russell 1000)")
+
+  # 1. Fetch holdings universe
+  log_info("Fetching Russell 1000 holdings...")
+  ticker_universe <- fetch_iwb_holdings()
+  log_info("Screening {length(ticker_universe)} tickers for IV skew...")
+
+  # 2. Setup parallel processing
+  oplan <- setup_parallel_processing(max_workers)
+  on.exit(plan(oplan), add = TRUE)
+
+  quote_source <- get_quote_source()
+
+  # 3. Compute IV skew ratio for each ticker in parallel
+  skew_results <- future_map(ticker_universe, function(ticker) {
+    if (!"investR" %in% loadedNamespaces()) {
+      suppressPackageStartupMessages(loadNamespace("investR"))
+    }
+    options(investR.quote_source = quote_source)
+    investR::compute_iv_skew_ratio(ticker)
+  }, .options = furrr_options(seed = TRUE, packages = "investR"))
+
+  skew_results <- compact(skew_results)
+  log_info("{length(skew_results)} tickers had valid IV data out of {length(ticker_universe)} screened")
+
+  if (length(skew_results) == 0) {
+    log_warn("No tickers returned valid IV skew data")
+    return(tibble::tibble())
+  }
+
+  # 4. Sort by iv_ratio descending, take top N
+  top_n <- COLLAR_CONFIG$iv_skew_top_n
+  skew_df <- dplyr::bind_rows(
+    lapply(skew_results, function(x) {
+      tibble::tibble(
+        ticker        = x$ticker,
+        call_iv       = x$call_iv,
+        put_iv        = x$put_iv,
+        iv_ratio      = x$iv_ratio,
+        current_price = x$current_price,
+        expiry_date   = x$expiry_date
+      )
+    })
+  )
+  skew_df <- dplyr::arrange(skew_df, dplyr::desc(iv_ratio))
+  top_tickers <- head(skew_df$ticker, top_n)
+
+  log_info("Top {length(top_tickers)} tickers by IV skew ratio selected for collar analysis")
+
+  # 5. Run collar analysis on top N in parallel
+  results <- future_map(top_tickers, function(ticker) {
+    if (!"investR" %in% loadedNamespaces()) {
+      suppressPackageStartupMessages(loadNamespace("investR"))
+    }
+    options(investR.quote_source = quote_source)
+    investR::analyze_collar_single(ticker, target_days, strike_adjustment_pct)
+  }, .options = furrr_options(seed = TRUE, packages = "investR"))
+
+  results_df <- compact(results) %>% bind_rows()
+
+  if (nrow(results_df) > 0) {
+    results_df <- results_df %>% arrange(desc(annualized_return))
+  }
+
+  log_info("{nrow(results_df)} collar opportunities found among top {length(top_tickers)} IV-skew stocks")
+  log_analysis_footer(nrow(results_df))
+
+  return(results_df)
+}

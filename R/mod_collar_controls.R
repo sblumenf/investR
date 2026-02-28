@@ -33,7 +33,8 @@ mod_collar_controls_ui <- function(id){
           "Oversold Stocks" = "oversold",
           "Most Shorted Stocks" = "most_shorted",
           "2x Leveraged ETFs" = "leveraged_2x",
-          "3x Leveraged ETFs" = "leveraged_3x"
+          "3x Leveraged ETFs" = "leveraged_3x",
+          "IV Skew Screener" = "iv_skew"
         ),
         selected = "sp500_dividend"
       ),
@@ -180,6 +181,11 @@ mod_collar_controls_server <- function(id){
           target_days = input$target_days,
           strike_adjustment_pct = input$strike_adjustment / 100,
           max_workers = input$max_workers
+        ),
+        "iv_skew" = analyze_collar_iv_skew(
+          target_days = input$target_days,
+          strike_adjustment_pct = input$strike_adjustment / 100,
+          max_workers = input$max_workers
         )
       )
     }
@@ -194,7 +200,8 @@ mod_collar_controls_server <- function(id){
         "oversold" = "oversold stocks",
         "most_shorted" = "most shorted stocks",
         "leveraged_2x" = "2x leveraged ETFs",
-        "leveraged_3x" = "3x leveraged ETFs"
+        "leveraged_3x" = "3x leveraged ETFs",
+        "iv_skew" = "IV skew screened stocks"
       )
     })
 
@@ -205,7 +212,11 @@ mod_collar_controls_server <- function(id){
       session = session,
       analysis_func = analysis_function,
       progress_message = reactive({
-        sprintf("Analyzing %s for collar opportunities... This may take several minutes.", variant_label())
+        if (input$collar_variant == "iv_skew") {
+          "Screening Russell 1000 for IV skew... This may take several minutes."
+        } else {
+          sprintf("Analyzing %s for collar opportunities... This may take several minutes.", variant_label())
+        }
       }),
       success_message_template = "Analysis complete! Found %d collar opportunities (net credit > 0).",
       no_results_message = "No collar opportunities found. All positions had net debit (call bid < put ask).",
