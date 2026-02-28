@@ -649,20 +649,22 @@ fetch_iwb_holdings <- function() {
   tickers
 }
 
-#' Compute IV skew ratio for a single ticker
+#' Compute collar net credit for a single ticker
 #'
-#' Fetches ATM call IV and ATM put IV at the closest expiry to 45 days from
-#' today (within the 45-60 day window) and returns their ratio.
+#' Fetches ATM call bid and ATM put ask at the closest expiry to 45 days from
+#' today (within the 45-60 day window) and returns the net credit (call_bid -
+#' put_ask). Returns NULL if no valid data found or if the collar does not
+#' produce a net credit.
 #'
 #' @param ticker Stock ticker symbol
-#' @return List with ticker, call_iv, put_iv, iv_ratio, current_price,
-#'   expiry_date; or NULL if no valid data found
+#' @return List with ticker, call_bid, put_ask, net_credit, current_price,
+#'   expiry_date; or NULL if no valid data found or net_credit <= 0
 #' @export
 #' @examples
 #' \dontrun{
-#'   result <- compute_iv_skew_ratio("AAPL")
+#'   result <- compute_collar_credit("AAPL")
 #' }
-compute_iv_skew_ratio <- function(ticker) {
+compute_collar_credit <- function(ticker) {
   tryCatch({
     screening_target <- COLLAR_CONFIG$iv_skew_screening_target_days
     screening_max <- COLLAR_CONFIG$iv_skew_screening_max_days
@@ -738,33 +740,32 @@ compute_iv_skew_ratio <- function(ticker) {
       return(NULL)
     }
 
-    # 5. Extract IV values (column may be named IV or impliedVolatility)
-    get_iv <- function(opt_row) {
-      if ("IV" %in% names(opt_row)) return(as.numeric(opt_row$IV[1]))
-      if ("impliedVolatility" %in% names(opt_row)) return(as.numeric(opt_row$impliedVolatility[1]))
-      NA_real_
-    }
+    # 5. Extract bid/ask values
+    call_bid <- atm_call$Bid[1]
+    put_ask  <- atm_put$Ask[1]
 
-    call_iv <- get_iv(atm_call)
-    put_iv  <- get_iv(atm_put)
-
-    if (is.na(call_iv) || is.na(put_iv) || put_iv == 0) {
-      log_debug("{ticker}: Invalid IV (call_iv={call_iv}, put_iv={put_iv}), skipping")
+    if (is.na(call_bid) || is.na(put_ask) || call_bid <= 0 || put_ask <= 0) {
+      log_debug("{ticker}: Invalid bid/ask (call_bid={call_bid}, put_ask={put_ask}), skipping")
       return(NULL)
     }
 
-    iv_ratio <- call_iv / put_iv
+    net_credit <- call_bid - put_ask
+
+    if (net_credit <= 0) {
+      log_debug("{ticker}: No net credit (net_credit={net_credit}), skipping")
+      return(NULL)
+    }
 
     list(
       ticker        = ticker,
-      call_iv       = call_iv,
-      put_iv        = put_iv,
-      iv_ratio      = iv_ratio,
+      call_bid      = call_bid,
+      put_ask       = put_ask,
+      net_credit    = net_credit,
       current_price = current_price,
       expiry_date   = as.character(as.Date(selected_expiry_str, format = "%b.%d.%Y"))
     )
   }, error = function(e) {
-    log_debug("{ticker}: Error computing IV skew - {truncate_error(e$message)}")
+    log_debug("{ticker}: Error computing collar credit - {truncate_error(e$message)}")
     return(NULL)
   })
 }
@@ -805,35 +806,35 @@ analyze_collar_iv_skew <- function(strike_adjustment_pct = 0,
       suppressPackageStartupMessages(loadNamespace("investR"))
     }
     options(investR.quote_source = quote_source)
-    investR::compute_iv_skew_ratio(ticker)
+    investR::compute_collar_credit(ticker)
   }, .options = furrr_options(seed = TRUE, packages = "investR"))
 
   skew_results <- compact(skew_results)
-  log_info("{length(skew_results)} tickers had valid IV data out of {length(ticker_universe)} screened")
+  log_info("{length(skew_results)} tickers had valid net credit data out of {length(ticker_universe)} screened")
 
   if (length(skew_results) == 0) {
-    log_warn("No tickers returned valid IV skew data")
+    log_warn("No tickers returned valid net credit data")
     return(tibble::tibble())
   }
 
-  # 4. Sort by iv_ratio descending, take top N
+  # 4. Sort by net_credit descending, take top N
   top_n <- COLLAR_CONFIG$iv_skew_top_n
   skew_df <- dplyr::bind_rows(
     lapply(skew_results, function(x) {
       tibble::tibble(
         ticker        = x$ticker,
-        call_iv       = x$call_iv,
-        put_iv        = x$put_iv,
-        iv_ratio      = x$iv_ratio,
+        call_bid      = x$call_bid,
+        put_ask       = x$put_ask,
+        net_credit    = x$net_credit,
         current_price = x$current_price,
         expiry_date   = x$expiry_date
       )
     })
   )
-  skew_df <- dplyr::arrange(skew_df, dplyr::desc(iv_ratio))
+  skew_df <- dplyr::arrange(skew_df, dplyr::desc(net_credit))
   top_tickers <- head(skew_df$ticker, top_n)
 
-  log_info("Top {length(top_tickers)} tickers by IV skew ratio selected for collar analysis")
+  log_info("Top {length(top_tickers)} tickers by net credit selected for collar analysis")
 
   # 5. Run collar analysis on top N in parallel
   results <- future_map(top_tickers, function(ticker) {

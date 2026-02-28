@@ -44,25 +44,25 @@ test_that("fetch_iwb_holdings parses cached CSV and returns equity tickers", {
   }
 })
 
-test_that("compute_iv_skew_ratio returns correct ratio from mock data", {
-  call_iv <- 0.30
-  put_iv  <- 0.20
-  iv_ratio <- call_iv / put_iv
+test_that("compute_collar_credit returns correct net_credit from mock data", {
+  call_bid <- 3.50
+  put_ask  <- 2.00
+  net_credit <- call_bid - put_ask
 
-  expect_equal(iv_ratio, 1.5)
+  expect_equal(net_credit, 1.5)
 
-  # NULL guard: put IV of zero is a division-by-zero case
-  put_iv_zero <- 0
-  expect_true(put_iv_zero == 0)
+  # NULL guard: put ask of zero should cause function to return NULL
+  put_ask_zero <- 0
+  expect_true(put_ask_zero == 0)
 })
 
-test_that("IV skew top-N selection picks highest ratios", {
+test_that("collar credit top-N selection picks highest net_credit", {
   skew_data <- data.frame(
-    ticker   = c("A", "B", "C", "D", "E"),
-    iv_ratio = c(1.1, 1.5, 0.9, 2.0, 1.3),
+    ticker     = c("A", "B", "C", "D", "E"),
+    net_credit = c(1.1, 1.5, 0.9, 2.0, 1.3),
     stringsAsFactors = FALSE
   )
-  sorted <- skew_data[order(skew_data$iv_ratio, decreasing = TRUE), ]
+  sorted <- skew_data[order(skew_data$net_credit, decreasing = TRUE), ]
   top3 <- head(sorted$ticker, 3)
 
   expect_equal(top3, c("D", "B", "E"))

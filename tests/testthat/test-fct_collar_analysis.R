@@ -15,16 +15,16 @@ test_that("fetch_iwb_holdings parses cached CSV and returns equity tickers", {
   expect_true("NVDA" %in% tickers)
 })
 
-test_that("compute_iv_skew_ratio returns NULL for missing quote data", {
+test_that("compute_collar_credit returns NULL for missing quote data", {
   local_mocked_bindings(
     fetch_current_quote = function(ticker, ...) NULL,
     .package = "investR"
   )
-  result <- compute_iv_skew_ratio("FAKE")
+  result <- compute_collar_credit("FAKE")
   expect_null(result)
 })
 
-test_that("compute_iv_skew_ratio computes correct iv_ratio from mock data", {
+test_that("compute_collar_credit computes correct net_credit from mock data", {
   mock_quote <- data.frame(Last = "150.0", Name = "Apple Inc", stringsAsFactors = FALSE)
 
   today <- Sys.Date()
@@ -59,19 +59,19 @@ test_that("compute_iv_skew_ratio computes correct iv_ratio from mock data", {
     .package = "investR"
   )
 
-  result <- compute_iv_skew_ratio("AAPL")
+  result <- compute_collar_credit("AAPL")
 
   expect_type(result, "list")
   expect_equal(result$ticker, "AAPL")
-  expect_equal(result$call_iv, 0.32)
-  expect_equal(result$put_iv, 0.20)
-  expect_equal(result$iv_ratio, 0.32 / 0.20)
+  expect_equal(result$call_bid, 4.2)
+  expect_equal(result$put_ask, 2.7)
+  expect_equal(result$net_credit, 4.2 - 2.7)
   expect_equal(result$current_price, 150.0)
   # expiry_date is now normalized to ISO format
   expect_equal(result$expiry_date, as.character(today + 50))
 })
 
-test_that("compute_iv_skew_ratio skips tickers with no expiry in window", {
+test_that("compute_collar_credit skips tickers with no expiry in window", {
   mock_quote <- data.frame(Last = "150.0", Name = "Apple Inc", stringsAsFactors = FALSE)
 
   today <- Sys.Date()
@@ -90,11 +90,11 @@ test_that("compute_iv_skew_ratio skips tickers with no expiry in window", {
     .package = "investR"
   )
 
-  result <- compute_iv_skew_ratio("AAPL")
+  result <- compute_collar_credit("AAPL")
   expect_null(result)
 })
 
-test_that("compute_iv_skew_ratio returns NULL when put IV is zero", {
+test_that("compute_collar_credit returns NULL when put ask is zero", {
   mock_quote <- data.frame(Last = "150.0", Name = "Apple Inc", stringsAsFactors = FALSE)
 
   today <- Sys.Date()
@@ -102,8 +102,8 @@ test_that("compute_iv_skew_ratio returns NULL when put IV is zero", {
 
   mock_chain <- list()
   mock_chain[[target_expiry_key]] <- list(
-    calls = data.frame(Strike = 150, IV = 0.30, stringsAsFactors = FALSE),
-    puts  = data.frame(Strike = 150, IV = 0.0,  stringsAsFactors = FALSE)
+    calls = data.frame(Strike = 150, IV = 0.30, Bid = 3.50, Ask = 3.70, stringsAsFactors = FALSE),
+    puts  = data.frame(Strike = 150, IV = 0.0,  Bid = 0.0,  Ask = 0.0,  stringsAsFactors = FALSE)
   )
 
   local_mocked_bindings(
@@ -112,6 +112,6 @@ test_that("compute_iv_skew_ratio returns NULL when put IV is zero", {
     .package = "investR"
   )
 
-  result <- compute_iv_skew_ratio("AAPL")
+  result <- compute_collar_credit("AAPL")
   expect_null(result)
 })
