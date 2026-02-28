@@ -183,7 +183,6 @@ mod_collar_controls_server <- function(id){
           max_workers = input$max_workers
         ),
         "iv_skew" = analyze_collar_iv_skew(
-          target_days = COLLAR_CONFIG$iv_skew_screening_target_days,
           strike_adjustment_pct = input$strike_adjustment / 100,
           max_workers = input$max_workers
         )

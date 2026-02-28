@@ -775,17 +775,15 @@ compute_iv_skew_ratio <- function(ticker) {
 #' high relative to ATM put IV, then runs standard collar analysis on the top N
 #' results.
 #'
-#' @param target_days Target days to expiry for collar analysis (from UI slider)
 #' @param strike_adjustment_pct Strike adjustment as decimal (0 = ATM)
 #' @param max_workers Number of parallel workers
 #' @return Tibble with collar opportunities sorted by annualized_return
 #' @export
 #' @examples
 #' \dontrun{
-#'   results <- analyze_collar_iv_skew(target_days = 45, strike_adjustment_pct = 0)
+#'   results <- analyze_collar_iv_skew(strike_adjustment_pct = 0)
 #' }
-analyze_collar_iv_skew <- function(target_days = COLLAR_CONFIG$iv_skew_screening_target_days,
-                                   strike_adjustment_pct = 0,
+analyze_collar_iv_skew <- function(strike_adjustment_pct = 0,
                                    max_workers = COLLAR_CONFIG$max_workers) {
 
   log_analysis_header_generic("Collar Strategy - IV Skew Screener (Russell 1000)")
