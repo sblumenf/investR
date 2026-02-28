@@ -5,14 +5,11 @@
 \title{Analyze Russell 1000 universe for IV skew collar opportunities}
 \usage{
 analyze_collar_iv_skew(
-  target_days = COLLAR_CONFIG$iv_skew_screening_target_days,
   strike_adjustment_pct = 0,
   max_workers = COLLAR_CONFIG$max_workers
 )
 }
 \arguments{
-\item{target_days}{Target days to expiry for collar analysis (from UI slider)}
-
 \item{strike_adjustment_pct}{Strike adjustment as decimal (0 = ATM)}
 
 \item{max_workers}{Number of parallel workers}
@@ -27,6 +24,6 @@ results.
 }
 \examples{
 \dontrun{
-  results <- analyze_collar_iv_skew(target_days = 45, strike_adjustment_pct = 0)
+  results <- analyze_collar_iv_skew(strike_adjustment_pct = 0)
 }
 }

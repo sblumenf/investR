@@ -1,15 +1,13 @@
 {
   "allowed_files": [
     "R/fct_collar_analysis.R",
-    "NAMESPACE",
+    "R/mod_collar_controls.R",
     "tests/testthat/test-fct_collar_analysis.R",
-    "tests/testthat/test-fct_collar_iv_skew.R",
-    "man/compute_iv_skew_ratio.Rd",
-    "man/compute_collar_credit.Rd"
+    "tests/testthat/test-fct_collar_iv_skew.R"
   ],
   "denied_files": [],
-  "allow_new_files": true,
-  "allowed_new_dirs": ["man"],
+  "allow_new_files": false,
+  "allowed_new_dirs": [],
   "allow_new_deps": false,
   "created_by": "pm",
   "spec_file": "inline",

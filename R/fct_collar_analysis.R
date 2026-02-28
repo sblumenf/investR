@@ -657,6 +657,7 @@ fetch_iwb_holdings <- function() {
 #' produce a net credit.
 #'
 #' @param ticker Stock ticker symbol
+#' @param target_days Target days to expiry for option selection (default from config)
 #' @return List with ticker, call_bid, put_ask, net_credit, current_price,
 #'   expiry_date; or NULL if no valid data found or net_credit <= 0
 #' @export
@@ -664,10 +665,10 @@ fetch_iwb_holdings <- function() {
 #' \dontrun{
 #'   result <- compute_collar_credit("AAPL")
 #' }
-compute_collar_credit <- function(ticker) {
+compute_collar_credit <- function(ticker, target_days = COLLAR_CONFIG$iv_skew_screening_target_days) {
   tryCatch({
-    screening_target <- COLLAR_CONFIG$iv_skew_screening_target_days
-    screening_max <- COLLAR_CONFIG$iv_skew_screening_max_days
+    screening_target <- target_days
+    screening_max <- target_days + 15
 
     # 1. Get current price
     quote <- fetch_current_quote(ticker, fields = c("Last Trade (Price Only)"))
@@ -776,6 +777,7 @@ compute_collar_credit <- function(ticker) {
 #' high relative to ATM put IV, then runs standard collar analysis on the top N
 #' results.
 #'
+#' @param target_days Target days to expiry for option selection (default from config)
 #' @param strike_adjustment_pct Strike adjustment as decimal (0 = ATM)
 #' @param max_workers Number of parallel workers
 #' @return Tibble with collar opportunities sorted by annualized_return
@@ -784,7 +786,8 @@ compute_collar_credit <- function(ticker) {
 #' \dontrun{
 #'   results <- analyze_collar_iv_skew(strike_adjustment_pct = 0)
 #' }
-analyze_collar_iv_skew <- function(strike_adjustment_pct = 0,
+analyze_collar_iv_skew <- function(target_days = COLLAR_CONFIG$iv_skew_screening_target_days,
+                                   strike_adjustment_pct = 0,
                                    max_workers = COLLAR_CONFIG$max_workers) {
 
   log_analysis_header_generic("Collar Strategy - IV Skew Screener (Russell 1000)")
@@ -806,7 +809,7 @@ analyze_collar_iv_skew <- function(strike_adjustment_pct = 0,
       suppressPackageStartupMessages(loadNamespace("investR"))
     }
     options(investR.quote_source = quote_source)
-    investR::compute_collar_credit(ticker)
+    investR::compute_collar_credit(ticker, target_days)
   }, .options = furrr_options(seed = TRUE, packages = "investR"))
 
   skew_results <- compact(skew_results)
@@ -842,7 +845,7 @@ analyze_collar_iv_skew <- function(strike_adjustment_pct = 0,
       suppressPackageStartupMessages(loadNamespace("investR"))
     }
     options(investR.quote_source = quote_source)
-    investR::analyze_collar_single(ticker, COLLAR_CONFIG$iv_skew_screening_target_days, strike_adjustment_pct)
+    investR::analyze_collar_single(ticker, target_days, strike_adjustment_pct)
   }, .options = furrr_options(seed = TRUE, packages = "investR"))
 
   results_df <- compact(results) %>% bind_rows()
