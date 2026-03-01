@@ -5,11 +5,17 @@
 \title{Analyze Russell 1000 universe for IV skew collar opportunities}
 \usage{
 analyze_collar_iv_skew(
+  target_days = COLLAR_CONFIG$iv_skew_screening_target_days,
+  max_days = NULL,
   strike_adjustment_pct = 0,
   max_workers = COLLAR_CONFIG$max_workers
 )
 }
 \arguments{
+\item{target_days}{Target days to expiry for option selection (default from config)}
+
+\item{max_days}{Maximum days to expiry for screening window (default: target_days + 15)}
+
 \item{strike_adjustment_pct}{Strike adjustment as decimal (0 = ATM)}
 
 \item{max_workers}{Number of parallel workers}

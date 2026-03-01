@@ -1,6 +1,8 @@
 {
   "allowed_files": [
-    "R/fct_collar_analysis.R"
+    "R/fct_collar_analysis.R",
+    "man/compute_collar_credit.Rd",
+    "man/analyze_collar_iv_skew.Rd"
   ],
   "denied_files": [],
   "allow_new_files": false,
