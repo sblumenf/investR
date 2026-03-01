@@ -658,6 +658,7 @@ fetch_iwb_holdings <- function() {
 #'
 #' @param ticker Stock ticker symbol
 #' @param target_days Target days to expiry for option selection (default from config)
+#' @param max_days Maximum days to expiry for screening window (default: target_days + 15)
 #' @return List with ticker, call_bid, put_ask, net_credit, current_price,
 #'   expiry_date; or NULL if no valid data found or net_credit <= 0
 #' @export
@@ -665,10 +666,10 @@ fetch_iwb_holdings <- function() {
 #' \dontrun{
 #'   result <- compute_collar_credit("AAPL")
 #' }
-compute_collar_credit <- function(ticker, target_days = COLLAR_CONFIG$iv_skew_screening_target_days) {
+compute_collar_credit <- function(ticker, target_days = COLLAR_CONFIG$iv_skew_screening_target_days, max_days = NULL) {
   tryCatch({
     screening_target <- target_days
-    screening_max <- target_days + 15
+    screening_max <- if (!is.null(max_days)) max_days else target_days + 15
 
     # 1. Get current price
     quote <- fetch_current_quote(ticker, fields = c("Last Trade (Price Only)"))
@@ -778,6 +779,7 @@ compute_collar_credit <- function(ticker, target_days = COLLAR_CONFIG$iv_skew_sc
 #' results.
 #'
 #' @param target_days Target days to expiry for option selection (default from config)
+#' @param max_days Maximum days to expiry for screening window (default: target_days + 15)
 #' @param strike_adjustment_pct Strike adjustment as decimal (0 = ATM)
 #' @param max_workers Number of parallel workers
 #' @return Tibble with collar opportunities sorted by annualized_return
@@ -787,6 +789,7 @@ compute_collar_credit <- function(ticker, target_days = COLLAR_CONFIG$iv_skew_sc
 #'   results <- analyze_collar_iv_skew(strike_adjustment_pct = 0)
 #' }
 analyze_collar_iv_skew <- function(target_days = COLLAR_CONFIG$iv_skew_screening_target_days,
+                                   max_days = NULL,
                                    strike_adjustment_pct = 0,
                                    max_workers = COLLAR_CONFIG$max_workers) {
 
@@ -809,7 +812,7 @@ analyze_collar_iv_skew <- function(target_days = COLLAR_CONFIG$iv_skew_screening
       suppressPackageStartupMessages(loadNamespace("investR"))
     }
     options(investR.quote_source = quote_source)
-    investR::compute_collar_credit(ticker, target_days)
+    investR::compute_collar_credit(ticker, target_days, max_days)
   }, .options = furrr_options(seed = TRUE, packages = "investR"))
 
   skew_results <- compact(skew_results)
