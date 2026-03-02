@@ -4,18 +4,10 @@
 \alias{compute_collar_credit}
 \title{Compute collar net credit for a single ticker}
 \usage{
-compute_collar_credit(
-  ticker,
-  target_days = COLLAR_CONFIG$iv_skew_screening_target_days,
-  max_days = NULL
-)
+compute_collar_credit(ticker)
 }
 \arguments{
 \item{ticker}{Stock ticker symbol}
-
-\item{target_days}{Target days to expiry for option selection (default from config)}
-
-\item{max_days}{Maximum days to expiry for screening window (default: target_days + 15)}
 }
 \value{
 List with ticker, call_bid, put_ask, net_credit, current_price,
