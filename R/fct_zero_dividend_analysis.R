@@ -123,7 +123,8 @@ analyze_zero_dividend_custom_list <- function(list_type,
     "most_shorted" = "Most Shorted Stocks",
     "leveraged_2x" = "2x Leveraged ETFs",
     "leveraged_3x" = "3x Leveraged ETFs",
-    stop("Invalid list_type. Must be 'overbought', 'oversold', 'most_shorted', 'leveraged_2x', or 'leveraged_3x'")
+    "finviz_screened" = "Finviz Screened Stocks",
+    stop("Invalid list_type. Must be 'overbought', 'oversold', 'most_shorted', 'leveraged_2x', 'leveraged_3x', or 'finviz_screened'")
   )
 
   # Fetch ticker list (web scraping with caching)
@@ -133,7 +134,8 @@ analyze_zero_dividend_custom_list <- function(list_type,
     "oversold" = fetch_oversold_tickers(),
     "most_shorted" = fetch_most_shorted_tickers(),
     "leveraged_2x" = fetch_2x_leveraged_etfs(),
-    "leveraged_3x" = fetch_3x_leveraged_etfs()
+    "leveraged_3x" = fetch_3x_leveraged_etfs(),
+    "finviz_screened" = fetch_finviz_screened_tickers()
   )
 
   # Validate we have tickers to analyze

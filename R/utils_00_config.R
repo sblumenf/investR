@@ -26,7 +26,7 @@ NULL
 #' }
 get_golem_config_value <- function(section, key, fallback = NULL) {
   tryCatch({
-    golem_config <- golem::get_golem_config()
+    golem_config <- config::get(file = app_sys("golem-config.yml"))
     value <- golem_config[[section]][[key]]
     if (is.null(value)) fallback else value
   }, error = function(e) {

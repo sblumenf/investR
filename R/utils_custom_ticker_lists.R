@@ -5,7 +5,7 @@
 #' and leveraged ETFs. Used by both collar and zero-dividend strategies.
 #'
 #' @name custom-ticker-lists
-#' @importFrom rvest read_html html_elements html_attr
+#' @importFrom rvest read_html html_elements html_attr html_node html_table html_text
 #' @importFrom logger log_info log_warn log_error
 NULL
 
@@ -427,6 +427,163 @@ fetch_3x_leveraged_etfs <- function(force_refresh = FALSE) {
   .leveraged_3x_cache$timestamp <- Sys.time()
 
   log_info("Successfully fetched {length(tickers)} 3x leveraged ETFs")
+
+  return(tickers)
+}
+
+################################################################################
+# FINVIZ SCREENED TICKERS
+################################################################################
+
+# Session-level cache for Finviz screened tickers
+.finviz_screened_cache <- new.env(parent = emptyenv())
+
+#' Scrape a single Finviz screener page (with pagination)
+#'
+#' Fetches all result pages for a Finviz screener URL and extracts ticker symbols.
+#' Handles pagination automatically (20 results per page).
+#'
+#' @param url Finviz screener URL
+#' @param delay Seconds between paginated requests (default 0.3)
+#' @return Character vector of ticker symbols
+#' @noRd
+scrape_finviz_page <- function(url, delay = 0.3) {
+  # Fetch first page
+  first_page <- rvest::read_html(url)
+
+  # Get total result count from #screener-total element
+  total_text <- first_page %>%
+    rvest::html_node("#screener-total") %>%
+    rvest::html_text()
+
+  if (is.na(total_text)) {
+    log_warn("Could not find result count on Finviz page: {url}")
+    return(character(0))
+  }
+
+  nums <- regmatches(total_text, gregexpr("[0-9]+", total_text))[[1]]
+  total_results <- as.integer(nums[length(nums)])
+
+  if (length(nums) == 0 || is.na(total_results) || total_results == 0) {
+    return(character(0))
+  }
+
+  total_pages <- ceiling(total_results / 20)
+
+  # Parse first page table
+  all_tickers <- character(0)
+  tbl <- tryCatch(
+    first_page %>%
+      rvest::html_node("table.screener_table") %>%
+      rvest::html_table(),
+    error = function(e) NULL
+  )
+
+  if (!is.null(tbl) && "Ticker" %in% names(tbl)) {
+    all_tickers <- c(all_tickers, tbl$Ticker)
+  }
+
+  # Fetch remaining pages
+  if (total_pages > 1) {
+    for (p in 2:total_pages) {
+      Sys.sleep(delay)
+      r_param <- (p - 1) * 20 + 1
+      page_url <- paste0(url, "&r=", r_param)
+
+      page_tbl <- tryCatch({
+        page_html <- rvest::read_html(page_url)
+        page_html %>%
+          rvest::html_node("table.screener_table") %>%
+          rvest::html_table()
+      }, error = function(e) {
+        log_warn("Failed to fetch Finviz page {p}: {e$message}")
+        NULL
+      })
+
+      if (is.null(page_tbl) || nrow(page_tbl) == 0) {
+        log_warn("Empty table on Finviz page {p}, skipping to next")
+        next
+      }
+      if ("Ticker" %in% names(page_tbl)) {
+        all_tickers <- c(all_tickers, page_tbl$Ticker)
+      }
+    }
+  }
+
+  unique(toupper(all_tickers))
+}
+
+#' Fetch Finviz screened tickers
+#'
+#' Scrapes all configured Finviz screener URLs, extracts ticker symbols,
+#' and returns a deduplicated list. Results are cached for 24 hours.
+#'
+#' @param force_refresh Logical. If TRUE, ignores cache and fetches fresh data.
+#' @return Character vector of unique ticker symbols (empty if all scraping fails)
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#'   tickers <- fetch_finviz_screened_tickers()
+#'   tickers <- fetch_finviz_screened_tickers(force_refresh = TRUE)
+#' }
+fetch_finviz_screened_tickers <- function(force_refresh = FALSE) {
+  cache_hours <- get_golem_config_value("custom_ticker_lists", "ticker_cache_hours", 24)
+
+  # Check cache
+  if (!force_refresh && collar_cache_is_valid(.finviz_screened_cache, cache_hours)) {
+    log_info("Using cached Finviz screened tickers ({length(.finviz_screened_cache$tickers)} tickers)")
+    return(.finviz_screened_cache$tickers)
+  }
+
+  # Get URLs from config
+  urls <- get_golem_config_value("custom_ticker_lists", "finviz_screener_urls", list())
+
+  if (length(urls) == 0) {
+    log_warn("No Finviz screener URLs configured in golem-config.yml")
+    return(character(0))
+  }
+
+  log_info("Fetching tickers from {length(urls)} Finviz screener URLs...")
+
+  # Scrape each URL and collect tickers
+  all_tickers <- character(0)
+  success_count <- 0
+
+  for (i in seq_along(urls)) {
+    url <- urls[[i]]
+    log_info("Scraping Finviz URL {i}/{length(urls)}...")
+
+    page_tickers <- tryCatch(
+      scrape_finviz_page(url),
+      error = function(e) {
+        log_error("Failed to scrape Finviz URL {i}: {e$message}")
+        character(0)
+      }
+    )
+
+    if (length(page_tickers) > 0) {
+      all_tickers <- c(all_tickers, page_tickers)
+      success_count <- success_count + 1
+    }
+
+    # Brief delay between different screener URLs
+    if (i < length(urls)) Sys.sleep(0.5)
+  }
+
+  # Deduplicate
+  tickers <- unique(toupper(all_tickers))
+
+  if (length(tickers) == 0) {
+    log_warn("No tickers fetched from any Finviz screener URL")
+    return(character(0))
+  }
+
+  # Update cache
+  .finviz_screened_cache$tickers <- tickers
+  .finviz_screened_cache$timestamp <- Sys.time()
+
+  log_info("Successfully fetched {length(tickers)} unique tickers from {success_count}/{length(urls)} Finviz screens")
 
   return(tickers)
 }

@@ -11,6 +11,27 @@ default:
     most_shorted_url: "https://stockanalysis.com/list/most-shorted-stocks/"
     leveraged_2x_url: "https://www.2xetfs.com/"
     leveraged_3x_url: "https://3xetf.com/"
+    finviz_screener_urls:
+      - "https://finviz.com/screener.ashx?v=171&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,ta_volatility_wo5&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&s=ta_e_after&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,ta_volatility_wo5&o=-volume"
+      - "https://finviz.com/screener.ashx?v=131&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,sh_short_o15&o=-volume"
+      - "https://finviz.com/screener.ashx?v=131&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,sh_short_o20&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,ta_gap_u5,ta_volatility_wo3&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,ta_perf_4w_o10,ta_perf_1w_d&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,ta_sma200_pa20,ta_rsi_ob70&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&s=ta_overbought&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,ta_sma200_pa20&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&s=it_latestbuys&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,ta_perf_1w_d&o=-volume"
+      - "https://finviz.com/screener.ashx?v=131&s=it_latestbuys&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,ta_sma50_pb,ta_sma200_pa&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&s=ta_oversold&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&s=ta_unusualvolume&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&s=ta_mostvolatile&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover&o=-volume"
+      - "https://finviz.com/screener.ashx?v=161&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,fa_opermargin_pos,fa_debteq_u0.5,ta_perf_13w_d&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,ta_highlow52w_b10l,fa_opermargin_pos,fa_curratio_o1.5&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&s=ta_newlow&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&s=it_latestsales&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover,ta_perf_4w_o10&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&s=ta_downgrades&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover&o=-volume"
+      - "https://finviz.com/screener.ashx?v=171&s=ta_upgrades&f=sh_opt_option,sh_avgvol_o500,fa_div_none,cap_midover&o=-volume"
 
   # Shared constants across all strategies
   shared:

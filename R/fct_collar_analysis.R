@@ -36,9 +36,9 @@ analyze_collar_single <- function(ticker,
                                   target_days = 300,
                                   strike_adjustment_pct = 0) {
 
-  validate_ticker(ticker)
-
   tryCatch({
+
+    validate_ticker(ticker)
 
     # 1. Get stock data
     log_debug("Analyzing {ticker}...")
@@ -481,7 +481,8 @@ analyze_collar_custom_list <- function(list_type,
     "most_shorted" = "Most Shorted Stocks",
     "leveraged_2x" = "2x Leveraged ETFs",
     "leveraged_3x" = "3x Leveraged ETFs",
-    stop("Invalid list_type. Must be 'overbought', 'oversold', 'most_shorted', 'leveraged_2x', or 'leveraged_3x'")
+    "finviz_screened" = "Finviz Screened Stocks",
+    stop("Invalid list_type. Must be 'overbought', 'oversold', 'most_shorted', 'leveraged_2x', 'leveraged_3x', or 'finviz_screened'")
   )
 
   log_analysis_header_generic(paste("Collar Strategy -", list_name))
@@ -492,7 +493,8 @@ analyze_collar_custom_list <- function(list_type,
     "oversold" = fetch_oversold_tickers(),
     "most_shorted" = fetch_most_shorted_tickers(),
     "leveraged_2x" = fetch_2x_leveraged_etfs(),
-    "leveraged_3x" = fetch_3x_leveraged_etfs()
+    "leveraged_3x" = fetch_3x_leveraged_etfs(),
+    "finviz_screened" = fetch_finviz_screened_tickers()
   )
 
   if (length(ticker_list) == 0) {

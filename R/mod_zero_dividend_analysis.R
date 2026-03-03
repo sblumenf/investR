@@ -32,7 +32,8 @@ mod_zero_dividend_analysis_ui <- function(id){
           "Oversold Stocks" = "oversold",
           "Most Shorted Stocks" = "most_shorted",
           "2x Leveraged ETFs" = "leveraged_2x",
-          "3x Leveraged ETFs" = "leveraged_3x"
+          "3x Leveraged ETFs" = "leveraged_3x",
+          "Finviz Screened" = "finviz_screened"
         ),
         selected = "sp500_zero"
       ),
@@ -195,6 +196,14 @@ mod_zero_dividend_analysis_server <- function(id){
           max_days = input$days_range[2],
           expiry_month = NULL,
           max_workers = input$max_workers
+        ),
+        "finviz_screened" = analyze_zero_dividend_custom_list(
+          list_type = "finviz_screened",
+          strike_threshold_pct = input$strike_threshold / 100,
+          min_days = input$days_range[1],
+          max_days = input$days_range[2],
+          expiry_month = NULL,
+          max_workers = input$max_workers
         )
       )
     }
@@ -209,7 +218,8 @@ mod_zero_dividend_analysis_server <- function(id){
         "oversold" = "oversold stocks",
         "most_shorted" = "most shorted stocks",
         "leveraged_2x" = "2x leveraged ETFs",
-        "leveraged_3x" = "3x leveraged ETFs"
+        "leveraged_3x" = "3x leveraged ETFs",
+        "finviz_screened" = "Finviz screened stocks"
       )
     })
 

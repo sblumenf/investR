@@ -34,7 +34,8 @@ mod_collar_controls_ui <- function(id){
           "Most Shorted Stocks" = "most_shorted",
           "2x Leveraged ETFs" = "leveraged_2x",
           "3x Leveraged ETFs" = "leveraged_3x",
-          "IV Skew Screener" = "iv_skew"
+          "IV Skew Screener" = "iv_skew",
+          "Finviz Screened" = "finviz_screened"
         ),
         selected = "sp500_dividend"
       ),
@@ -186,6 +187,12 @@ mod_collar_controls_server <- function(id){
           target_days = input$target_days,
           strike_adjustment_pct = input$strike_adjustment / 100,
           max_workers = input$max_workers
+        ),
+        "finviz_screened" = analyze_collar_custom_list(
+          list_type = "finviz_screened",
+          target_days = input$target_days,
+          strike_adjustment_pct = input$strike_adjustment / 100,
+          max_workers = input$max_workers
         )
       )
     }
@@ -201,7 +208,8 @@ mod_collar_controls_server <- function(id){
         "most_shorted" = "most shorted stocks",
         "leveraged_2x" = "2x leveraged ETFs",
         "leveraged_3x" = "3x leveraged ETFs",
-        "iv_skew" = "IV skew screened stocks"
+        "iv_skew" = "IV skew screened stocks",
+        "finviz_screened" = "Finviz screened stocks"
       )
     })
 
@@ -214,6 +222,8 @@ mod_collar_controls_server <- function(id){
       progress_message = reactive({
         if (input$collar_variant == "iv_skew") {
           "Screening Russell 1000 for IV skew... This may take several minutes."
+        } else if (input$collar_variant == "finviz_screened") {
+          "Scraping Finviz screeners and analyzing collars... This may take several minutes."
         } else {
           sprintf("Analyzing %s for collar opportunities... This may take several minutes.", variant_label())
         }
