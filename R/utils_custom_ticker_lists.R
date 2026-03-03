@@ -587,3 +587,89 @@ fetch_finviz_screened_tickers <- function(force_refresh = FALSE) {
 
   return(tickers)
 }
+
+################################################################################
+# DRIP INVESTING
+################################################################################
+
+#' Fetch DRIP Investing dividend stocks dataset
+#'
+#' Downloads the full dataset from DRIPInvesting.org JSON API.
+#' Caches the result as an RDS file in inst/cache/ for 30 days.
+#'
+#' @return A data frame with all DRIP Investing stocks
+#' @export
+fetch_drip_investing_data <- function() {
+  cache_path <- system.file("cache", "drip_investing_data.rds", package = "investR")
+  if (cache_path == "") {
+    cache_path <- file.path("inst", "cache", "drip_investing_data.rds")
+  }
+
+  cache_days <- get_golem_config_value("aristocrats", "drip_cache_days", 30)
+
+  if (file.exists(cache_path)) {
+    cache_age_days <- as.numeric(
+      difftime(Sys.time(), file.info(cache_path)$mtime, units = "days")
+    )
+    if (cache_age_days < cache_days) {
+      log_info("Using cached DRIP Investing data ({round(cache_age_days, 1)} days old)")
+      return(readRDS(cache_path))
+    }
+  }
+
+  api_url <- get_golem_config_value(
+    "aristocrats",
+    "drip_api_url",
+    "https://www.dripinvesting.org/wp-json/drip-investing/v1/stocks-dataset"
+  )
+
+  result <- tryCatch({
+    response <- httr::GET(api_url, httr::user_agent("investR/1.0"))
+    if (httr::status_code(response) != 200) {
+      stop("DRIP Investing API returned HTTP ", httr::status_code(response))
+    }
+    parsed <- jsonlite::fromJSON(httr::content(response, as = "text", encoding = "UTF-8"))
+    dataset <- parsed$dataset
+    if (!dir.exists(dirname(cache_path))) {
+      dir.create(dirname(cache_path), recursive = TRUE, showWarnings = FALSE)
+    }
+    saveRDS(dataset, cache_path)
+    log_info("Successfully fetched {nrow(dataset)} stocks from DRIP Investing API")
+    dataset
+  }, error = function(e) {
+    if (file.exists(cache_path)) {
+      log_warn("DRIP Investing API fetch failed, returning stale cache: {e$message}")
+      return(readRDS(cache_path))
+    }
+    stop("Failed to fetch DRIP Investing data and no cache available: ", e$message)
+  })
+
+  result
+}
+
+#' Get ticker symbols from DRIP Investing by dividend category
+#'
+#' @param category One of "King", "Champion", "Contender", "Challenger"
+#' @return Character vector of ticker symbols
+#' @export
+get_drip_tickers <- function(category) {
+  valid_categories <- c("King", "Champion", "Contender", "Challenger")
+  if (!category %in% valid_categories) {
+    stop("category must be one of: ", paste(valid_categories, collapse = ", "))
+  }
+
+  data <- fetch_drip_investing_data()
+
+  tickers <- data %>%
+    dplyr::filter(stock_type == category) %>%
+    dplyr::pull(ticker) %>%
+    as.character()
+
+  if (length(tickers) == 0) {
+    stop("No tickers found for DRIP Investing category: ", category)
+  }
+
+  log_info("Retrieved {length(tickers)} {category} tickers from DRIP Investing")
+
+  tickers
+}

@@ -14,6 +14,19 @@ mod_aristocrats_analysis_ui <- function(id){
       width = 3,
       h3("Strategy Parameters"),
 
+      selectInput(
+        ns("aristocrats_variant"),
+        NULL,
+        choices = c(
+          "Dividend Aristocrats" = "aristocrats",
+          "Dividend Kings (50+ yrs)" = "kings",
+          "Dividend Champions (25+ yrs)" = "champions",
+          "Dividend Contenders (10-24 yrs)" = "contenders",
+          "Dividend Challengers (5-9 yrs)" = "challengers"
+        ),
+        selected = "aristocrats"
+      ),
+
       # Quote source toggle
       quote_source_toggle_ui(ns),
 
@@ -111,14 +124,37 @@ mod_aristocrats_analysis_server <- function(id){
       )
     })
 
+    variant_label <- reactive({
+      switch(input$aristocrats_variant,
+        "aristocrats" = "Dividend Aristocrats",
+        "kings"       = "Dividend Kings (50+ yrs)",
+        "champions"   = "Dividend Champions (25+ yrs)",
+        "contenders"  = "Dividend Contenders (10-24 yrs)",
+        "challengers" = "Dividend Challengers (5-9 yrs)"
+      )
+    })
+
     # Create analysis function that captures current parameters
     analysis_function <- function() {
       params <- analysis_params()
+      tickers <- if (input$aristocrats_variant == "aristocrats") {
+        NULL
+      } else if (input$aristocrats_variant == "kings") {
+        get_drip_tickers("King")
+      } else if (input$aristocrats_variant == "champions") {
+        get_drip_tickers("Champion")
+      } else if (input$aristocrats_variant == "contenders") {
+        get_drip_tickers("Contender")
+      } else if (input$aristocrats_variant == "challengers") {
+        get_drip_tickers("Challenger")
+      }
       analyze_aristocrats(
         limit = NULL,
         strike_threshold_pct = params$strike_threshold_pct,
         target_days = params$target_days,
-        max_workers = params$max_workers
+        max_workers = params$max_workers,
+        tickers = tickers,
+        strategy_name = variant_label()
       )
     }
 
@@ -128,7 +164,9 @@ mod_aristocrats_analysis_server <- function(id){
       output = output,
       session = session,
       analysis_func = analysis_function,
-      progress_message = "Analysis in progress... This may take several minutes.",
+      progress_message = reactive({
+        sprintf("Analyzing %s... This may take several minutes.", variant_label())
+      }),
       success_message_template = "Analysis complete! Found %d opportunities.",
       no_results_message = "No opportunities found with current parameters.",
       download_filename_prefix = "aristocrats_analysis"

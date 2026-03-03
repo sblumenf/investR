@@ -52,7 +52,8 @@ setup_analysis_controls <- function(input,
     reset_fallback_tracker()
 
     # Show progress message
-    status_message(create_progress_alert(progress_message))
+    msg <- if (is.function(progress_message)) progress_message() else progress_message
+    status_message(create_progress_alert(msg))
 
     # Run analysis function
     results <- tryCatch({

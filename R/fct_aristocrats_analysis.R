@@ -683,10 +683,12 @@ log_analysis_footer <- function(n_results) {
 analyze_aristocrats <- function(limit = NULL,
                                strike_threshold_pct = ARISTOCRATS_CONFIG$strike_threshold_pct,
                                target_days = ARISTOCRATS_CONFIG$target_days,
-                               max_workers = ARISTOCRATS_CONFIG$max_workers) {
+                               max_workers = ARISTOCRATS_CONFIG$max_workers,
+                               tickers = NULL,
+                               strategy_name = "Dividend Aristocrats") {
 
   # Get aristocrats list (strategy-specific)
-  aristocrats <- get_dividend_aristocrats()
+  aristocrats <- if (!is.null(tickers)) tickers else get_dividend_aristocrats()
 
   # Apply limit if specified
   if (!is.null(limit)) {
@@ -697,7 +699,7 @@ analyze_aristocrats <- function(limit = NULL,
   # Call generic covered call analyzer
   analyze_covered_calls_generic(
     stock_universe = aristocrats,
-    strategy_name = "Dividend Aristocrats",
+    strategy_name = strategy_name,
     strike_threshold_pct = strike_threshold_pct,
     target_days = target_days,
     max_workers = max_workers,

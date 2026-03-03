@@ -8,7 +8,8 @@ analyze_aristocrats(
   limit = NULL,
   strike_threshold_pct = ARISTOCRATS_CONFIG$strike_threshold_pct,
   target_days = ARISTOCRATS_CONFIG$target_days,
-  max_workers = ARISTOCRATS_CONFIG$max_workers
+  max_workers = ARISTOCRATS_CONFIG$max_workers,
+  tickers = NULL
 )
 }
 \arguments{

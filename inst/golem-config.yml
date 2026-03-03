@@ -61,6 +61,8 @@ default:
     max_sgov_yield_sanity: 0.20
     default_top_n: 10
     output_dir: strategies
+    drip_api_url: "https://www.dripinvesting.org/wp-json/drip-investing/v1/stocks-dataset"
+    drip_cache_days: 30
 
   # Weekly dividend capture strategy configuration
   weekly_capture:
