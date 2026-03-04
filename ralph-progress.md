@@ -12,15 +12,17 @@
 - [x] Ran `devtools::document()` to regenerate NAMESPACE with new exports
 - [x] `devtools::test(filter = 'etf_collar')` → FAIL 0 | PASS 25
 
-## Remaining
+### Phase 2: UI — Controls Module (US-2) ✅
 
-### Phase 2: UI — Controls Module (US-2)
-- [ ] Create `R/mod_etf_collar_controls.R` with `mod_etf_collar_controls_ui()` and `mod_etf_collar_controls_server()`
-  - Sidebar width=3, matching existing collar controls layout
-  - 2-option variant dropdown: dividend_paying / zero_dividend
-  - Same sliders as collar page (target_days, strike_adjustment_pct, workers)
-  - Run Analysis + Download CSV buttons
+- [x] Created `R/mod_etf_collar_controls.R` — exports `mod_etf_collar_controls_ui()` and `mod_etf_collar_controls_server()`
+  - Sidebar width=3 matching existing collar controls layout exactly
+  - 2-option variant dropdown: "Dividend-paying ETFs" = "dividend_paying", "Zero-dividend ETFs" = "zero_dividend"
+  - Identical sliders: target_days (45-850, default 300), strike_adjustment (-20 to 20, step 5, post="%"), max_workers (1-20, default from ETF_COLLAR_CONFIG)
+  - Run Analysis + Download CSV buttons + Home nav link
   - Uses `quote_source_toggle_ui/server` and `setup_analysis_controls()`
+  - `devtools::load_all()` + `devtools::test(filter='etf_collar')` → FAIL 0 | PASS 25
+
+## Remaining
 
 ### Phase 3: Integration — Page + Registration + Navigation (US-3)
 - [ ] Create `R/page_etf_collar.R`

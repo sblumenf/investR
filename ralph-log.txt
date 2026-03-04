@@ -21,3 +21,16 @@
 
 One fix applied: removed `shiny::showNotification()` from the business logic function — that call errors outside a Shiny session. The empty-universe case logs a warning; the controls module's `setup_analysis_controls()` will surface user-visible status.
   [review] Starting review pass...
+**Review complete — PASS**
+
+Phase 1 is clean:
+- All 5 US-1 acceptance criteria met (config section, config utility, analysis wrapper, tests, passing run)
+- 25 tests pass with 0 failures
+- Parallel pattern correctly mirrors `analyze_collar_etfs()` with `fetch_yfscreen_etfs()` substituted as ticker source
+- No Shiny calls leaked into the `fct_` layer
+- No unauthorized dependencies or off-limits file modifications
+  [review] PASS — moving to next task
+--- Iteration 1 finished ---
+
+=== Iteration 2 of 10 === 21:58:44 ===
+  [impl] Starting implementation pass...
