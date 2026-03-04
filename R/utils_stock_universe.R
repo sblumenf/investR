@@ -259,7 +259,8 @@ stock_pays_dividend <- function(ticker, lookback_years = 2) {
 
       dividends <- fetch_dividend_history(ticker, from = start_date)
 
-      # NULL means the lookup itself failed (fetch_dividend_history should have thrown)
+      # NULL means fetch_dividend_history() failed (network error, rate limit, etc.)
+      # Stop here so safely_fetch returns NA (unknown) instead of FALSE (no dividends)
       if (is.null(dividends)) {
         stop("Dividend data unavailable for lookup")
       }
