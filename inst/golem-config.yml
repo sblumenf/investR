@@ -231,6 +231,7 @@ default:
   # ETF covered calls strategy configuration
   etf_covered_calls:
     max_workers: 10
+    default_universe_size: 2000
 
   # ETF collar strategy configuration (yfscreen-based)
   etf_collar:

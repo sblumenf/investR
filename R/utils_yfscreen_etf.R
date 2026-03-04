@@ -202,7 +202,7 @@ fetch_yfscreen_etfs <- function(dividend_yield_min = NULL,
     # Request more results than we need so we can filter and sort properly
     # If top_n is specified, request 10x that amount to ensure enough after filtering
     # Otherwise request a large batch (500 ETFs)
-    request_size <- if (!is.null(top_n)) max(top_n * 10, 100) else 500
+    request_size <- if (!is.null(top_n)) max(top_n * 10, 100) else ETF_SCREENER_CONFIG$default_universe_size
     log_info("Requesting {request_size} ETFs from API (to filter and sort to top {top_n %||% 'all'})")
 
     payload <- yfscreen::create_payload("etf", query, size = request_size)

@@ -259,9 +259,13 @@ stock_pays_dividend <- function(ticker, lookback_years = 2) {
 
       dividends <- fetch_dividend_history(ticker, from = start_date)
 
-      # NULL or empty xts object means no dividends
+      # NULL means the lookup itself failed (fetch_dividend_history should have thrown)
+      if (is.null(dividends)) {
+        stop("Dividend data unavailable for lookup")
+      }
+      # Empty xts object means no dividends were paid
       # Note: nrow() on empty xts returns NULL, so use length() instead
-      if (is.null(dividends) || length(dividends) == 0) {
+      if (length(dividends) == 0) {
         return(FALSE)
       }
 

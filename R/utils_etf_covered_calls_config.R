@@ -16,7 +16,8 @@ ETF_SCREENER_CONFIG <- list(
   max_days = 120,              # Default maximum 120 days to expiration
 
   # Parallel Processing
-  max_workers = get_golem_config_value("etf_covered_calls", "max_workers", 10)  # Default 10 workers for ETF screening
+  max_workers = get_golem_config_value("etf_covered_calls", "max_workers", 10),  # Default 10 workers for ETF screening
+  default_universe_size = get_golem_config_value("etf_covered_calls", "default_universe_size", 2000)
 )
 
 #' Validate ETF Screener Strategy Configuration

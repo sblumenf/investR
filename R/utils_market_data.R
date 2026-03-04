@@ -77,7 +77,7 @@ fetch_dividend_history <- function(ticker,
 
   }, error = function(e) {
     log_warn("{ticker}: Failed to fetch dividend history - {e$message}")
-    return(NULL)
+    stop(e$message)
   })
 }
 
