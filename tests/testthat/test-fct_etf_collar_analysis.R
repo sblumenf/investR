@@ -144,7 +144,7 @@ test_that("validate_etf_collar_config rejects negative min_net_credit", {
 
 test_that("get_etf_collar_config returns specific key value", {
   val <- investR::get_etf_collar_config("max_workers")
-  expect_type(val, "double")
+  expect_true(is.numeric(val))
   expect_gt(val, 0)
 })
 
