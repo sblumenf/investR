@@ -66,6 +66,15 @@ page_home <- function() {
         ),
         href = "/collar",
         button_text = "Analyze Collars"
+      ),
+      list(
+        title = "ETF Collar Strategy (Synthetic Bonds)",
+        description = c(
+          "Create risk-free 'synthetic bond' positions on dynamically-screened ETFs from Yahoo Finance.",
+          "Screens for dividend-paying or zero-dividend ETFs, then applies collar analysis for locked returns."
+        ),
+        href = "/etf-collar",
+        button_text = "Analyze ETF Collars"
       )
     ),
     cash_secured_puts = list(

@@ -22,13 +22,18 @@
   - Uses `quote_source_toggle_ui/server` and `setup_analysis_controls()`
   - `devtools::load_all()` + `devtools::test(filter='etf_collar')` → FAIL 0 | PASS 25
 
+### Phase 3: Integration — Page + Registration + Navigation (US-3) ✅
+
+- [x] Created `R/page_etf_collar.R` — mirrors `page_collar.R` exactly with `/etf-collar` href and ETF collar module names
+- [x] Registered `page_etf_collar()` in `R/run_app.R` after `page_collar()` (line 122)
+- [x] Added `validate_etf_collar_config()` to startup validation in `R/run_app.R` (after `validate_collar_config()`)
+- [x] Added second card to `collar_strategies` list in `R/page_home.R`
+- [x] `devtools::load_all()` → Load successful (no errors)
+- [x] `devtools::test(filter = 'etf_collar')` → FAIL 0 | PASS 25
+
 ## Remaining
 
-### Phase 3: Integration — Page + Registration + Navigation (US-3)
-- [ ] Create `R/page_etf_collar.R`
-- [ ] Register `page_etf_collar()` in `R/run_app.R` after `page_collar()`
-- [ ] Add `validate_etf_collar_config()` to startup validation in `R/run_app.R`
-- [ ] Add second card to `collar_strategies` list in `R/page_home.R`
+None — all phases complete.
 
 ## Notes
 

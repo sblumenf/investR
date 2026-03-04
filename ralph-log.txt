@@ -45,3 +45,18 @@ The checkpoint already committed the progress file with the Phase 2 update. Ever
 
 **Remaining:** Phase 3 (page definition + run_app.R registration + home page card)
   [review] Starting review pass...
+
+- `mod_etf_collar_controls.R` mirrors `mod_collar_controls.R` structure exactly as spec requires
+- 2-variant dropdown correctly maps `"dividend_paying"` / `"zero_dividend"` string values
+- All slider ranges match spec precisely (target_days 45-850/300, strike -20..20/step5/%, workers 1-20)
+- `quote_source_toggle_ui/server` wired correctly
+- `setup_analysis_controls()` pattern reused as required
+- `strike_adjustment / 100` conversion applied before passing to `analyze_etf_collar_yfscreen()` (correct — spec expects `strike_adjustment_pct`)
+- `devtools::load_all()` succeeds, 25 tests still pass (FAIL 0 | PASS 25)
+
+No issues. Phase 3 (page definition + registration + home page card) remains.
+  [review] PASS — moving to next task
+--- Iteration 2 finished ---
+
+=== Iteration 3 of 10 === 22:01:21 ===
+  [impl] Starting implementation pass...

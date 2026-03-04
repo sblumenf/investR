@@ -67,6 +67,7 @@ run_app <- function(
   validate_zero_dividend_config()  # Zero Dividend
   validate_dynamic_config()  # Dynamic Covered Calls
   validate_collar_config()  # Collar Strategy
+  validate_etf_collar_config()  # ETF Collar Strategy
   validate_etf_screener_config()  # ETF Screener
   validate_puts_config()  # Cash-Secured Puts
 
@@ -119,6 +120,7 @@ run_app <- function(
       page_dynamic_covered_calls(),
       page_etf_covered_calls(),
       page_collar(),
+      page_etf_collar(),
       page_cash_secured_puts(),
       page_put_calendar_spread(),
       page_etf_cash_secured_puts_yfscreen(),
