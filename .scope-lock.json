@@ -2,7 +2,12 @@
   "allowed_files": [
     "R/run_app.R",
     "inst/golem-config.yml",
-    "R/page_home.R"
+    "R/page_home.R",
+    "R/page_etf_collar.R",
+    "R/mod_etf_collar_controls.R",
+    "R/fct_etf_collar_analysis.R",
+    "R/utils_etf_collar_config.R",
+    "tests/testthat/test-fct_etf_collar_analysis.R"
   ],
   "denied_files": [],
   "allow_new_files": true,
