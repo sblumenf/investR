@@ -1,0 +1,17 @@
+{
+  "allowed_files": [
+    "R/run_app.R",
+    "inst/golem-config.yml",
+    "R/page_home.R"
+  ],
+  "denied_files": [],
+  "allow_new_files": true,
+  "allowed_new_dirs": [
+    "R",
+    "tests/testthat"
+  ],
+  "allow_new_deps": false,
+  "created_by": "ralph",
+  "spec_file": "docs/specs/help-me-implement-this-new-strategypage.md",
+  "created_at": "2026-03-04T02:53:11Z"
+}

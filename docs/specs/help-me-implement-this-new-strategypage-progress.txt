@@ -1,0 +1,21 @@
+ETF Collar Strategy Page - Implementation Progress
+===================================================
+Created: 2026-03-03
+
+Phase 1: Foundation — Config + Business Logic [PENDING]
+  - [ ] Add etf_collar section to inst/golem-config.yml
+  - [ ] Create R/utils_etf_collar_config.R
+  - [ ] Create R/fct_etf_collar_analysis.R
+  - [ ] Create tests/testthat/test-fct_etf_collar_analysis.R
+  Verification: Rscript -e "devtools::test(filter = 'etf_collar')"
+
+Phase 2: UI — Controls Module [PENDING]
+  - [ ] Create R/mod_etf_collar_controls.R with 2-variant dropdown + collar params
+  Verification: Rscript -e "devtools::load_all(); mod_etf_collar_controls_ui('test')"
+
+Phase 3: Integration — Page + Registration + Navigation [PENDING]
+  - [ ] Create R/page_etf_collar.R
+  - [ ] Register page_etf_collar() in R/run_app.R
+  - [ ] Add validate_etf_collar_config() to R/run_app.R
+  - [ ] Add second card to collar_strategies in R/page_home.R
+  Verification: Rscript -e "devtools::load_all(); cat('Load successful\n')"

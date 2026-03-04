@@ -232,6 +232,17 @@ default:
   etf_covered_calls:
     max_workers: 10
 
+  # ETF collar strategy configuration (yfscreen-based)
+  etf_collar:
+    max_workers: 10
+    min_net_credit: 0.01
+    min_open_interest: 10
+    max_stock_price: 1000
+    shares_per_contract: 100
+    sgov_yield_default: 0.0414
+    max_sgov_yield_sanity: 0.15
+    negative_return_threshold: 0
+
   # Cash equivalent (money market) tickers configuration
   # These tickers are treated specially: no expiration required, SEC yield for returns
   cash_equivalents:
