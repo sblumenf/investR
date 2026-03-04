@@ -78,7 +78,7 @@ mod_etf_covered_calls_analysis_ui <- function(id){
         ns("top_n_etfs"),
         "Maximum Number of ETFs to Analyze",
         min = 10,
-        max = 200,
+        max = 500,
         value = 50,
         step = 10
       ),
