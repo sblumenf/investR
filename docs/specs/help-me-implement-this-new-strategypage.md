@@ -2,161 +2,137 @@
 
 ## Constraints
 
-- **Files to Modify**: `R/run_app.R` (register page + config validation), `inst/golem-config.yml` (add `etf_collar` config section), `R/page_home.R` (add nav card to `collar_strategies` list)
-- **Files NOT to Modify**: `R/mod_collar_controls.R`, `R/mod_collar_results.R`, `R/fct_collar_analysis.R`, `R/mod_etf_covered_calls_analysis.R`, `R/fct_etf_yfscreen_analysis.R`, `R/utils_yfscreen_etf.R` (read-only reference; can call but not edit)
+- **Files to Modify**: `R/run_app.R` (register page + config validation), `inst/golem-config.yml` (add `etf_collar` config section), `R/page_home.R` (add second card to `collar_strategies` list)
+- **Files NOT to Modify**: No hard restrictions, but prefer not modifying existing collar or ETF CC modules unless truly necessary
 - **New Files Allowed**: Yes — `R/page_etf_collar.R`, `R/mod_etf_collar_controls.R`, `R/fct_etf_collar_analysis.R`, `R/utils_etf_collar_config.R`, `tests/testthat/test-fct_etf_collar_analysis.R`
 - **New Dependencies Allowed**: No — use only existing packages in DESCRIPTION
-- **Existing Code to Reuse**: `fetch_yfscreen_etfs()` from `utils_yfscreen_etf.R`, `analyze_collar_etfs()` from `fct_collar_analysis.R`, `mod_collar_results_ui/server` from `mod_collar_results.R`, `setup_analysis_controls()` from `utils_analysis_controls_helper.R`, `quote_source_toggle_ui/server` from their respective utils
-- **Out of Scope**: Changes to existing collar page, changes to ETF covered calls page, new analysis algorithms, ETF-specific result columns (AUM, expense ratio)
+- **Existing Code to Reuse**: `fetch_yfscreen_etfs()` from `utils_yfscreen_etf.R`, `analyze_collar_single()` from `fct_collar_analysis.R`, `mod_collar_results_ui/server` from `mod_collar_results.R`, `setup_analysis_controls()` from `utils_analysis_controls_helper.R`, `quote_source_toggle_ui/server`, parallel processing pattern from `analyze_collar_etfs()`
+- **Out of Scope**: Changes to existing collar page, changes to existing ETF covered calls page, new analysis algorithms, ETF-specific result columns
 
 ## Overview
 
-New Brochure page at `/etf-collar` titled "ETF Collar Strategy (Synthetic Bonds)" that runs the existing collar analysis engine on a dynamically-screened ETF universe from yfscreen (Yahoo Finance ETF screener).
+New Brochure page at `/etf-collar` titled "ETF Collar Strategy (Synthetic Bonds)" that runs the existing collar analysis engine on ETFs sourced dynamically from yfscreen (Yahoo Finance ETF screener).
 
-The existing collar strategy page at `/collar` uses static/manual ticker lists (S&P 500 stocks, curated ETF list, Finviz screener, etc.). This new page applies the identical collar analysis logic but sources its ETF universe dynamically from yfscreen — the same screening system already used by the ETF Covered Calls page at `/etf-covered-calls`.
+This is a **completely separate page** from the existing `/collar` page. The home page's "Collar Strategies" accordion section currently has one card; it will have two after this feature.
 
-### Key Design Decisions
-
-| Decision | Choice |
-|----------|--------|
-| Controls UI | Merged single panel — yfscreen filters at top, collar params below, single "Run Analysis" button |
-| Results module | Reuse existing `mod_collar_results` as-is |
-| Business logic | Thin wrapper in `fct_etf_collar_analysis.R` calling `fetch_yfscreen_etfs()` then `analyze_collar_etfs()` |
-| Route | `/etf-collar` |
-| Page title | "ETF Collar Strategy (Synthetic Bonds)" |
-| Navigation | Immediately after existing collar strategy in home page `collar_strategies` accordion |
-| Config | Own `etf_collar:` section in golem-config.yml with dedicated config object |
-| Collar parameters | Same as existing collar page (target days, strike adjustment %, workers) |
-| Empty results handling | Same as ETF Covered Calls — show notification, return empty table |
-| Testing | Unit test for wrapper function + config validation |
-| Dependencies | None new — all existing packages sufficient |
+The new page looks and feels identical to the existing collar page. The variant dropdown has exactly 2 options (dividend-paying ETFs and zero-dividend ETFs, both from yfscreen) instead of the existing page's 10 stock/ETF variants. All other controls (target days, strike adjustment, workers) are identical.
 
 ## Scope
 
 ### In Scope
-- New Brochure page with yfscreen-filtered ETF collar analysis
-- Controls module merging yfscreen filters + collar parameters
-- Thin `fct_` wrapper function
-- Config object + golem-config.yml section
-- Registration in `run_app.R` and home page navigation
-- Quote source toggle (Questrade/Yahoo Finance)
-- Unit tests for business logic and config
+- New Brochure page at `/etf-collar` with yfscreen-sourced ETF collar analysis
+- Controls module mirroring existing collar controls (dropdown + same params)
+- Variant dropdown: "Dividend-paying ETFs" and "Zero-dividend ETFs"
+- Thin `fct_` wrapper that calls `fetch_yfscreen_etfs()` then parallel-processes via `analyze_collar_single()`
+- Own config section in `golem-config.yml` + config utility file
+- Registration in `run_app.R` and second card on home page
+- Reuse `mod_collar_results` for results display
+- Unit tests for wrapper + config validation
 
 ### Out of Scope
-- Changes to existing collar strategy page
+- Changes to existing collar strategy page (`/collar`)
 - Changes to existing ETF covered calls page
-- New analysis logic (reuses existing collar engine)
-- ETF-specific result columns (AUM, expense ratio, etc.)
-- Integration tests hitting real yfscreen API
+- Exposing yfscreen filter controls (AUM, top N, yield range) to the user — use sensible defaults internally
+- New analysis algorithms
+- ETF-specific result columns
 
 ## User Stories
 
 ### US-1: Config and Business Logic Foundation
 
-**Description:** Create the ETF collar config object and thin wrapper analysis function so the core logic is in place before building the UI.
+**Description:** Create the ETF collar config object, golem-config section, and the wrapper analysis function that fetches ETFs from yfscreen and runs collar analysis.
 
 **Acceptance Criteria:**
-- [ ] `R/utils_etf_collar_config.R` exists and exports `ETF_COLLAR_CONFIG` list with keys: `max_workers`, `min_net_credit`, `min_open_interest`, `max_stock_price`, `shares_per_contract`, `sgov_yield_default`, `negative_return_threshold`
-- [ ] `get_etf_collar_config(key)` function works identically to `get_collar_config(key)` pattern
-- [ ] `validate_etf_collar_config()` runs without error when `etf_collar` section exists in `golem-config.yml`
-- [ ] `etf_collar:` section added to `inst/golem-config.yml` with same defaults as `collar:` section (max_workers: 10, etc.)
-- [ ] `R/fct_etf_collar_analysis.R` exists and exports `analyze_etf_collar_yfscreen()` function
-- [ ] Function signature: `analyze_etf_collar_yfscreen(dividend_filter = "all", dividend_yield_min = 2, dividend_yield_max = 6, min_market_cap = 0, top_n = 50, target_days = 45, strike_adjustment_pct = 0, max_workers = ETF_COLLAR_CONFIG$max_workers, use_questrade = FALSE)`
-- [ ] Function calls `fetch_yfscreen_etfs()` to get ticker vector, then passes tickers to `analyze_collar_etfs()`
-- [ ] Function returns a tibble (empty tibble if no ETFs match filters)
+- [ ] `etf_collar:` section added to `inst/golem-config.yml` following same structure as `collar:` section (max_workers, min_net_credit, min_open_interest, shares_per_contract, sgov_yield_default, etc.)
+- [ ] `R/utils_etf_collar_config.R` exports `ETF_COLLAR_CONFIG` list, `validate_etf_collar_config()`, and `get_etf_collar_config(key)`
+- [ ] `R/fct_etf_collar_analysis.R` exports `analyze_etf_collar_yfscreen()` function
+- [ ] Function accepts: `dividend_filter` ("dividend_paying" or "zero_dividend"), `target_days`, `strike_adjustment_pct`, `max_workers`
+- [ ] Function calls `fetch_yfscreen_etfs(dividend_filter = ...)` to get ticker vector
+- [ ] Function runs `analyze_collar_single()` on each ticker via `future_map()` (same parallel pattern as `analyze_collar_etfs()`)
+- [ ] Function returns a tibble sorted by annualized return (empty tibble if no ETFs match)
 - [ ] `tests/testthat/test-fct_etf_collar_analysis.R` exists with mocked tests
 - [ ] `devtools::test(filter = "etf_collar")` passes
 
 ### US-2: Controls Module
 
-**Description:** Create the merged controls module with yfscreen filters at top and collar parameters below. Uses `setup_analysis_controls()` helper for the run/progress/download pattern.
+**Description:** Create controls module mirroring the existing collar controls but with a 2-option variant dropdown (dividend ETFs / zero-dividend ETFs from yfscreen).
 
 **Acceptance Criteria:**
 - [ ] `R/mod_etf_collar_controls.R` exists with `mod_etf_collar_controls_ui(id)` and `mod_etf_collar_controls_server(id)`
-- [ ] UI sidebar (width=3) contains in order:
-  1. `h3("Strategy Parameters")`
+- [ ] UI sidebar (width=3) matches existing collar controls layout:
+  1. `h3("ETF Collar Strategy")` with helpText
   2. Quote source toggle via `quote_source_toggle_ui(ns)`
   3. `hr()`
-  4. `h4("ETF Screening Criteria")`
-  5. Dividend filter `selectInput` (choices: "All ETFs" = "all", "Dividend-paying only" = "dividend_paying", "Zero-dividend only" = "zero_dividend"; default "all")
-  6. Conditional dividend yield range `sliderInput` (0-10%, default 2-6%, step 0.5) — shown only when "dividend_paying" selected
-  7. Min ETF size `selectInput` (same choices as `mod_etf_covered_calls_analysis.R`: No minimum through $100 Billion; default "0")
-  8. Top N ETFs `sliderInput` (10-500, default 50, step 10)
+  4. `h4("Select ETF Variant")` with `selectInput` — 2 choices: "Dividend-paying ETFs" = "dividend_paying", "Zero-dividend ETFs" = "zero_dividend"
+  5. `hr()`
+  6. `h5("Strategy Parameters")` — Target days slider (min=45, max=850, default=300, step=5), Strike adjustment slider (min=-20, max=20, default=0, step=5, post="%")
+  7. `hr()`
+  8. `h5("Performance")` — Parallel workers slider (1-20, default from config)
   9. `hr()`
-  10. `h4("Collar Parameters")`
-  11. Target days to expiry `sliderInput` (same range/default as existing collar controls)
-  12. OTM strike adjustment % `sliderInput` (same range/default as existing collar controls)
-  13. Parallel workers `sliderInput` (1-20, default from config)
-  14. Run Analysis `actionButton`
-- [ ] Server calls `quote_source_toggle_server(input, session, "ETF Collar Strategy")`
-- [ ] Server creates analysis function that calls `analyze_etf_collar_yfscreen()` with all input values
-- [ ] Server uses `setup_analysis_controls()` returning `$results_data` (reactive) and `$status_ui` (reactive)
-- [ ] `conditionalPanel` correctly shows/hides dividend yield slider based on dividend_filter input
+  10. Run Analysis `actionButton` + Download CSV `downloadButton`
+  11. Home navigation link
+- [ ] Server calls `quote_source_toggle_server()`
+- [ ] Server creates analysis function that calls `analyze_etf_collar_yfscreen()` with `dividend_filter = input$collar_variant` and other input values
+- [ ] Server uses `setup_analysis_controls()` returning `$results_data` and `$status_ui`
+- [ ] All slider ranges and defaults match existing collar controls exactly
 
 ### US-3: Page Definition and Registration
 
-**Description:** Create the Brochure page definition, register it in `run_app.R`, add config validation, and add home page navigation.
+**Description:** Create the Brochure page, register it in `run_app.R`, add config validation at startup, and add navigation card to home page.
 
 **Acceptance Criteria:**
-- [ ] `R/page_etf_collar.R` exists with `page_etf_collar()` function
-- [ ] Function returns `brochure::page(href = "/etf-collar", ui = ..., server = ...)`
-- [ ] UI: `fluidPage` with `titlePanel("ETF Collar Strategy (Synthetic Bonds)")`, `sidebarLayout` using `mod_etf_collar_controls_ui("controls")` for sidebar, `mainPanel(width = 9)` with `uiOutput("controls_status")` and `mod_collar_results_ui("results")`
-- [ ] Server: calls `mod_etf_collar_controls_server("controls")`, passes `controls$results_data` to `mod_collar_results_server("results", ...)`, renders `controls$status_ui()` to `output$controls_status`
-- [ ] `page_etf_collar()` added to `brochureApp()` in `R/run_app.R` immediately after `page_collar()` (after line 121)
-- [ ] `validate_etf_collar_config()` added to startup validation block in `R/run_app.R` (after line 69)
-- [ ] New entry added to `R/page_home.R` in `collar_strategies` list (after existing collar entry, around line 69):
+- [ ] `R/page_etf_collar.R` defines `page_etf_collar()` returning `brochure::page(href = "/etf-collar", ...)`
+- [ ] Page structure matches `page_collar.R` exactly: `fluidPage` → `titlePanel("ETF Collar Strategy (Synthetic Bonds)")` → `sidebarLayout` with `mod_etf_collar_controls_ui("controls")` and `mainPanel(width=9)` with `uiOutput("controls_status")` + `mod_collar_results_ui("results")`
+- [ ] Server wires `mod_etf_collar_controls_server("controls")` → `mod_collar_results_server("results", controls$results_data)` → `output$controls_status`
+- [ ] `page_etf_collar()` added to `brochureApp()` in `R/run_app.R` immediately after `page_collar()` (line 121)
+- [ ] `validate_etf_collar_config()` added to startup validation block in `R/run_app.R` (after `validate_collar_config()`, line 69)
+- [ ] New card added to `collar_strategies` list in `R/page_home.R` (after existing collar entry, line 69):
   ```r
   list(
     title = "ETF Collar Strategy (Synthetic Bonds)",
     description = c(
-      "Create risk-free 'synthetic bond' positions on dynamically-screened ETFs.",
-      "Uses Yahoo Finance ETF screener to find liquid ETFs, then applies collar analysis for locked returns."
+      "Create risk-free 'synthetic bond' positions on dynamically-screened ETFs from Yahoo Finance.",
+      "Screens for dividend-paying or zero-dividend ETFs, then applies collar analysis for locked returns."
     ),
     href = "/etf-collar",
     button_text = "Analyze ETF Collars"
   )
   ```
-- [ ] App starts without error: `devtools::load_all()` succeeds
-- [ ] Navigating to `/etf-collar` renders the page with controls sidebar and empty results panel
+- [ ] `devtools::load_all()` succeeds without error
+- [ ] Navigating to `/etf-collar` renders the page with controls and empty results panel
 
 ## Technical Design
 
 ### Architecture
 
 ```
-page_etf_collar.R                    # Brochure page (URL: /etf-collar)
-  ├── mod_etf_collar_controls.R      # NEW: yfscreen filters + collar params
-  │     ├── quote_source_toggle      # REUSED: Questrade/Yahoo toggle
-  │     ├── setup_analysis_controls  # REUSED: run/progress/download helper
-  │     └── analyze_etf_collar_yfscreen()  # NEW wrapper in fct_etf_collar_analysis.R
-  │           ├── fetch_yfscreen_etfs()    # REUSED: from utils_yfscreen_etf.R
-  │           └── analyze_collar_etfs()    # REUSED: from fct_collar_analysis.R
-  └── mod_collar_results.R           # REUSED: existing results table + download
+page_etf_collar.R                       # Brochure page (URL: /etf-collar)
+  +-- mod_etf_collar_controls.R          # NEW: 2-variant dropdown + collar params
+  |     +-- quote_source_toggle          # REUSED
+  |     +-- setup_analysis_controls()    # REUSED
+  |     +-- analyze_etf_collar_yfscreen()  # NEW wrapper in fct_etf_collar_analysis.R
+  |           +-- fetch_yfscreen_etfs()    # REUSED from utils_yfscreen_etf.R
+  |           +-- analyze_collar_single()  # REUSED from fct_collar_analysis.R
+  +-- mod_collar_results.R               # REUSED: existing results table + download
 ```
 
 ### Data Flow
 
-1. User sets yfscreen filters → `fetch_yfscreen_etfs(dividend_filter, yield_range, min_cap, top_n)` → character vector of ETF tickers
-2. Ticker vector → `analyze_collar_etfs(tickers, target_days, strike_adjustment_pct, max_workers)` → tibble of collar opportunities
-3. Results tibble → `mod_collar_results_server()` → DT table + CSV download
+1. User selects variant (dividend-paying or zero-dividend) and clicks Run
+2. `analyze_etf_collar_yfscreen(dividend_filter, target_days, strike_adjustment_pct, max_workers)` is called
+3. Internally: `fetch_yfscreen_etfs(dividend_filter = ...)` returns character vector of ETF tickers
+4. Parallel `future_map()` calls `analyze_collar_single(ticker, target_days, strike_adjustment_pct)` for each ticker
+5. Results combined into tibble, sorted by annualized return
+6. Tibble passed to `mod_collar_results_server()` for display
 
-### Data Model
+### Key Implementation Detail
 
-No new database tables. Output is the same tibble format as existing collar analysis (ticker, stock_price, put_strike, put_price, call_strike, call_price, net_cost, annualized_return, days_to_expiry, etc.).
-
-### Integration Points
-
-| Component | Source File | How Used |
-|-----------|------------|----------|
-| `fetch_yfscreen_etfs()` | `R/utils_yfscreen_etf.R` | Called to get dynamic ETF ticker list |
-| `analyze_collar_etfs()` | `R/fct_collar_analysis.R` | Called with fetched tickers for collar analysis |
-| `mod_collar_results_ui/server` | `R/mod_collar_results.R` | Reused for results display |
-| `setup_analysis_controls()` | `R/utils_analysis_controls_helper.R` | Reused for run button/progress/download pattern |
-| `quote_source_toggle_ui/server` | Respective utils files | Reused for Questrade/Yahoo toggle |
+`analyze_collar_etfs()` cannot be called directly because it internally calls `get_liquid_etfs()` for its tickers. The new wrapper must replicate the parallel processing pattern from `analyze_collar_etfs()` (lines 397-456 of `fct_collar_analysis.R`) but substitute `fetch_yfscreen_etfs()` as the ticker source. The core analysis function `analyze_collar_single()` is reused directly.
 
 ### Config Structure
 
-Add to `inst/golem-config.yml`:
+Add to `inst/golem-config.yml` (after existing `collar:` section):
+
 ```yaml
   # ETF collar strategy configuration (yfscreen-based)
   etf_collar:
@@ -170,57 +146,41 @@ Add to `inst/golem-config.yml`:
     negative_return_threshold: 0
 ```
 
-`R/utils_etf_collar_config.R` follows the exact same pattern as `R/utils_collar_config.R`:
-```r
-ETF_COLLAR_CONFIG <- list(
-  max_workers = get_golem_config_value("etf_collar", "max_workers", 10),
-  # ... same keys as COLLAR_CONFIG
-)
-validate_etf_collar_config <- function() { ... }
-get_etf_collar_config <- function(key) { ... }
-```
-
 ## User Experience
 
 ### User Flow
 
-1. User navigates to `/etf-collar` from home page "Collar Strategies" accordion or direct URL
-2. User sees sidebar with ETF screening filters (top) and collar parameters (bottom)
-3. User adjusts yfscreen filters: dividend type, yield range (if dividend-paying), min AUM, top N
-4. User adjusts collar params: target days, strike adjustment %, workers
-5. User clicks "Run Analysis"
-6. Progress indicator shows — first fetching ETFs from yfscreen, then running collar analysis
-7. Results table appears with collar opportunities sorted by annualized return
-8. User can download results as CSV
+1. User navigates to `/etf-collar` from home page "Collar Strategies" accordion (second card) or direct URL
+2. User selects variant: "Dividend-paying ETFs" or "Zero-dividend ETFs"
+3. User adjusts collar parameters (target days, strike adjustment %, workers) — same controls as existing collar page
+4. User clicks "Run Analysis"
+5. Progress indicator shows during analysis
+6. Results table displays collar opportunities sorted by annualized return
+7. User can download results as CSV
 
 ### Edge Cases
 
 | Scenario | Behavior |
 |----------|----------|
-| yfscreen returns 0 ETFs | Show notification: "No ETFs matched your screening criteria." Empty results table. |
-| yfscreen API unavailable | Error notification via existing error handling in `fetch_yfscreen_etfs()` |
+| yfscreen returns 0 ETFs | Show notification, return empty results table |
+| yfscreen API unavailable | Error notification via existing error handling |
 | All fetched ETFs lack options chains | Results table shows 0 rows with status message |
-| High top_n (500) | Analysis runs longer; progress bar tracks per-ticker |
-| Network timeout during collar analysis | Existing error handling in `analyze_collar_etfs()` applies |
 
 ## Requirements
 
 ### Functional Requirements
-
-- **FR-1**: Page fetches ETF universe dynamically from yfscreen based on user-selected filters
-- **FR-2**: Leveraged/inverse ETFs are automatically excluded via existing `is_leveraged_or_inverse_etf()` logic
-- **FR-3**: Collar analysis uses identical engine as existing collar page (`analyze_collar_etfs()`)
-- **FR-4**: Results display in same format as existing collar results table (via `mod_collar_results`)
-- **FR-5**: CSV download available for results
+- **FR-1**: Page fetches ETF universe dynamically from yfscreen based on selected variant (dividend-paying or zero-dividend)
+- **FR-2**: Leveraged/inverse ETFs automatically excluded (existing `is_leveraged_or_inverse_etf()` logic in `fetch_yfscreen_etfs()`)
+- **FR-3**: Collar analysis uses `analyze_collar_single()` — same per-ticker logic as existing collar page
+- **FR-4**: Results display via reused `mod_collar_results` module
+- **FR-5**: CSV download available
 - **FR-6**: Quote source toggle (Questrade/Yahoo Finance) available
-- **FR-7**: Dividend yield range slider conditionally shown only for "dividend_paying" filter
 
 ### Non-Functional Requirements
-
 - **NFR-1**: Parallel processing via future/furrr with configurable workers (default 10)
 - **NFR-2**: No new package dependencies
-- **NFR-3**: Config validation at app startup prevents runtime config errors
-- **NFR-4**: Follows existing Golem + Brochure conventions (page/module/fct/utils separation)
+- **NFR-3**: Config validation at app startup
+- **NFR-4**: Follows existing Golem + Brochure conventions
 
 ## Implementation Phases
 
@@ -228,30 +188,28 @@ get_etf_collar_config <- function(key) { ... }
 - [ ] Add `etf_collar:` section to `inst/golem-config.yml`
 - [ ] Create `R/utils_etf_collar_config.R` with `ETF_COLLAR_CONFIG`, `validate_etf_collar_config()`, `get_etf_collar_config()`
 - [ ] Create `R/fct_etf_collar_analysis.R` with `analyze_etf_collar_yfscreen()`
-- [ ] Create `tests/testthat/test-fct_etf_collar_analysis.R` with mocked tests
+- [ ] Create `tests/testthat/test-fct_etf_collar_analysis.R`
 - **Verification:** `Rscript -e "devtools::test(filter = 'etf_collar')"`
 
 ### Phase 2: UI — Controls Module
-- [ ] Create `R/mod_etf_collar_controls.R` with `mod_etf_collar_controls_ui()` and `mod_etf_collar_controls_server()`
-- [ ] Include all yfscreen filter inputs + collar parameter inputs
-- [ ] Wire to `analyze_etf_collar_yfscreen()` via `setup_analysis_controls()`
+- [ ] Create `R/mod_etf_collar_controls.R` matching existing collar controls layout with 2-variant dropdown
 - **Verification:** `Rscript -e "devtools::load_all(); mod_etf_collar_controls_ui('test')"`
 
 ### Phase 3: Integration — Page + Registration + Navigation
-- [ ] Create `R/page_etf_collar.R` with `page_etf_collar()` function
+- [ ] Create `R/page_etf_collar.R`
 - [ ] Register `page_etf_collar()` in `R/run_app.R` after `page_collar()`
 - [ ] Add `validate_etf_collar_config()` to startup validation in `R/run_app.R`
-- [ ] Add navigation entry to `R/page_home.R` in `collar_strategies` list
+- [ ] Add second card to `collar_strategies` in `R/page_home.R`
 - **Verification:** `Rscript -e "devtools::load_all(); cat('Load successful\n')"`
 
 ## Definition of Done
 
 This feature is complete when:
 - [ ] All acceptance criteria in US-1, US-2, US-3 pass
-- [ ] All implementation phases verified
 - [ ] Tests pass: `Rscript -e "devtools::test(filter = 'etf_collar')"`
 - [ ] Package loads: `Rscript -e "devtools::load_all()"`
-- [ ] Manual verification: navigating to `/etf-collar` shows correct page with controls and results panels
+- [ ] Home page shows two cards in "Collar Strategies" section
+- [ ] Navigating to `/etf-collar` shows correct page with 2-variant dropdown and collar controls
 
 ## Files Summary
 
@@ -259,43 +217,21 @@ This feature is complete when:
 | File | Purpose |
 |------|---------|
 | `R/page_etf_collar.R` | Brochure page definition at `/etf-collar` |
-| `R/mod_etf_collar_controls.R` | Controls module: yfscreen filters + collar params |
-| `R/fct_etf_collar_analysis.R` | Thin wrapper: fetch_yfscreen_etfs → analyze_collar_etfs |
+| `R/mod_etf_collar_controls.R` | Controls module: 2-variant dropdown + collar params |
+| `R/fct_etf_collar_analysis.R` | Wrapper: fetch_yfscreen_etfs → parallel analyze_collar_single |
 | `R/utils_etf_collar_config.R` | ETF_COLLAR_CONFIG object + validation |
 | `tests/testthat/test-fct_etf_collar_analysis.R` | Unit tests for wrapper + config |
 
 ### Modified Files (3)
 | File | Change |
 |------|--------|
-| `inst/golem-config.yml` | Add `etf_collar:` section after `collar:` section |
+| `inst/golem-config.yml` | Add `etf_collar:` section |
 | `R/run_app.R` | Add `validate_etf_collar_config()` + register `page_etf_collar()` |
-| `R/page_home.R` | Add ETF collar entry to `collar_strategies` list |
-
-## Ralph Loop Command
-
-```bash
-/ralph "Implement ETF Collar Strategy Page per spec at docs/specs/help-me-implement-this-new-strategypage.md
-
-PHASES:
-1. Foundation: Create utils_etf_collar_config.R, fct_etf_collar_analysis.R, add golem-config.yml section, write tests - verify with Rscript -e 'devtools::test(filter=\"etf_collar\")'
-2. UI: Create mod_etf_collar_controls.R with yfscreen filters + collar params - verify with Rscript -e 'devtools::load_all(); mod_etf_collar_controls_ui(\"test\")'
-3. Integration: Create page_etf_collar.R, register in run_app.R, add to page_home.R - verify with Rscript -e 'devtools::load_all(); cat(\"Load successful\n\")'
-
-VERIFICATION (run after each phase):
-- Rscript -e 'devtools::test(filter=\"etf_collar\")'
-- Rscript -e 'devtools::load_all()'
-
-ESCAPE HATCH: After 20 iterations without progress:
-- Document what's blocking in the spec file under 'Implementation Notes'
-- List approaches attempted
-- Stop and ask for human guidance
-
-Output <promise>COMPLETE</promise> when all phases pass verification." --max-iterations 30 --completion-promise "COMPLETE"
-```
+| `R/page_home.R` | Add second card to `collar_strategies` list |
 
 ## Open Questions
 
-None — all decisions captured during interview.
+None — all decisions confirmed during interview.
 
 ## Implementation Notes
 
