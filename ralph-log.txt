@@ -34,3 +34,14 @@ Phase 1 is clean:
 
 === Iteration 2 of 10 === 21:58:44 ===
   [impl] Starting implementation pass...
+The checkpoint already committed the progress file with the Phase 2 update. Everything is committed. Phase 2 is complete — the controls module is done and all 25 tests still pass.
+
+**Summary of Phase 2:**
+- Created `R/mod_etf_collar_controls.R` with `mod_etf_collar_controls_ui()` and `mod_etf_collar_controls_server()`
+- 2-option variant dropdown ("Dividend-paying ETFs" / "Zero-dividend ETFs") replacing the existing collar page's 10-option dropdown
+- Identical sidebar layout, sliders, and buttons to `mod_collar_controls.R`
+- Server calls `analyze_etf_collar_yfscreen()` with the selected `dividend_filter`
+- Reuses `quote_source_toggle_ui/server` and `setup_analysis_controls()` unchanged
+
+**Remaining:** Phase 3 (page definition + run_app.R registration + home page card)
+  [review] Starting review pass...
