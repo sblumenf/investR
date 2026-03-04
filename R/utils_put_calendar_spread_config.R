@@ -56,7 +56,7 @@ long_expiry_target_days = 60,           # Target 60 DTE (2:1 ratio)
 min_expiry_ratio = 1.5,                 # Long DTE must be >= 1.5x short DTE
 
 # Parallel Processing
-max_workers = 10,                       # Parallel processing workers
+max_workers = get_golem_config_value("put_calendar_spread", "max_workers", 10),                       # Parallel processing workers
 
 # Liquidity Requirements (higher for spreads per research)
 min_option_bid = 0.05,                  # Higher min bid for calendar spreads

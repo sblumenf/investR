@@ -249,7 +249,7 @@ fetch_yfscreen_etfs <- function(dividend_yield_min = NULL,
       tickers <- data$symbol
 
       # Use parallel processing for speed
-      oplan <- future::plan(future::multisession, workers = 4)
+      oplan <- future::plan(future::multisession, workers = ETF_SCREENER_CONFIG$max_workers)
       on.exit(future::plan(oplan), add = TRUE)
 
       dividend_status <- furrr::future_map_lgl(

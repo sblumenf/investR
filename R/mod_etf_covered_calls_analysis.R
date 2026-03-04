@@ -119,7 +119,7 @@ mod_etf_covered_calls_analysis_ui <- function(id){
         "Parallel Workers",
         min = 1,
         max = 20,
-        value = 4,
+        value = ETF_SCREENER_CONFIG$max_workers,
         step = 1
       ),
       helpText("Note: Use 1 worker during development with devtools::load_all()"),

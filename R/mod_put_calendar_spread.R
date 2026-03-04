@@ -67,7 +67,7 @@ mod_put_calendar_spread_ui <- function(id){
         "Parallel Workers",
         min = 1,
         max = 20,
-        value = 4,
+        value = PUT_CALENDAR_SPREAD_CONFIG$max_workers,
         step = 1
       ),
       helpText("Note: Use 1 worker during development"),

@@ -119,7 +119,7 @@ mod_etf_cash_secured_puts_yfscreen_ui <- function(id){
         "Parallel Workers",
         min = 1,
         max = 20,
-        value = 4,
+        value = 10,
         step = 1
       ),
       helpText("Note: Use 1 worker during development with devtools::load_all()"),

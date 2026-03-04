@@ -35,7 +35,7 @@ CASH_SECURED_PUTS_CONFIG <- list(
   max_days = 120,                # Maximum days to expiration
 
   # Parallel Processing
-  max_workers = 10,              # Parallel processing workers
+  max_workers = get_golem_config_value("cash_secured_puts", "max_workers", 10),              # Parallel processing workers
 
   # Data Validation
   min_option_bid = 0.01,         # Filter out low-premium options

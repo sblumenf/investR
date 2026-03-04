@@ -17,7 +17,7 @@ cat("  ✓ investR package loaded successfully\n\n")
 # Test 2: Analysis function
 cat("TEST 2: Running analysis with 5 stocks (30 seconds)...\n")
 results <- analyze_aristocrats(limit = 5, strike_threshold_pct = 0.8,
-                                target_days = NULL, max_workers = 2)
+                                target_days = NULL, max_workers = 10)
 cat("  Result: Found", nrow(results), "opportunities\n")
 if (nrow(results) > 0) {
   cat("  ✓ Analysis working correctly\n\n")
