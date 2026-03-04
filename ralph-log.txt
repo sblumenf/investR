@@ -12,3 +12,12 @@
 
 === Iteration 1 of 10 === 21:53:11 ===
   [impl] Starting implementation pass...
+**Phase 1 complete.** Summary of what was implemented:
+
+- **`inst/golem-config.yml`** — added `etf_collar:` section with 8 config keys matching the spec
+- **`R/utils_etf_collar_config.R`** — `ETF_COLLAR_CONFIG` list, `validate_etf_collar_config()`, `get_etf_collar_config()` — mirrors `utils_collar_config.R` pattern, minus the ETF-universe-filter keys that yfscreen replaces
+- **`R/fct_etf_collar_analysis.R`** — `analyze_etf_collar_yfscreen()` replicates the parallel pattern from `analyze_collar_etfs()` exactly, substituting `fetch_yfscreen_etfs(dividend_filter = ...)` as the ticker source
+- **`tests/testthat/test-fct_etf_collar_analysis.R`** — 25 tests covering exports, empty universe handling, filter validation, and config validation — all passing
+
+One fix applied: removed `shiny::showNotification()` from the business logic function — that call errors outside a Shiny session. The empty-universe case logs a warning; the controls module's `setup_analysis_controls()` will surface user-visible status.
+  [review] Starting review pass...
