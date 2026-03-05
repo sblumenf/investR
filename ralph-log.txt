@@ -1,1 +1,14 @@
-  Archived to docs/specs/completed/
+
+============================================
+  Ralph Loop v2
+  Spec: docs/specs/dividends-staleness.md
+  Max iterations: 10
+  Review enabled: YES
+  Started: Wed  4 Mar 2026 22:50:15 EST
+  PID: 15149
+============================================
+
+  Generated .scope-lock.json from spec constraints
+
+=== Iteration 1 of 10 === 22:50:15 ===
+  [impl] Starting implementation pass...

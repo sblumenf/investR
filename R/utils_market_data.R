@@ -182,6 +182,39 @@ fetch_options_chain <- function(ticker, expiration = NULL) {
   }
 }
 
+#' Check if a dividend history is stale (dividend appears suspended)
+#'
+#' Determines whether a stock's dividend history suggests the dividend has been
+#' suspended, using a 1.5x average interval heuristic. If the time since the
+#' last payment exceeds 1.5x the average interval between past payments, the
+#' dividend is considered stale.
+#'
+#' @param dividend_history xts object (output of `fetch_dividend_history()`), or NULL
+#' @return Named list with:
+#'   - `is_stale` (logical): TRUE if dividend appears suspended
+#'   - `last_date` (Date or NA): date of most recent dividend payment
+#'   - `days_since` (numeric or NA): days since last payment
+#'   - `threshold` (numeric or NA): staleness threshold in days (1.5x avg interval)
+#' @export
+is_dividend_stale <- function(dividend_history) {
+  if (is.null(dividend_history) || nrow(dividend_history) < 2) {
+    return(list(is_stale = FALSE, last_date = NA, days_since = NA, threshold = NA))
+  }
+
+  div_dates <- zoo::index(dividend_history)
+  days_between <- as.numeric(diff(div_dates))
+  avg_days_between <- mean(days_between)
+  days_since_last <- as.numeric(Sys.Date() - max(div_dates))
+  threshold <- avg_days_between * 1.5
+
+  list(
+    is_stale = days_since_last > threshold,
+    last_date = max(div_dates),
+    days_since = round(days_since_last),
+    threshold = round(threshold)
+  )
+}
+
 #' Fetch current SOFR rate from FRED
 #'
 #' Retrieves Secured Overnight Financing Rate from Federal Reserve Economic Data.
