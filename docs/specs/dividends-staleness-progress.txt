@@ -1,0 +1,16 @@
+Feature: Dividend Staleness Guard for Strategy Screening
+Spec: docs/specs/dividends-staleness.md
+Created: 2026-03-04
+
+Phase 1: Create Shared Helper + Tests [PENDING]
+  - [ ] Add is_dividend_stale() to R/utils_market_data.R
+  - [ ] Create tests/testthat/test-dividend_staleness.R
+
+Phase 2: Integrate into Aristocrats and Collar Screening [PENDING]
+  - [ ] Call is_dividend_stale() in get_stock_data() (fct_aristocrats_analysis.R)
+  - [ ] Call is_dividend_stale() in analyze_collar_single() (fct_collar_analysis.R)
+  - [ ] Add summary log at orchestrator level
+
+Phase 3: Unify Projection Guard [PENDING]
+  - [ ] Replace inline staleness check in generate_dividend_events() with shared helper
+  - [ ] Verify identical behavior for existing groups

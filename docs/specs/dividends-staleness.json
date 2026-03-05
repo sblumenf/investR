@@ -1,0 +1,23 @@
+{
+  "feature": "dividends-staleness",
+  "title": "Dividend Staleness Guard for Strategy Screening",
+  "status": "ready",
+  "created": "2026-03-04",
+  "spec_file": "docs/specs/dividends-staleness.md",
+  "progress_file": "docs/specs/dividends-staleness-progress.txt",
+  "phases": 3,
+  "user_stories": 5,
+  "files_to_modify": [
+    "R/utils_market_data.R",
+    "R/fct_aristocrats_analysis.R",
+    "R/fct_collar_analysis.R",
+    "R/fct_income_projection_engine.R"
+  ],
+  "new_files": [
+    "tests/testthat/test-dividend_staleness.R"
+  ],
+  "verification_commands": [
+    "devtools::test(filter = 'dividend_staleness')",
+    "devtools::test()"
+  ]
+}
