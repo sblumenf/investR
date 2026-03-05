@@ -11,6 +11,15 @@
 #' @importFrom lubridate year month
 NULL
 
+#' @noRd
+safe_as_posixct <- function(x) {
+  if (is.numeric(x)) {
+    as.POSIXct(x, origin = "1970-01-01")
+  } else {
+    as.POSIXct(x)
+  }
+}
+
 ################################################################################
 # SCHEMA INITIALIZATION
 ################################################################################
@@ -351,8 +360,8 @@ get_group_cash_flows <- function(group_id, conn = NULL) {
     result <- tibble::as_tibble(result) %>%
       dplyr::mutate(
         event_date = as.Date(event_date),
-        created_at = as.POSIXct(created_at),
-        updated_at = as.POSIXct(updated_at)
+        created_at = safe_as_posixct(created_at),
+        updated_at = safe_as_posixct(updated_at)
       )
     return(result)
   }, error = function(e) {
@@ -438,8 +447,8 @@ get_cash_flows_for_groups <- function(group_ids) {
     result <- tibble::as_tibble(result) %>%
       dplyr::mutate(
         event_date = as.Date(event_date),
-        created_at = as.POSIXct(created_at),
-        updated_at = as.POSIXct(updated_at)
+        created_at = safe_as_posixct(created_at),
+        updated_at = safe_as_posixct(updated_at)
       )
     return(result)
 

@@ -1,16 +1,13 @@
 {
   "allowed_files": [
-    "R/utils_market_data.R",
-    "R/utils_stock_universe.R",
-    "R/utils_yfscreen_etf.R",
-    "R/utils_etf_covered_calls_config.R",
-    "inst/golem-config.yml"
+    "R/fct_income_projection_database.R",
+    "inst/database/portfolio.sqlite"
   ],
   "denied_files": [],
   "allow_new_files": false,
   "allowed_new_dirs": [],
   "allow_new_deps": false,
   "created_by": "pm",
-  "spec_file": "inline",
-  "created_at": "2026-03-03T22:30:00Z"
+  "spec_file": "inline - fix mixed-type timestamps in cash flow queries",
+  "created_at": "2026-03-04T21:58:00Z"
 }
