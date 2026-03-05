@@ -12,3 +12,12 @@
 
 === Iteration 1 of 10 === 22:50:15 ===
   [impl] Starting implementation pass...
+Phase 1 complete. Here's what was done:
+
+**Phase 1: Shared Helper + Tests** ✓
+- Added `is_dividend_stale(dividend_history)` to `R/utils_market_data.R` — accepts an xts object, returns a named list with `is_stale`, `last_date`, `days_since`, `threshold`. Returns `is_stale = FALSE` for NULL or fewer than 2 records.
+- Created `tests/testthat/test-dividend_staleness.R` with 6 tests covering all AC from US-1.
+- All 16 tests pass.
+
+**Next iteration** will tackle Phase 2: integrating the helper into `fct_aristocrats_analysis.R` and `fct_collar_analysis.R`.
+  [review] Starting review pass...
