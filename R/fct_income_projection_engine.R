@@ -218,6 +218,18 @@ generate_dividend_events <- function(ticker, shares, end_date = NULL) {
   days_between <- as.numeric(diff(div_dates))
   avg_days_between <- mean(days_between)
 
+  # Check if dividend appears suspended (no payment in 1.5x the average interval)
+  days_since_last <- as.numeric(Sys.Date() - max(div_dates))
+  if (days_since_last > avg_days_between * 1.5) {
+    log_warn("Income Projection: Dividend appears suspended for {ticker} - last payment {max(div_dates)}, {round(days_since_last)} days ago (threshold: {round(avg_days_between * 1.5)} days)")
+    return(tibble::tibble(
+      event_date = as.Date(character(0)),
+      event_type = character(0),
+      amount = numeric(0),
+      confidence = character(0)
+    ))
+  }
+
   # Determine confidence based on consistency
   cv <- sd(days_between) / mean(days_between)  # Coefficient of variation
   confidence <- if (cv < 0.05) "high" else if (cv < 0.15) "medium" else "low"

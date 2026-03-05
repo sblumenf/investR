@@ -66,6 +66,15 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
     pull(total)
   option_premiums <- if (length(option_premiums) == 0) 0 else option_premiums
 
+  option_buys <- activities %>%
+    filter(type == "Trades", action == "Buy", purrr::map_lgl(symbol, is_option_symbol))
+
+  long_option_costs <- if (nrow(option_buys) > 0) {
+    sum(abs(option_buys$gross_amount), na.rm = TRUE)
+  } else {
+    0
+  }
+
   # Calculate dividends received
   total_dividends <- activities %>%
     filter(type == "Dividends") %>%
@@ -116,7 +125,7 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
     cash_collected <- option_premiums  # Premium is income for CSP
     log_debug("GROUP_METRICS_CALC: CSP detected - cash_collateral={cash_collateral}, premium={option_premiums}, expiry={csp_expiration_date}")
   } else if (strategy_type != "Other") {
-    cost_basis <- stock_purchases + total_commissions - option_premiums
+    cost_basis <- stock_purchases + total_commissions + long_option_costs - option_premiums
     cash_collected <- total_dividends
   } else {
     cost_basis <- stock_purchases + total_commissions
