@@ -372,6 +372,14 @@ get_stock_data <- function(ticker) {
     # Get dividends
     dividends <- fetch_dividend_history(ticker, from = start_date, to = end_date)
 
+    # Skip stocks with suspended dividends
+    staleness <- is_dividend_stale(dividends)
+    if (staleness$is_stale) {
+      log_warn("Screening: Skipping {ticker} - dividend appears suspended (last payment {staleness$last_date}, {staleness$days_since} days ago)")
+      stale_ticker_tracker_add(ticker)
+      return(NULL)
+    }
+
     # Calculate current yield
     current_yield <- 0
     annual_dividend <- 0
@@ -696,8 +704,11 @@ analyze_aristocrats <- function(limit = NULL,
     log_info("Limiting analysis to first {limit} stocks")
   }
 
+  # Reset stale tracker before run
+  stale_ticker_tracker_reset()
+
   # Call generic covered call analyzer
-  analyze_covered_calls_generic(
+  results <- analyze_covered_calls_generic(
     stock_universe = aristocrats,
     strategy_name = strategy_name,
     strike_threshold_pct = strike_threshold_pct,
@@ -705,4 +716,9 @@ analyze_aristocrats <- function(limit = NULL,
     max_workers = max_workers,
     result_flags = list(is_aristocrat = TRUE)
   )
+
+  # Log stale dividend summary (populated in sequential mode; empty in parallel mode)
+  log_stale_dividend_summary(strategy_name)
+
+  results
 }

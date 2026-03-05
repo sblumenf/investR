@@ -63,6 +63,14 @@ analyze_collar_single <- function(ticker,
     start_date <- end_date - lubridate::years(COLLAR_CONFIG$history_years)
     dividends <- fetch_dividend_history(ticker, from = start_date, to = end_date)
 
+    # Skip stocks with suspended dividends (only affects tickers with prior dividend history)
+    staleness <- is_dividend_stale(dividends)
+    if (staleness$is_stale) {
+      log_warn("Screening: Skipping {ticker} - dividend appears suspended (last payment {staleness$last_date}, {staleness$days_since} days ago)")
+      stale_ticker_tracker_add(ticker)
+      return(NULL)
+    }
+
     # Calculate current dividend yield
     has_dividends <- FALSE
     if (!is.null(dividends) && length(dividends) > 0 && nrow(dividends) >= 2) {
@@ -307,6 +315,9 @@ analyze_collar_stocks <- function(dividend_filter = "all",
 
   log_analysis_header_generic("Collar Strategy - S&P 500 Stocks")
 
+  # Reset stale tracker before run
+  stale_ticker_tracker_reset()
+
   # Get stock universe based on dividend filter
   log_info("Fetching S&P 500 stock universe (filter: {dividend_filter})...")
 
@@ -365,6 +376,9 @@ analyze_collar_stocks <- function(dividend_filter = "all",
   # Log completion
   log_analysis_footer(nrow(results_df))
 
+  # Log stale dividend summary (populated in sequential mode; empty in parallel mode)
+  log_stale_dividend_summary("Collar Strategy - S&P 500")
+
   return(results_df)
 }
 
@@ -397,6 +411,9 @@ analyze_collar_etfs <- function(min_market_cap = COLLAR_CONFIG$min_market_cap,
                                 max_workers = COLLAR_CONFIG$max_workers) {
 
   log_analysis_header_generic("Collar Strategy - Liquid ETFs")
+
+  # Reset stale tracker before run
+  stale_ticker_tracker_reset()
 
   # Get ETF universe
   etf_universe <- get_liquid_etfs(min_market_cap, min_avg_volume)
@@ -450,6 +467,9 @@ analyze_collar_etfs <- function(min_market_cap = COLLAR_CONFIG$min_market_cap,
   # Log completion
   log_analysis_footer(nrow(results_df))
 
+  # Log stale dividend summary (populated in sequential mode; empty in parallel mode)
+  log_stale_dividend_summary("Collar Strategy - Liquid ETFs")
+
   return(results_df)
 }
 
@@ -486,6 +506,9 @@ analyze_collar_custom_list <- function(list_type,
   )
 
   log_analysis_header_generic(paste("Collar Strategy -", list_name))
+
+  # Reset stale tracker before run
+  stale_ticker_tracker_reset()
 
   # Fetch ticker list (web scraping with caching)
   ticker_list <- switch(list_type,
@@ -540,6 +563,9 @@ analyze_collar_custom_list <- function(list_type,
 
   # Log completion
   log_analysis_footer(nrow(results_df))
+
+  # Log stale dividend summary (populated in sequential mode; empty in parallel mode)
+  log_stale_dividend_summary(paste("Collar Strategy -", list_name))
 
   return(results_df)
 }
@@ -793,6 +819,9 @@ analyze_collar_iv_skew <- function(target_days = COLLAR_CONFIG$iv_skew_screening
 
   log_analysis_header_generic("Collar Strategy - IV Skew Screener (Russell 1000)")
 
+  # Reset stale tracker before run
+  stale_ticker_tracker_reset()
+
   # 1. Fetch holdings universe
   log_info("Fetching Russell 1000 holdings...")
   ticker_universe <- fetch_iwb_holdings()
@@ -857,6 +886,9 @@ analyze_collar_iv_skew <- function(target_days = COLLAR_CONFIG$iv_skew_screening
 
   log_info("{nrow(results_df)} collar opportunities found among top {length(top_tickers)} IV-skew stocks")
   log_analysis_footer(nrow(results_df))
+
+  # Log stale dividend summary (populated in sequential mode; empty in parallel mode)
+  log_stale_dividend_summary("Collar Strategy - IV Skew")
 
   return(results_df)
 }

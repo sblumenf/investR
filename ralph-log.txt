@@ -21,3 +21,18 @@ Phase 1 complete. Here's what was done:
 
 **Next iteration** will tackle Phase 2: integrating the helper into `fct_aristocrats_analysis.R` and `fct_collar_analysis.R`.
   [review] Starting review pass...
+**Review complete.**
+
+Phase 1 (shared helper + tests) passes all checks:
+
+- `is_dividend_stale()` in `utils_market_data.R` matches the spec's Technical Design exactly
+- All 6 required test scenarios covered, 16 assertions pass
+- Correct file placement, no constraint violations
+- No unauthorized dependencies or off-limits files touched
+
+Phases 2 (Aristocrats + Collar integration) and 3 (projection engine unification) remain unimplemented.
+  [review] PASS — moving to next task
+--- Iteration 1 finished ---
+
+=== Iteration 2 of 10 === 22:53:05 ===
+  [impl] Starting implementation pass...

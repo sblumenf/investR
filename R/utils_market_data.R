@@ -6,10 +6,44 @@
 #'
 #' @name market-data
 #' @importFrom quantmod getSymbols getDividends getQuote yahooQF getOptionChain
-#' @importFrom logger log_debug log_warn
+#' @importFrom logger log_debug log_warn log_info
 #' @importFrom readr read_csv cols col_date col_double
 #' @importFrom dplyr filter slice_tail pull
 NULL
+
+# Package-level environment for tracking stale dividend tickers during a screening run.
+# Note: writes from parallel workers (future_map) do not propagate back here.
+.stale_tracker <- new.env(parent = emptyenv())
+.stale_tracker$tickers <- character(0)
+
+#' Reset the stale dividend ticker tracker
+#' @noRd
+stale_ticker_tracker_reset <- function() {
+  .stale_tracker$tickers <- character(0)
+}
+
+#' Add a ticker to the stale dividend tracker
+#' @noRd
+stale_ticker_tracker_add <- function(ticker) {
+  .stale_tracker$tickers <- c(.stale_tracker$tickers, ticker)
+}
+
+#' Get stale dividend tickers accumulated since last reset
+#' @noRd
+stale_ticker_tracker_get <- function() {
+  .stale_tracker$tickers
+}
+
+#' Log summary of stale dividend tickers and reset tracker
+#' @param context Character label for the screening context (e.g. "Aristocrats")
+#' @noRd
+log_stale_dividend_summary <- function(context = "Screening") {
+  stale <- stale_ticker_tracker_get()
+  if (length(stale) > 0) {
+    log_info("{context} complete: Filtered {length(stale)} stocks with stale dividends: {paste(stale, collapse=', ')}")
+  }
+  stale_ticker_tracker_reset()
+}
 
 #' Fetch price history from Yahoo Finance
 #'
