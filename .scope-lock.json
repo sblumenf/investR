@@ -12,7 +12,7 @@
     "Config files",
     "Database schema"
   ],
-  "allow_new_files": false,
+  "allow_new_files": true,
   "allowed_new_dirs": [
     "tests/testthat/test-dividend_staleness.R"
   ],
