@@ -1,0 +1,70 @@
+{
+  "feature": "Finviz Call Skew Collar Variants",
+  "slug": "implement-the-call-skew-variants-for-the-collar-strategy",
+  "created": "2026-03-05",
+  "status": "ready",
+  "phases": [
+    {
+      "id": 1,
+      "name": "Config + Fetch Functions",
+      "stories": ["US-1", "US-2"],
+      "status": "pending",
+      "verification": "devtools::load_all(); length(get_golem_config_value('custom_ticker_lists', 'finviz_call_skew_div_urls')) == 46"
+    },
+    {
+      "id": 2,
+      "name": "Dispatch + UI Wiring",
+      "stories": ["US-3", "US-4"],
+      "status": "pending",
+      "verification": "devtools::load_all(); devtools::check()"
+    },
+    {
+      "id": 3,
+      "name": "Tests",
+      "stories": ["US-5"],
+      "status": "pending",
+      "verification": "devtools::test(filter = 'custom_ticker_lists_call_skew')"
+    }
+  ],
+  "files_to_modify": [
+    "R/mod_collar_controls.R",
+    "R/utils_custom_ticker_lists.R",
+    "R/fct_collar_analysis.R",
+    "inst/golem-config.yml"
+  ],
+  "files_not_to_modify": [
+    "R/fct_collar_analysis.R (analyze_collar_single only)",
+    "R/shared_risk_engine.R",
+    "R/page_collar.R"
+  ],
+  "new_files": [
+    "tests/testthat/test-utils_custom_ticker_lists_call_skew.R"
+  ],
+  "user_stories": [
+    {
+      "id": "US-1",
+      "title": "Config -- Add 92 Finviz URLs to golem-config.yml",
+      "phase": 1
+    },
+    {
+      "id": "US-2",
+      "title": "Fetch Functions -- Add ticker scraping for both variants",
+      "phase": 1
+    },
+    {
+      "id": "US-3",
+      "title": "Dispatch -- Wire new variants into analyze_collar_custom_list()",
+      "phase": 2
+    },
+    {
+      "id": "US-4",
+      "title": "UI -- Add dropdown entries and progress messages",
+      "phase": 2
+    },
+    {
+      "id": "US-5",
+      "title": "Tests -- Unit tests for fetch functions",
+      "phase": 3
+    }
+  ]
+}

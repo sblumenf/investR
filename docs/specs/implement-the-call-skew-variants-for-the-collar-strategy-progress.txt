@@ -1,0 +1,10 @@
+Phase 1: Config + Fetch Functions [PENDING]
+  US-1: Config -- Add 92 Finviz URLs to golem-config.yml [PENDING]
+  US-2: Fetch Functions -- Add ticker scraping for both variants [PENDING]
+
+Phase 2: Dispatch + UI Wiring [PENDING]
+  US-3: Dispatch -- Wire new variants into analyze_collar_custom_list() [PENDING]
+  US-4: UI -- Add dropdown entries and progress messages [PENDING]
+
+Phase 3: Tests [PENDING]
+  US-5: Tests -- Unit tests for fetch functions [PENDING]
