@@ -35,7 +35,9 @@ mod_collar_controls_ui <- function(id){
           "2x Leveraged ETFs" = "leveraged_2x",
           "3x Leveraged ETFs" = "leveraged_3x",
           "IV Skew Screener" = "iv_skew",
-          "Finviz Screened" = "finviz_screened"
+          "Finviz Screened" = "finviz_screened",
+          "Finviz Call Skew (Dividend)" = "finviz_call_skew_div",
+          "Finviz Call Skew (Non-Dividend)" = "finviz_call_skew_nodiv"
         ),
         selected = "sp500_dividend"
       ),
@@ -193,6 +195,18 @@ mod_collar_controls_server <- function(id){
           target_days = input$target_days,
           strike_adjustment_pct = input$strike_adjustment / 100,
           max_workers = input$max_workers
+        ),
+        "finviz_call_skew_div" = analyze_collar_custom_list(
+          list_type = "finviz_call_skew_div",
+          target_days = input$target_days,
+          strike_adjustment_pct = input$strike_adjustment / 100,
+          max_workers = input$max_workers
+        ),
+        "finviz_call_skew_nodiv" = analyze_collar_custom_list(
+          list_type = "finviz_call_skew_nodiv",
+          target_days = input$target_days,
+          strike_adjustment_pct = input$strike_adjustment / 100,
+          max_workers = input$max_workers
         )
       )
     }
@@ -209,7 +223,9 @@ mod_collar_controls_server <- function(id){
         "leveraged_2x" = "2x leveraged ETFs",
         "leveraged_3x" = "3x leveraged ETFs",
         "iv_skew" = "IV skew screened stocks",
-        "finviz_screened" = "Finviz screened stocks"
+        "finviz_screened" = "Finviz screened stocks",
+        "finviz_call_skew_div" = "Finviz call skew screened dividend stocks",
+        "finviz_call_skew_nodiv" = "Finviz call skew screened non-dividend stocks"
       )
     })
 
@@ -224,6 +240,8 @@ mod_collar_controls_server <- function(id){
           "Screening Russell 1000 for IV skew... This may take several minutes."
         } else if (input$collar_variant == "finviz_screened") {
           "Scraping Finviz screeners and analyzing collars... This may take several minutes."
+        } else if (input$collar_variant %in% c("finviz_call_skew_div", "finviz_call_skew_nodiv")) {
+          "Scraping 45 Finviz call skew screens and analyzing collars... This may take several minutes."
         } else {
           sprintf("Analyzing %s for collar opportunities... This may take several minutes.", variant_label())
         }

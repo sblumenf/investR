@@ -1,0 +1,19 @@
+{
+  "allowed_files": [
+    "R/mod_collar_controls.R",
+    "R/utils_custom_ticker_lists.R",
+    "inst/golem-config.yml",
+    "R/fct_collar_analysis.R"
+  ],
+  "denied_files": [
+    "R/shared_risk_engine.R"
+  ],
+  "allow_new_files": true,
+  "allowed_new_dirs": [
+    "tests/testthat/"
+  ],
+  "allow_new_deps": false,
+  "created_by": "ralph",
+  "spec_file": "docs/specs/implement-the-call-skew-variants-for-the-collar-strategy.md",
+  "created_at": "2026-03-06T04:05:35Z"
+}

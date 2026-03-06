@@ -589,6 +589,154 @@ fetch_finviz_screened_tickers <- function(force_refresh = FALSE) {
 }
 
 ################################################################################
+# FINVIZ CALL SKEW TICKERS
+################################################################################
+
+# Session-level caches for call skew variants
+.finviz_call_skew_div_cache <- new.env(parent = emptyenv())
+.finviz_call_skew_nodiv_cache <- new.env(parent = emptyenv())
+
+#' Fetch Finviz call skew dividend tickers
+#'
+#' Scrapes all configured Finviz call skew screener URLs (dividend payers),
+#' extracts ticker symbols, and returns a deduplicated list.
+#' Results are cached for 24 hours.
+#'
+#' @param force_refresh Logical. If TRUE, ignores cache and fetches fresh data.
+#' @return Character vector of unique ticker symbols (empty if all scraping fails)
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#'   tickers <- fetch_finviz_call_skew_div_tickers()
+#'   tickers <- fetch_finviz_call_skew_div_tickers(force_refresh = TRUE)
+#' }
+fetch_finviz_call_skew_div_tickers <- function(force_refresh = FALSE) {
+  cache_hours <- get_golem_config_value("custom_ticker_lists", "ticker_cache_hours", 24)
+
+  if (!force_refresh && collar_cache_is_valid(.finviz_call_skew_div_cache, cache_hours)) {
+    log_info("Using cached Finviz call skew dividend tickers ({length(.finviz_call_skew_div_cache$tickers)} tickers)")
+    return(.finviz_call_skew_div_cache$tickers)
+  }
+
+  urls <- get_golem_config_value("custom_ticker_lists", "finviz_call_skew_div_urls", list())
+
+  if (length(urls) == 0) {
+    log_warn("No Finviz call skew dividend URLs configured in golem-config.yml")
+    return(character(0))
+  }
+
+  log_info("Fetching tickers from {length(urls)} Finviz call skew dividend URLs...")
+
+  all_tickers <- character(0)
+  success_count <- 0
+
+  for (i in seq_along(urls)) {
+    url <- urls[[i]]
+    log_info("Scraping Finviz call skew div URL {i}/{length(urls)}...")
+
+    page_tickers <- tryCatch(
+      scrape_finviz_page(url),
+      error = function(e) {
+        log_warn("Failed to scrape Finviz call skew div URL {i}: {e$message}")
+        character(0)
+      }
+    )
+
+    if (length(page_tickers) > 0) {
+      all_tickers <- c(all_tickers, page_tickers)
+      success_count <- success_count + 1
+    }
+
+    if (i < length(urls)) Sys.sleep(0.5)
+  }
+
+  tickers <- unique(toupper(all_tickers))
+
+  if (length(tickers) == 0) {
+    log_warn("No tickers fetched from any Finviz call skew dividend URL")
+    return(character(0))
+  }
+
+  .finviz_call_skew_div_cache$tickers <- tickers
+  .finviz_call_skew_div_cache$timestamp <- Sys.time()
+
+  log_info("Successfully fetched {length(tickers)} unique tickers from {success_count}/{length(urls)} Finviz call skew dividend screens")
+
+  return(tickers)
+}
+
+#' Fetch Finviz call skew non-dividend tickers
+#'
+#' Scrapes all configured Finviz call skew screener URLs (non-dividend payers),
+#' extracts ticker symbols, and returns a deduplicated list.
+#' Results are cached for 24 hours.
+#'
+#' @param force_refresh Logical. If TRUE, ignores cache and fetches fresh data.
+#' @return Character vector of unique ticker symbols (empty if all scraping fails)
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#'   tickers <- fetch_finviz_call_skew_nodiv_tickers()
+#'   tickers <- fetch_finviz_call_skew_nodiv_tickers(force_refresh = TRUE)
+#' }
+fetch_finviz_call_skew_nodiv_tickers <- function(force_refresh = FALSE) {
+  cache_hours <- get_golem_config_value("custom_ticker_lists", "ticker_cache_hours", 24)
+
+  if (!force_refresh && collar_cache_is_valid(.finviz_call_skew_nodiv_cache, cache_hours)) {
+    log_info("Using cached Finviz call skew non-dividend tickers ({length(.finviz_call_skew_nodiv_cache$tickers)} tickers)")
+    return(.finviz_call_skew_nodiv_cache$tickers)
+  }
+
+  urls <- get_golem_config_value("custom_ticker_lists", "finviz_call_skew_nodiv_urls", list())
+
+  if (length(urls) == 0) {
+    log_warn("No Finviz call skew non-dividend URLs configured in golem-config.yml")
+    return(character(0))
+  }
+
+  log_info("Fetching tickers from {length(urls)} Finviz call skew non-dividend URLs...")
+
+  all_tickers <- character(0)
+  success_count <- 0
+
+  for (i in seq_along(urls)) {
+    url <- urls[[i]]
+    log_info("Scraping Finviz call skew nodiv URL {i}/{length(urls)}...")
+
+    page_tickers <- tryCatch(
+      scrape_finviz_page(url),
+      error = function(e) {
+        log_warn("Failed to scrape Finviz call skew nodiv URL {i}: {e$message}")
+        character(0)
+      }
+    )
+
+    if (length(page_tickers) > 0) {
+      all_tickers <- c(all_tickers, page_tickers)
+      success_count <- success_count + 1
+    }
+
+    if (i < length(urls)) Sys.sleep(0.5)
+  }
+
+  tickers <- unique(toupper(all_tickers))
+
+  if (length(tickers) == 0) {
+    log_warn("No tickers fetched from any Finviz call skew non-dividend URL")
+    return(character(0))
+  }
+
+  .finviz_call_skew_nodiv_cache$tickers <- tickers
+  .finviz_call_skew_nodiv_cache$timestamp <- Sys.time()
+
+  log_info("Successfully fetched {length(tickers)} unique tickers from {success_count}/{length(urls)} Finviz call skew non-dividend screens")
+
+  return(tickers)
+}
+
+################################################################################
 # DRIP INVESTING
 ################################################################################
 

@@ -502,7 +502,9 @@ analyze_collar_custom_list <- function(list_type,
     "leveraged_2x" = "2x Leveraged ETFs",
     "leveraged_3x" = "3x Leveraged ETFs",
     "finviz_screened" = "Finviz Screened Stocks",
-    stop("Invalid list_type. Must be 'overbought', 'oversold', 'most_shorted', 'leveraged_2x', 'leveraged_3x', or 'finviz_screened'")
+    "finviz_call_skew_div" = "Finviz Call Skew (Dividend)",
+    "finviz_call_skew_nodiv" = "Finviz Call Skew (Non-Dividend)",
+    stop("Invalid list_type. Must be 'overbought', 'oversold', 'most_shorted', 'leveraged_2x', 'leveraged_3x', 'finviz_screened', 'finviz_call_skew_div', or 'finviz_call_skew_nodiv'")
   )
 
   log_analysis_header_generic(paste("Collar Strategy -", list_name))
@@ -517,7 +519,9 @@ analyze_collar_custom_list <- function(list_type,
     "most_shorted" = fetch_most_shorted_tickers(),
     "leveraged_2x" = fetch_2x_leveraged_etfs(),
     "leveraged_3x" = fetch_3x_leveraged_etfs(),
-    "finviz_screened" = fetch_finviz_screened_tickers()
+    "finviz_screened" = fetch_finviz_screened_tickers(),
+    "finviz_call_skew_div" = fetch_finviz_call_skew_div_tickers(),
+    "finviz_call_skew_nodiv" = fetch_finviz_call_skew_nodiv_tickers()
   )
 
   if (length(ticker_list) == 0) {
