@@ -33,7 +33,8 @@ mod_zero_dividend_analysis_ui <- function(id){
           "Most Shorted Stocks" = "most_shorted",
           "2x Leveraged ETFs" = "leveraged_2x",
           "3x Leveraged ETFs" = "leveraged_3x",
-          "Finviz Screened" = "finviz_screened"
+          "Finviz Screened" = "finviz_screened",
+          "Finviz Call Skew (Non-Dividend)" = "finviz_call_skew_nodiv"
         ),
         selected = "sp500_zero"
       ),
@@ -204,6 +205,14 @@ mod_zero_dividend_analysis_server <- function(id){
           max_days = input$days_range[2],
           expiry_month = NULL,
           max_workers = input$max_workers
+        ),
+        "finviz_call_skew_nodiv" = analyze_zero_dividend_custom_list(
+          list_type = "finviz_call_skew_nodiv",
+          strike_threshold_pct = input$strike_threshold / 100,
+          min_days = input$days_range[1],
+          max_days = input$days_range[2],
+          expiry_month = NULL,
+          max_workers = input$max_workers
         )
       )
     }
@@ -219,7 +228,8 @@ mod_zero_dividend_analysis_server <- function(id){
         "most_shorted" = "most shorted stocks",
         "leveraged_2x" = "2x leveraged ETFs",
         "leveraged_3x" = "3x leveraged ETFs",
-        "finviz_screened" = "Finviz screened stocks"
+        "finviz_screened" = "Finviz screened stocks",
+        "finviz_call_skew_nodiv" = "Finviz call skew screened non-dividend stocks"
       )
     })
 
