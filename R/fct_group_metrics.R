@@ -199,10 +199,10 @@ calculate_metrics_core <- function(activities, cash_flows, strategy_type, group_
     log_debug("GROUP_METRICS_CALC: CSP - income={csp_income}, collateral={cost_basis}, days={days_held}, result={result}%")
     result
   } else if (cost_basis > 0 && days_held > 0) {
-    return_ratio <- projected_income / cost_basis
+    return_ratio <- target_total_return / cost_basis
     annualization_factor <- 365 / days_held
     result <- ((1 + return_ratio) ^ annualization_factor - 1) * 100
-    log_debug("GROUP_METRICS_CALC: proj_inc={projected_income}, cost={cost_basis}, days={days_held}, result={result}%")
+    log_debug("GROUP_METRICS_CALC: total_return={target_total_return}, cost={cost_basis}, days={days_held}, result={result}%")
     result
   } else {
     0

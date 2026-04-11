@@ -456,7 +456,7 @@ create_open_group_card <- function(group_data, metrics, members, cash_flows, act
 
     # Expected profit with clear labeling
     if (metrics$projected_income[1] > 0) {
-      return_pct <- metrics$projected_income[1] / metrics$cost_basis[1]
+      return_pct <- metrics$target_total_return[1] / metrics$cost_basis[1]
       annualized_pct <- metrics$projected_annualized_return_pct[1] / 100
 
       profit_display <- sprintf("%s (%s return | %s annualized)",
