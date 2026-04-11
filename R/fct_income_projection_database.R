@@ -296,6 +296,38 @@ delete_projected_option_gains <- function(group_id, conn = NULL) {
   })
 }
 
+delete_projected_dividends <- function(group_id, conn = NULL) {
+
+  should_close <- FALSE
+  if (is.null(conn)) {
+    conn <- get_portfolio_db_connection()
+    should_close <- TRUE
+  }
+
+  if (should_close) {
+    on.exit(dbDisconnect(conn), add = TRUE)
+  }
+
+  tryCatch({
+    rows_affected <- dbExecute(conn, "
+      DELETE FROM position_group_cash_flows
+      WHERE group_id = ?
+        AND event_type = 'dividend'
+        AND status = 'projected'
+    ", params = list(group_id))
+
+    if (rows_affected > 0) {
+      log_debug("Income Projection DB: Deleted {rows_affected} projected dividend event(s) for group {group_id}")
+    }
+
+    return(rows_affected)
+
+  }, error = function(e) {
+    log_error("Income Projection DB: Failed to delete projected dividends - {e$message}")
+    return(0L)
+  })
+}
+
 ################################################################################
 # CASH FLOW RETRIEVAL OPERATIONS
 ################################################################################

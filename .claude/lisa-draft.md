@@ -1,50 +1,51 @@
-# Specification Draft: Finviz Call Skew Collar Variants
+# Specification Draft: Covered Call Roll Transaction Support
 
-*Interview in progress - Started: 2026-03-05*
+*Interview in progress - Started: 2026-04-10*
 
 ## Overview
-Add two new collar strategy variants (#11 and #12) to the existing 10 on `/collar`:
-- **Finviz Call Skew (Dividend)** — scrapes 46 `fa_div_pos` Finviz URLs across 15 categories
-- **Finviz Call Skew (Non-Dividend)** — scrapes 46 `fa_div_none` Finviz URLs across 15 categories
+Support the "covered call roll" transaction pattern in investR: a Buy-to-Close (BTC) on an existing short call combined with a Sell-to-Open (STO) on a new call with a later expiry date. The WMT Dividend Aristocrat position triggered this work — the user rolled from a June 2027 covered call to a December 2027 or January 2028 covered call.
 
-The existing Finviz Screened variant (#10) remains unchanged.
+## Context (from prior research)
+The research agent (April 9) identified that the codebase does NOT currently have roll detection, member update, or projection regeneration logic — the function names found (`detect_option_roll`, `update_group_option_member`, `regenerate_projections_after_roll`) may not exist yet. The spec must treat these as things to BUILD, not things to verify.
 
-## Decisions Made
+## Problem Statement
+When a user rolls a covered call position (BTC old call + STO new call), the following must happen automatically once both transactions are linked to the position group:
+1. The group's tracked option expiry date updates to the new call's expiry
+2. Dividend projections are extended through the new expiry date
+3. The STO premium appears as a separate actual cash flow for the month it was received
+4. The cash flow projection module reflects the extended timeline
 
-### URL Handling
-- Both variants scrape ALL their respective URLs in a single run (no sub-filtering by category)
+## User Decisions Captured
 
-### UI Labels
-- Dropdown labels: "Finviz Call Skew (Dividend)" and "Finviz Call Skew (Non-Dividend)"
-- Variant IDs: `finviz_call_skew_div` and `finviz_call_skew_nodiv`
+### Roll detection trigger
+- Rolls are detected when transactions are linked to a group (same as all other transaction types)
+- NO extra pairing/linking UI step needed — consistent with how other transaction types work
+- If BTC and STO are linked to the same group and both reference the same underlying, roll logic fires
+- No same-day requirement enforced by the user — just needs to work when both are linked
 
-### URL Storage
-- URLs stored in `golem-config.yml` under two new config keys:
-  - `finviz_call_skew_div_urls`
-  - `finviz_call_skew_nodiv_urls`
+### Cash flow display
+- Each STO creates its own separate, dated actual cash flow line item
+- Full audit trail: original STO at inception + roll STO in April 2026 both visible separately
+- No aggregation into a single cumulative total
 
-### Caching
-- Same pattern as existing finviz_screened: separate session-level cache env per variant, 24-hour TTL
-- Cache envs: `.finviz_call_skew_div_cache` and `.finviz_call_skew_nodiv_cache`
+### Screens affected
+- Group card: expiry date + dividend projections + cash flows (primary)
+- Cash flow projection module: must update to reflect extended timeline
+- Other screens (risk dashboard, home dashboard): calculated on the fly from group data — verify they pick up changes automatically, do not build special handling
 
-### Dividend Fetching
-- No change to analyze_collar_single() -- non-div tickers will get zero dividend history naturally
-
-### Progress Messages
-- Include URL count: "Scraping 46 Finviz call skew screens and analyzing collars..."
-
-### Testing
-- Unit tests for the new fetch functions with mocked HTML responses
-- Verify URL config loading and deduplication
-
-## Files to Modify (preliminary)
-- `R/mod_collar_controls.R` -- add dropdown entries and switch cases
-- `R/utils_custom_ticker_lists.R` -- add fetch functions and cache envs
-- `inst/golem-config.yml` -- add 92 URLs under two new keys
-
-## New Files
-- `tests/testthat/test-utils_custom_ticker_lists_call_skew.R` -- unit tests
+## Key Technical Facts (from research)
+- Option expiry is stored implicitly in the option symbol in `position_group_members` (role = 'short_call')
+- `parse_option_details(symbol)` extracts strike and expiry from the symbol string
+- Dividend projections are rows in `position_group_cash_flows` with event_type = 'dividend' and status = 'projected'
+- Option premiums received are rows with event_type = 'option_premium' and status = 'actual'
+- The `account_activities` table stores raw transactions; `position_group_cash_flows` stores processed events
+- Deduplication key for activities: account_number + description + trade_date + action + quantity + net_amount
+- Blank option symbols can arrive from Questrade — enrichment function exists
 
 ## Open Questions
-- Variant description text for the results panel
-- Constraints section (files NOT to modify, out of scope)
+- Does `detect_option_roll` actually exist in the codebase, or was the research agent hallucinating function names? MUST verify before implementation.
+- Which file/function actually triggers projection regeneration when a transaction is linked to a group?
+- Does the dividend staleness check threshold need to be documented/configurable?
+
+---
+*Notes accumulated below*

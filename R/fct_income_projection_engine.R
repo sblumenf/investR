@@ -132,7 +132,8 @@ generate_initial_projections <- function(group_id, members, account_number) {
         strike_price = strike_price,
         shares = shares,
         stock_cost = stock_cost,
-        premium_received = premium_received
+        premium_received = premium_received,
+        btc_costs = 0
       )
     }
 
@@ -282,13 +283,14 @@ generate_dividend_events <- function(ticker, shares, end_date = NULL) {
 #' @return Tibble with single event row
 #' @noRd
 generate_option_gain_event <- function(expiry_date, strike_price, shares,
-                                       stock_cost, premium_received) {
+                                       stock_cost, premium_received,
+                                       btc_costs = 0) {
 
   # Calculate exercise proceeds (if assigned)
   exercise_proceeds <- strike_price * shares
 
   # Calculate net debit
-  net_debit <- stock_cost - premium_received
+  net_debit <- stock_cost - premium_received + btc_costs
 
   # Calculate gain
   gain <- exercise_proceeds - net_debit
@@ -405,6 +407,15 @@ regenerate_projections_after_roll <- function(group_id, new_option_symbol, conn 
     # Accumulate ALL premiums received (original + rolls)
     premium_received <- sum(abs(option_activities$gross_amount), na.rm = TRUE)
 
+    # Calculate total buy-to-close costs from ALL option buy activities
+    option_activities_buy <- activities %>%
+      filter(
+        type == "Trades",
+        action == "Buy",
+        purrr::map_lgl(symbol, is_option_symbol)
+      )
+    btc_costs <- sum(abs(option_activities_buy$gross_amount), na.rm = TRUE)
+
     # Parse new option symbol for strike and expiry
     option_info <- parse_option_details(new_option_symbol)
     strike_price <- option_info$strike
@@ -429,35 +440,78 @@ regenerate_projections_after_roll <- function(group_id, new_option_symbol, conn 
       strike_price = strike_price,
       shares = shares,
       stock_cost = stock_cost,
-      premium_received = premium_received  # Accumulated from ALL sells
+      premium_received = premium_received,  # Accumulated from ALL sells
+      btc_costs = btc_costs
     )
 
+    # Save new projected option gain event (if positive gain exists)
+    option_gain_count <- 0L
     if (nrow(option_events) == 0) {
       log_info("Income Projection: No positive option gain to project after roll for group {group_id}")
-      log_projection_recalculation(group_id, "option_roll", old_count, 0)
-      return(TRUE)
+    } else {
+      save_cash_flow_event(
+        group_id = group_id,
+        event_date = option_events$event_date[1],
+        event_type = option_events$event_type[1],
+        amount = option_events$amount[1],
+        status = "projected",
+        confidence = option_events$confidence[1],
+        conn = conn
+      )
+      option_gain_count <- 1L
     }
 
-    # Save new projected event (pass connection if provided)
-    event_id <- save_cash_flow_event(
-      group_id = group_id,
-      event_date = option_events$event_date[1],
-      event_type = option_events$event_type[1],
-      amount = option_events$amount[1],
-      status = "projected",
-      confidence = option_events$confidence[1],
-      conn = conn
-    )
+    dividend_count <- 0L
+    underlying_member <- members %>% filter(role == "underlying_stock") %>% pull(symbol)
 
-    # Log recalculation
+    if (length(underlying_member) > 0 && nchar(underlying_member[1]) > 0) {
+      ticker <- underlying_member[1]
+
+      delete_projected_dividends(group_id, conn = conn)
+
+      dividend_events <- tryCatch(
+        generate_dividend_events(ticker = ticker, shares = shares, end_date = expiry_date),
+        error = function(e) {
+          log_warn("Income Projection: Dividend history fetch failed for {ticker} during roll - {e$message}")
+          tibble::tibble(
+            event_date = as.Date(character(0)),
+            event_type = character(0),
+            amount = numeric(0),
+            confidence = character(0)
+          )
+        }
+      )
+
+      if (nrow(dividend_events) > 0) {
+        purrr::walk(seq_len(nrow(dividend_events)), function(i) {
+          ev <- dividend_events[i, ]
+          save_cash_flow_event(
+            group_id = group_id,
+            event_date = ev$event_date,
+            event_type = ev$event_type,
+            amount = ev$amount,
+            status = "projected",
+            confidence = "medium",
+            conn = conn
+          )
+        })
+        dividend_count <- nrow(dividend_events)
+        log_info("Income Projection: Regenerated {dividend_count} dividend projections through {expiry_date} for group {group_id}")
+      } else {
+        log_info("Income Projection: No dividend projections generated for {ticker} after roll (dividend may be suspended or not applicable)")
+      }
+    } else {
+      log_warn("Income Projection: No underlying_stock member found for group {group_id} - skipping dividend regeneration")
+    }
+
     log_projection_recalculation(
       group_id = group_id,
       reason = "option_roll",
       old_count = old_count,
-      new_count = 1
+      new_count = option_gain_count + dividend_count
     )
 
-    log_info("Income Projection: Regenerated projections after roll - new projected gain: ${option_events$amount[1]}")
+    log_info("Income Projection: Regenerated projections after roll - option gain rows: {option_gain_count}, dividends: {dividend_count}")
     return(TRUE)
 
   }, error = function(e) {

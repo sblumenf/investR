@@ -1,14 +1,1 @@
-
-============================================
-  Ralph Loop v2
-  Spec: docs/specs/implement-the-call-skew-variants-for-the-collar-strategy.md
-  Max iterations: 10
-  Review enabled: YES
-  Started: Thu  5 Mar 2026 23:05:34 EST
-  PID: 95459
-============================================
-
-  Generated .scope-lock.json from spec constraints
-
-=== Iteration 1 of 10 === 23:05:35 ===
-  [impl] Starting implementation pass...
+  Archived to docs/specs/completed/

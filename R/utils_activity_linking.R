@@ -352,6 +352,24 @@ link_activities_to_group <- function(activity_ids, group_id) {
         WHERE activity_id IN (%s)
       ", placeholders), params = activity_ids) %>% as_tibble()
 
+      sell_candidates <- newly_linked %>%
+        filter(type == "Trades", action == "Sell")
+
+      if (nrow(sell_candidates) > 0) {
+        for (sc_i in seq_len(nrow(sell_candidates))) {
+          sc <- sell_candidates[sc_i, ]
+          if (is.na(sc$symbol[1]) || sc$symbol[1] == "" || sc$symbol[1] == "NOSYMBOL") {
+            enriched_symbol <- enrich_single_activity_symbol(sc$activity_id, sc, con)
+            if (!is.null(enriched_symbol)) {
+              newly_linked$symbol[newly_linked$activity_id == sc$activity_id] <- enriched_symbol
+              log_debug("Activity Linking: Enriched blank symbol for activity {sc$activity_id} -> '{enriched_symbol}'")
+            } else {
+              log_warn("Activity Linking: Could not enrich blank symbol for activity {sc$activity_id} - roll detection may be skipped")
+            }
+          }
+        }
+      }
+
       # Find option sell activities in the newly linked batch (potential new options in a roll)
       option_sells <- newly_linked %>%
         filter(

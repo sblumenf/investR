@@ -290,6 +290,43 @@ enrich_blank_symbols_unlinked <- function() {
   })
 }
 
+#' Enrich the symbol field for a single activity by matching against other rows
+#'
+#' @param activity_id Activity ID to enrich
+#' @param activity Single-row tibble with account_number, description, trade_date, quantity, net_amount
+#' @param conn DBI connection (required — caller must provide an open connection)
+#' @return Enriched symbol string, or NULL if no match found
+#' @noRd
+enrich_single_activity_symbol <- function(activity_id, activity, conn) {
+  matching <- tryCatch(dbGetQuery(conn, "
+    SELECT symbol, symbol_id
+    FROM account_activities
+    WHERE account_number = ?
+      AND description = ?
+      AND trade_date = ?
+      AND quantity = ?
+      AND net_amount = ?
+      AND symbol IS NOT NULL
+      AND symbol != ''
+      AND symbol != 'NOSYMBOL'
+    LIMIT 1
+  ", params = list(
+    activity$account_number[1],
+    activity$description[1],
+    activity$trade_date[1],
+    activity$quantity[1],
+    activity$net_amount[1]
+  )), error = function(e) NULL)
+
+  if (!is.null(matching) && nrow(matching) > 0) {
+    dbExecute(conn, "UPDATE account_activities SET symbol = ?, symbol_id = ? WHERE activity_id = ?",
+      params = list(matching$symbol[1], matching$symbol_id[1], activity_id))
+    return(matching$symbol[1])
+  }
+
+  NULL
+}
+
 #' Get unprocessed activities
 #'
 #' Retrieves all activities that haven't been analyzed for pattern matching
@@ -560,6 +597,16 @@ link_activity_to_group <- function(activity_id, group_id) {
         ", params = list(activity_id))
 
         if (nrow(full_activity) > 0 && !is.na(full_activity$action[1]) && full_activity$action[1] == "Sell") {
+          if (is.na(full_activity$symbol[1]) || full_activity$symbol[1] == "" || full_activity$symbol[1] == "NOSYMBOL") {
+            enriched_symbol <- enrich_single_activity_symbol(activity_id, full_activity, conn)
+            if (!is.null(enriched_symbol)) {
+              full_activity$symbol[1] <- enriched_symbol
+              log_debug("Activities DB: Enriched blank symbol for activity {activity_id} -> '{enriched_symbol}'")
+            } else {
+              log_warn("Activities DB: Could not enrich blank symbol for activity {activity_id} - skipping roll detection")
+            }
+          }
+
           if (!is.na(full_activity$symbol[1]) && is_option_symbol(full_activity$symbol[1])) {
             # Get all activities in this group to check for roll pattern
             group_activities <- get_activities_by_group(group_id)
