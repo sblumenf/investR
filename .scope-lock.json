@@ -1,0 +1,38 @@
+{
+  "allowed_files": [
+    "R/mod_aristocrats_analysis.R",
+    "R/mod_zero_dividend_analysis.R",
+    "R/fct_skew_signal.R",
+    "tests/testthat/test-fct_skew_signal.R"
+  ],
+  "denied_files": [
+    "R/fct_aristocrats_analysis.R",
+    "R/fct_zero_dividend_analysis.R",
+    "R/fct_questrade_options.R",
+    "R/fct_implied_volatility.R",
+    "Database schema (no new tables, no schema changes)",
+    "fct_questrade_options.R",
+    "fct_implied_volatility.R",
+    "utils_market_data.R",
+    "Historical options chain data (today's snapshot only)",
+    "Long-dated chain analysis (use 30-day chain only)",
+    "Computing IV from scratch via Black-Scholes",
+    "Redesigning the existing screening pipeline",
+    "Persisting skew data to the database",
+    "Batch pre-fetching skew for all cards"
+  ],
+  "allow_new_files": true,
+  "allowed_new_dirs": [
+    "R/fct_skew_signal.R",
+    "tests/testthat/test-fct_skew_signal.R",
+    "R/fct_aristocrats_analysis.R",
+    "R/fct_zero_dividend_analysis.R",
+    "R/fct_questrade_options.R",
+    "R/fct_implied_volatility.R",
+    "Database schema (no new tables, no schema changes)"
+  ],
+  "allow_new_deps": false,
+  "created_by": "ralph",
+  "spec_file": "docs/specs/skewsignalspecmd.md",
+  "created_at": "2026-04-20T03:53:01Z"
+}
