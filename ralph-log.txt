@@ -37,3 +37,11 @@ All 26 tests pass, no off-limits files touched, return structure matches spec. F
   [impl] Starting implementation pass...
 Phase 2 is done. The Fetch Skew button is wired into both candidate card modules. The only remaining task is Phase 3 — manual browser verification that the modal renders correctly — which requires `source("dev/run_dev.R")` and a human to visually confirm the modal layout. The visual formatting (arrows, colors, percentage format) was already implemented in Phase 1's `fct_skew_signal.R`.
   [review] Starting review pass...
+Session active. Review written to `ralph-review.md`.
+
+**Verdict: PASS** — Phases 1 and 2 are complete. All 26 tests pass, `load_all()` is clean, no constraint violations. Two minor notes: the `$table` row count isn't guarded to exactly 5 rows on thin chains, and there's no test asserting it. Phase 3 (visual polish — arrows, colors, percentage formatting) is still pending.
+  [review] PASS — moving to next task
+--- Iteration 2 finished ---
+
+=== Iteration 3 of 10 === 00:04:06 ===
+  [impl] Starting implementation pass...

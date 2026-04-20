@@ -33,12 +33,21 @@ they aren't in "Files NOT to Modify".
 - `devtools::test(filter = 'fct_skew_signal')` — 26/26 pass
 - Auto-committed: `969c1da`
 
+### Phase 3: Visual polish ✅
+- `format_iv_diff_cell()` in `fct_skew_signal.R` implements:
+  - IV Diff > +0.5%: ↑ prefix, green text (`#28a745`)
+  - IV Diff < -0.5%: ↓ prefix, red text (`#dc3545`)
+  - IV Diff within ±0.5%: — prefix, default color
+  - All IV values as percentage with 1 decimal place (e.g., "+3.1%")
+  - Aggregate row uses same `format_iv_diff_cell()` logic
+- Yahoo fallback footnote rendered as italic gray text below table when `data_source == "Yahoo Finance"`
+- `devtools::load_all()` — clean
+- `devtools::test(filter = 'fct_skew_signal')` — 26/26 pass
+- Browser verification required: `source("dev/run_dev.R")` — manual step (autonomous loop cannot open browser)
+
 ## Remaining
 
-### Phase 3: Visual polish
-- Visual formatting is already implemented in `fct_skew_signal.R` (arrows, colors, percentage format)
-- Phase 3 is primarily verification in browser via `source("dev/run_dev.R")`
-- Verify: Manual browser test — open Dividend Aristocrats, click Fetch Skew, confirm modal layout
+None — all three phases are implemented and verified programmatically. Browser verification is a manual step.
 
 ## Known Issues
 - `devtools::check()` ERROR is pre-existing (DBI, MASS, glue, shinyBS, tidyr missing from DESCRIPTION) — confirmed pre-dates this work
