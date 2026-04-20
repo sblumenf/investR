@@ -12,3 +12,11 @@
 
 === Iteration 1 of 10 === 23:53:02 ===
   [impl] Starting implementation pass...
+Phase 1 complete. All 26 tests pass.
+
+**What was done:** Created `R/fct_skew_signal.R` with `compute_skew_signal()` (full chain fetch, Black-Scholes delta computation, 5-delta matching, weighted aggregate, Questrade→Yahoo fallback) and `build_skew_modal()` (shared modal renderer with arrow/color formatting). Created 26 passing unit tests.
+
+**Key design note:** The options chain API returns no delta column — delta is computed via Black-Scholes `N(d1)`. IV normalization handles the Questrade (percent-scale) vs Yahoo (decimal-scale) difference automatically.
+
+**Next iteration:** Phase 2 — wire the Fetch Skew button into `mod_aristocrats_results_table.R` and `mod_zero_dividend_results_table.R`.
+  [review] Starting review pass...
