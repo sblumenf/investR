@@ -22,22 +22,23 @@ the Fetch Skew button to the results table modules (where the cards live), which
 intent even if the file names differ. The spec constraint already allows modifying results table modules since
 they aren't in "Files NOT to Modify".
 
-## Remaining
+### Phase 2: Module integration ✅
+- Added "Fetch Skew" button to `mod_aristocrats_results_table.R`:
+  - Button rendered alongside "Analyze Risk" in a flex row on each card
+  - `lapply(1:50)` observer loop added; each observer disables button, calls `compute_skew_signal(ticker)`, opens `showModal(build_skew_modal(...))`, then re-enables on exit
+  - Uses `shinyjs::disable/enable` for the loading state
+- Same changes applied to `mod_zero_dividend_results_table.R`
+- `.scope-lock.json` amended to include both results table files (spec named wrong files; results table files are where cards actually render; neither is in denied_files)
+- `devtools::load_all()` — clean (only pre-existing DT/shiny import warnings)
+- `devtools::test(filter = 'fct_skew_signal')` — 26/26 pass
+- Auto-committed: `969c1da`
 
-### Phase 2: Module integration
-- [ ] Add "Fetch Skew" button to each card in `mod_aristocrats_results_table.R`
-  - Button ID: `ns(paste0("skew_btn_", idx))`
-  - Disable during fetch, re-enable after (use `shinyjs` or reactive flag)
-  - Wire `observeEvent` (1-50 pattern like existing risk buttons) to call `compute_skew_signal()`
-  - Show `showModal(build_skew_modal(ticker, result))` after fetch
-  - Error path: `build_skew_modal` handles errors already
-- [ ] Same for `mod_zero_dividend_results_table.R`
-- Verify: `devtools::load_all()` and `source("dev/run_dev.R")`
+## Remaining
 
 ### Phase 3: Visual polish
 - Visual formatting is already implemented in `fct_skew_signal.R` (arrows, colors, percentage format)
-- Phase 3 is primarily verification in browser
-- Verify: Manual browser test
+- Phase 3 is primarily verification in browser via `source("dev/run_dev.R")`
+- Verify: Manual browser test — open Dividend Aristocrats, click Fetch Skew, confirm modal layout
 
 ## Known Issues
 - `devtools::check()` ERROR is pre-existing (DBI, MASS, glue, shinyBS, tidyr missing from DESCRIPTION) — confirmed pre-dates this work

@@ -27,7 +27,7 @@ mod_aristocrats_results_table_ui <- function(id){
 #'
 #' @noRd
 #'
-#' @importFrom shiny moduleServer renderUI req tags actionButton observeEvent
+#' @importFrom shiny moduleServer renderUI req tags actionButton observeEvent showModal
 #' @importFrom bslib card card_header card_body
 #' @importFrom dplyr %>%
 #' @importFrom purrr map
@@ -84,6 +84,23 @@ mod_aristocrats_results_table_server <- function(id, results_data){
         observeEvent(input[[btn_id]], {
           clicked_row(idx)
           trigger_counter(isolate(trigger_counter()) + 1)
+        }, ignoreInit = TRUE)
+      })
+    })
+
+    # Skew signal observers — one per possible card slot (1-50)
+    lapply(1:50, function(i) {
+      local({
+        idx <- i
+        skew_btn_id <- paste0("skew_btn_", idx)
+        observeEvent(input[[skew_btn_id]], {
+          req(results_data())
+          if (idx > nrow(results_data())) return()
+          ticker <- results_data()$ticker[idx]
+          shinyjs::disable(ns(skew_btn_id))
+          on.exit(shinyjs::enable(ns(skew_btn_id)), add = TRUE)
+          result <- compute_skew_signal(ticker)
+          showModal(build_skew_modal(ticker, result))
         }, ignoreInit = TRUE)
       })
     })
@@ -163,15 +180,22 @@ create_opportunity_card_with_risk <- function(row, ns, risk_id) {
 
   # Card body with sections
   body <- bslib::card_body(
-    # Risk Analysis Button (at top)
+    # Action Buttons row (at top)
     tags$div(
-      style = "margin-bottom: 15px;",
+      style = "margin-bottom: 15px; display: flex; gap: 8px;",
       actionButton(
         inputId = ns(paste0("analyze_risk_btn_", idx)),
         label = "Analyze Risk",
         icon = icon("chart-line"),
         class = "btn btn-primary btn-sm",
-        style = "width: 100%;"
+        style = "flex: 1;"
+      ),
+      actionButton(
+        inputId = ns(paste0("skew_btn_", idx)),
+        label = "Fetch Skew",
+        icon = icon("chart-bar"),
+        class = "btn btn-info btn-sm",
+        style = "flex: 1;"
       )
     ),
 
