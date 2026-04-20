@@ -1,0 +1,19 @@
+Volatility Skew Signal — Implementation Progress
+Spec: docs/specs/skewsignalspecmd.md
+Finalized: 2026-04-19
+
+PHASE 1: Business logic + tests [PENDING]
+  - [ ] R/fct_skew_signal.R
+  - [ ] tests/testthat/test-fct_skew_signal.R
+  Verification: devtools::test(filter = 'fct_skew_signal') && devtools::check()
+
+PHASE 2: Module integration [PENDING]
+  - [ ] R/mod_aristocrats_analysis.R — Fetch Skew button + modal
+  - [ ] R/mod_zero_dividend_analysis.R — Fetch Skew button + modal
+  Verification: devtools::load_all() && source('dev/run_dev.R')
+
+PHASE 3: Visual polish [PENDING]
+  - [ ] Arrow indicators + color coding for IV Diff column
+  - [ ] Source footnote for Yahoo fallback
+  - [ ] Percentage formatting (1 decimal)
+  Verification: Manual browser test + devtools::check()

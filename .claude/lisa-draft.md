@@ -1,51 +1,67 @@
-# Specification Draft: Covered Call Roll Transaction Support
+# Specification Draft: Volatility Skew Signal
 
-*Interview in progress - Started: 2026-04-10*
+*Interview in progress - Started: 2026-04-19*
 
 ## Overview
-Support the "covered call roll" transaction pattern in investR: a Buy-to-Close (BTC) on an existing short call combined with a Sell-to-Open (STO) on a new call with a later expiry date. The WMT Dividend Aristocrat position triggered this work — the user rolled from a June 2027 covered call to a December 2027 or January 2028 covered call.
+Add a "Fetch Skew" button to each candidate card in the Dividend Aristocrats and Zero-Dividend Stocks screens. Clicking the button fetches the nearest 30-day options chain for that ticker and displays a modal showing IV asymmetry between calls and puts at five delta levels. This is the skew signal identified in binomial testing (p<0.001) as a real-time indicator of post-entry stock move risk.
 
-## Context (from prior research)
-The research agent (April 9) identified that the codebase does NOT currently have roll detection, member update, or projection regeneration logic — the function names found (`detect_option_roll`, `update_group_option_member`, `regenerate_projections_after_roll`) may not exist yet. The spec must treat these as things to BUILD, not things to verify.
+## Decisions Captured
 
-## Problem Statement
-When a user rolls a covered call position (BTC old call + STO new call), the following must happen automatically once both transactions are linked to the position group:
-1. The group's tracked option expiry date updates to the new call's expiry
-2. Dividend projections are extended through the new expiry date
-3. The STO premium appears as a separate actual cash flow for the month it was received
-4. The cash flow projection module reflects the extended timeline
+### UI
+- **Placement:** Modal popup (not inline panel)
+- **Modal header:** Shows ticker + expiry date + days to expiry (e.g., "IV Skew Signal — AAPL | Expiry: May 16, 2026 (27 days)")
+- **Loading:** Button shows spinner while fetching; modal opens only after data is ready
+- **Error state:** Modal opens with error message if fetch fails or no options exist
+- **Data source notice:** Footnote in modal if Yahoo fallback used ("Source: Yahoo Finance (Questrade unavailable)")
 
-## User Decisions Captured
+### Data
+- **Expiry selection:** Always use nearest available to 30 days; always show actual expiry + days in modal header
+- **Delta matching:** Nearest available delta (no interpolation)
+- **Caching:** No caching — re-fetch on every button click
+- **Button visibility:** Shown on all cards; fails gracefully
 
-### Roll detection trigger
-- Rolls are detected when transactions are linked to a group (same as all other transaction types)
-- NO extra pairing/linking UI step needed — consistent with how other transaction types work
-- If BTC and STO are linked to the same group and both reference the same underlying, roll logic fires
-- No same-day requirement enforced by the user — just needs to work when both are linked
+### Aggregate statistic
+- **Formula:** Delta-weighted average of IV differences
+  - `aggregate = sum(delta_i * IV_diff_i) / sum(delta_i)`
+  - Weights: 0.20, 0.30, 0.40, 0.50, 0.60 (higher delta = more ATM = more weight)
+- Shown as a bottom row in the table
 
-### Cash flow display
-- Each STO creates its own separate, dated actual cash flow line item
-- Full audit trail: original STO at inception + roll STO in April 2026 both visible separately
-- No aggregation into a single cumulative total
+### Visual design
+- **IV Diff column:** Arrow indicator + color
+  - Positive (call IV > put IV, bullish skew): up arrow + green
+  - Negative (bearish skew): down arrow + red
+  - Near-zero (within ±0.5%): dash, default color
 
-### Screens affected
-- Group card: expiry date + dividend projections + cash flows (primary)
-- Cash flow projection module: must update to reflect extended timeline
-- Other screens (risk dashboard, home dashboard): calculated on the fly from group data — verify they pick up changes automatically, do not build special handling
+## Table Output
 
-## Key Technical Facts (from research)
-- Option expiry is stored implicitly in the option symbol in `position_group_members` (role = 'short_call')
-- `parse_option_details(symbol)` extracts strike and expiry from the symbol string
-- Dividend projections are rows in `position_group_cash_flows` with event_type = 'dividend' and status = 'projected'
-- Option premiums received are rows with event_type = 'option_premium' and status = 'actual'
-- The `account_activities` table stores raw transactions; `position_group_cash_flows` stores processed events
-- Deduplication key for activities: account_number + description + trade_date + action + quantity + net_amount
-- Blank option symbols can arrive from Questrade — enrichment function exists
+| Delta | Call Strike | Call Ask | Call IV | Put Strike | Put Ask | Put IV | IV Diff (C-P) |
+|-------|------------|----------|---------|------------|---------|--------|----------------|
+| 0.20  |            |          |         |            |         |        | ↑ +3.1% (green)|
+| 0.30  |            |          |         |            |         |        | ↓ -2.4% (red)  |
+| 0.40  |            |          |         |            |         |        | — 0.1%         |
+| 0.50  |            |          |         |            |         |        |                |
+| 0.60  |            |          |         |            |         |        |                |
+| **Wtd Avg** | | | | | | | **delta-weighted** |
+
+## Files
+
+### Files to modify
+- `R/mod_aristocrats_analysis.R` — add Fetch Skew button and modal trigger per card
+- `R/mod_zero_dividend_analysis.R` — same
+
+### New files
+- `R/fct_skew_signal.R` — pure function: fetches chain, matches deltas, computes skew table + weighted aggregate
+
+### Files NOT to modify
+- `R/fct_aristocrats_analysis.R`
+- `R/fct_zero_dividend_analysis.R`
+- `R/fct_questrade_options.R`
+- `R/fct_implied_volatility.R`
+- Database schema
 
 ## Open Questions
-- Does `detect_option_roll` actually exist in the codebase, or was the research agent hallucinating function names? MUST verify before implementation.
-- Which file/function actually triggers projection regeneration when a transaction is linked to a group?
-- Does the dividend staleness check threshold need to be documented/configurable?
+- Does Questrade options chain response actually include delta per option? (Must verify against `fct_questrade_options.R` before implementing delta-matching logic)
+- Exact column names returned by `fetch_options_chain()` — need to confirm field names for IV and delta
 
 ---
-*Notes accumulated below*
+*Interview notes accumulated below*

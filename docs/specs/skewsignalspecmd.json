@@ -1,0 +1,83 @@
+{
+  "spec_id": "skewsignalspecmd",
+  "title": "Volatility Skew Signal",
+  "finalized": "2026-04-19",
+  "status": "PENDING",
+  "phases": [
+    {
+      "id": 1,
+      "name": "Business logic + tests",
+      "status": "PENDING",
+      "files": [
+        "R/fct_skew_signal.R",
+        "tests/testthat/test-fct_skew_signal.R"
+      ],
+      "verification": "devtools::test(filter = 'fct_skew_signal') && devtools::check()"
+    },
+    {
+      "id": 2,
+      "name": "Module integration",
+      "status": "PENDING",
+      "files": [
+        "R/mod_aristocrats_analysis.R",
+        "R/mod_zero_dividend_analysis.R"
+      ],
+      "verification": "devtools::load_all() && source('dev/run_dev.R')"
+    },
+    {
+      "id": 3,
+      "name": "Visual polish",
+      "status": "PENDING",
+      "files": [
+        "R/mod_aristocrats_analysis.R",
+        "R/mod_zero_dividend_analysis.R"
+      ],
+      "verification": "Manual browser test + devtools::check()"
+    }
+  ],
+  "constraints": {
+    "files_to_modify": [
+      "R/mod_aristocrats_analysis.R",
+      "R/mod_zero_dividend_analysis.R"
+    ],
+    "new_files": [
+      "R/fct_skew_signal.R",
+      "tests/testthat/test-fct_skew_signal.R"
+    ],
+    "files_not_to_modify": [
+      "R/fct_aristocrats_analysis.R",
+      "R/fct_zero_dividend_analysis.R",
+      "R/fct_questrade_options.R",
+      "R/fct_implied_volatility.R"
+    ],
+    "new_dependencies": false,
+    "database_changes": false
+  },
+  "user_stories": ["US-1", "US-2", "US-3", "US-4"],
+  "data_source": {
+    "primary": "Questrade (fct_questrade_options.R)",
+    "fallback": "Yahoo Finance (quantmod::getOptionChain)",
+    "chain_target_days": 30,
+    "expiry_selection": "nearest to 30 days, no range restriction"
+  },
+  "signal": {
+    "delta_levels": [0.20, 0.30, 0.40, 0.50, 0.60],
+    "delta_matching": "nearest available, no interpolation",
+    "aggregate_formula": "sum(delta_i * iv_diff_i) / sum(delta_i)",
+    "iv_diff": "call_iv - put_iv at matching delta"
+  },
+  "ui": {
+    "placement": "modal popup",
+    "loading": "button spinner, modal opens after fetch completes",
+    "error_handling": "modal shows error message",
+    "fallback_notice": true,
+    "color_coding": {
+      "positive_threshold": 0.005,
+      "negative_threshold": -0.005,
+      "positive": "up arrow + green",
+      "negative": "down arrow + red",
+      "neutral": "dash + default color"
+    },
+    "caching": false
+  }
+}
