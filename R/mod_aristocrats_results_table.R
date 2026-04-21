@@ -97,8 +97,6 @@ mod_aristocrats_results_table_server <- function(id, results_data){
           req(results_data())
           if (idx > nrow(results_data())) return()
           ticker <- results_data()$ticker[idx]
-          shinyjs::disable(ns(skew_btn_id))
-          on.exit(shinyjs::enable(ns(skew_btn_id)), add = TRUE)
           result <- compute_skew_signal(ticker)
           showModal(build_skew_modal(ticker, result))
         }, ignoreInit = TRUE)
