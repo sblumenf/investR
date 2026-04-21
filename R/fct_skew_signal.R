@@ -7,7 +7,7 @@
 #' @name skew-signal
 #' @importFrom logger log_debug log_info log_warn log_error
 #' @importFrom dplyr %>% filter arrange mutate
-#' @importFrom stats pnorm median
+#' @importFrom stats pnorm
 NULL
 
 TARGET_DELTAS <- c(0.20, 0.30, 0.40, 0.50, 0.60)
@@ -116,8 +116,8 @@ compute_skew_signal <- function(ticker) {
   }
 
   # Normalize IV: Questrade returns percent (e.g., 23.74), Yahoo returns decimal (e.g., 0.2374)
-  calls_df <- normalize_iv_column(calls_df)
-  puts_df  <- normalize_iv_column(puts_df)
+  calls_df <- normalize_iv_column(calls_df, data_source)
+  puts_df  <- normalize_iv_column(puts_df,  data_source)
 
   # Compute Black-Scholes delta for each option row
   time_to_expiry <- chosen_dte / 365
@@ -126,10 +126,32 @@ compute_skew_signal <- function(ticker) {
   calls_df <- add_bs_delta(calls_df, stock_price, time_to_expiry, risk_free_rate, "call")
   puts_df  <- add_bs_delta(puts_df,  stock_price, time_to_expiry, risk_free_rate, "put")
 
-  # Match each target delta to nearest call and put
-  table_rows <- lapply(TARGET_DELTAS, function(target_delta) {
-    call_row <- match_nearest_delta(calls_df, target_delta, "call")
-    put_row  <- match_nearest_delta(puts_df,  target_delta, "put")
+  # Reset rownames to sequential integers so as.integer(rownames(...)) is safe
+  # for Yahoo Finance data where rownames are option symbol strings.
+  rownames(calls_df) <- seq_len(nrow(calls_df))
+  rownames(puts_df)  <- seq_len(nrow(puts_df))
+
+  # Match ATM first, work outward — preserves most meaningful delta levels on sparse chains
+  atm_first_deltas <- TARGET_DELTAS[order(abs(TARGET_DELTAS - 0.50))]
+
+  used_call_idx <- integer(0)
+  used_put_idx  <- integer(0)
+
+  table_rows_unordered <- lapply(atm_first_deltas, function(target_delta) {
+    call_avail_idx <- setdiff(seq_len(nrow(calls_df)), used_call_idx)
+    put_avail_idx  <- setdiff(seq_len(nrow(puts_df)),  used_put_idx)
+
+    call_row <- match_nearest_delta(calls_df[call_avail_idx, , drop = FALSE],
+                                     target_delta, "call")
+    put_row  <- match_nearest_delta(puts_df[put_avail_idx, , drop = FALSE],
+                                     target_delta, "put")
+
+    if (!is.null(call_row)) {
+      used_call_idx <<- c(used_call_idx, as.integer(rownames(call_row)))
+    }
+    if (!is.null(put_row)) {
+      used_put_idx <<- c(used_put_idx, as.integer(rownames(put_row)))
+    }
 
     if (is.null(call_row) || is.null(put_row)) return(NULL)
 
@@ -149,6 +171,9 @@ compute_skew_signal <- function(ticker) {
       stringsAsFactors = FALSE
     )
   })
+
+  # Re-sort rows by delta ascending (0.20 -> 0.60) for display
+  table_rows <- table_rows_unordered[order(atm_first_deltas)]
 
   table_rows <- Filter(Negate(is.null), table_rows)
 
@@ -343,15 +368,15 @@ parse_chain_expiry_dates <- function(exp_names, data_source) {
 #' Normalize IV column to decimal form
 #'
 #' Questrade returns IV as percent (e.g., 23.74); Yahoo returns decimal (e.g., 0.2374).
-#' Detection: if median of non-NA values > 1, assume percent scale.
+#' The `data_source` parameter determines scaling: no heuristics needed.
 #'
 #' @param df Data frame with IV column
+#' @param data_source Character "Questrade" or "Yahoo Finance"
 #' @return Data frame with IV in decimal form
 #' @noRd
-normalize_iv_column <- function(df) {
+normalize_iv_column <- function(df, data_source) {
   if (!"IV" %in% names(df)) return(df)
-  iv_vals <- df$IV[!is.na(df$IV)]
-  if (length(iv_vals) > 0 && stats::median(iv_vals) > 1) {
+  if (data_source == "Questrade") {
     df$IV <- df$IV / 100
   }
   df

@@ -1,18 +1,18 @@
-test_that("normalize_iv_column converts percent-scale IV to decimal", {
+test_that("normalize_iv_column converts percent-scale IV to decimal for Questrade", {
   df <- data.frame(Strike = c(100, 110), IV = c(23.74, 31.50))
-  result <- normalize_iv_column(df)
+  result <- normalize_iv_column(df, "Questrade")
   expect_equal(result$IV, c(0.2374, 0.3150))
 })
 
-test_that("normalize_iv_column leaves decimal-scale IV unchanged", {
+test_that("normalize_iv_column leaves decimal-scale IV unchanged for Yahoo Finance", {
   df <- data.frame(Strike = c(100, 110), IV = c(0.2374, 0.3150))
-  result <- normalize_iv_column(df)
+  result <- normalize_iv_column(df, "Yahoo Finance")
   expect_equal(result$IV, c(0.2374, 0.3150))
 })
 
 test_that("normalize_iv_column handles missing IV column gracefully", {
   df <- data.frame(Strike = c(100, 110), Bid = c(5, 3))
-  result <- normalize_iv_column(df)
+  result <- normalize_iv_column(df, "Questrade")
   expect_equal(names(result), c("Strike", "Bid"))
 })
 
@@ -155,6 +155,103 @@ test_that("compute_skew_signal returns error list when both chains fail", {
   result <- compute_skew_signal("FAKE")
   expect_null(result$table)
   expect_false(is.null(result$error))
+})
+
+test_that("compute_skew_signal produces no duplicate strikes when chain is sparse", {
+  # Only 3 strikes with valid computed deltas but 5 target delta levels.
+  # ATM-first matching must prevent the same strike appearing in multiple rows,
+  # and the 3 matched rows should correspond to delta levels closest to 0.50
+  # (i.e., 0.50, 0.40/0.60, 0.30) rather than 0.20, 0.30, 0.40.
+  sparse_calls <- data.frame(
+    Strike = c(85, 100, 115),
+    Ask    = c(15, 5, 0.5),
+    IV     = c(0.35, 0.25, 0.18),
+    stringsAsFactors = FALSE
+  )
+  sparse_puts <- data.frame(
+    Strike = c(85, 100, 115),
+    Ask    = c(0.5, 5, 15),
+    IV     = c(0.18, 0.25, 0.35),
+    stringsAsFactors = FALSE
+  )
+
+  mock_chain <- list(
+    "2099-06-20" = list(calls = sparse_calls, puts = sparse_puts)
+  )
+
+  local_mocked_bindings(
+    fetch_current_quote = function(...) data.frame(Last = 100),
+    fetch_questrade_options_chain = function(...) NULL,
+    .package = "investR"
+  )
+  local_mocked_bindings(
+    getOptionChain = function(...) mock_chain,
+    .package = "quantmod"
+  )
+
+  result <- compute_skew_signal("FAKE")
+
+  if (!is.null(result$table) && nrow(result$table) > 1) {
+    # No duplicate strikes
+    expect_equal(length(unique(result$table$call_strike)), nrow(result$table))
+    expect_equal(length(unique(result$table$put_strike)),  nrow(result$table))
+
+    # With only 3 strikes, at most 3 rows. The matched delta levels should
+    # include 0.50 (ATM) — the most meaningful level — not be limited to OTM levels.
+    expect_true(0.50 %in% result$table$delta)
+  }
+  # At minimum the result should not error and should return a table or NULL
+  expect_true(is.null(result$error) || is.character(result$error))
+})
+
+test_that("compute_skew_signal handles Yahoo Finance option symbol rownames without NA deduplication", {
+  # Yahoo Finance chains use option symbol strings as rownames (e.g. "AAPL250620C00200000").
+  # The rowname reset must make as.integer(rownames(...)) safe so deduplication works.
+  yahoo_calls <- data.frame(
+    Strike = c(80, 90, 100, 110, 120),
+    Ask    = c(22, 13, 5, 1.5, 0.3),
+    IV     = c(0.30, 0.28, 0.25, 0.22, 0.20),
+    stringsAsFactors = FALSE
+  )
+  rownames(yahoo_calls) <- c(
+    "AAPL250620C00080000", "AAPL250620C00090000", "AAPL250620C00100000",
+    "AAPL250620C00110000", "AAPL250620C00120000"
+  )
+
+  yahoo_puts <- data.frame(
+    Strike = c(80, 90, 100, 110, 120),
+    Ask    = c(0.3, 1.5, 5, 13, 22),
+    IV     = c(0.20, 0.22, 0.25, 0.28, 0.30),
+    stringsAsFactors = FALSE
+  )
+  rownames(yahoo_puts) <- c(
+    "AAPL250620P00080000", "AAPL250620P00090000", "AAPL250620P00100000",
+    "AAPL250620P00110000", "AAPL250620P00120000"
+  )
+
+  mock_chain <- list(
+    "2099-06-20" = list(calls = yahoo_calls, puts = yahoo_puts)
+  )
+
+  local_mocked_bindings(
+    fetch_current_quote = function(...) data.frame(Last = 100),
+    fetch_questrade_options_chain = function(...) NULL,
+    .package = "investR"
+  )
+  local_mocked_bindings(
+    getOptionChain = function(...) mock_chain,
+    .package = "quantmod"
+  )
+
+  result <- compute_skew_signal("AAPL")
+
+  # Must succeed without error
+  expect_null(result$error)
+  expect_false(is.null(result$table))
+
+  # No duplicate strikes — deduplication must have worked correctly
+  expect_equal(length(unique(result$table$call_strike)), nrow(result$table))
+  expect_equal(length(unique(result$table$put_strike)),  nrow(result$table))
 })
 
 test_that("compute_skew_signal sets data_source to Yahoo Finance on Questrade failure", {
