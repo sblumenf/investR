@@ -156,6 +156,24 @@ default:
     drip_api_url: "https://www.dripinvesting.org/wp-json/drip-investing/v1/stocks-dataset"
     drip_cache_days: 30
 
+  # Monthly dividend stocks strategy configuration
+  monthly_dividend_stocks:
+    max_workers: 10
+    strike_threshold_pct: 0.8
+    target_days: null
+    min_option_bid: 0.01
+    min_open_interest: 0
+    sgov_yield_default: 0.05
+    shares_per_contract: 100
+    history_years: 5
+    short_expiry_warning_days: 14
+    negative_return_threshold: 0
+    low_dividend_threshold: 0.5
+    error_truncate_length: 50
+    max_sgov_yield_sanity: 0.20
+    default_top_n: 10
+    output_dir: strategies
+
   # Weekly dividend capture strategy configuration
   weekly_capture:
     weeks_per_year: 52

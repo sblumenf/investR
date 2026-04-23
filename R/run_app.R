@@ -64,6 +64,7 @@ run_app <- function(
 ) {
   # Validate all strategy configurations on app startup
   validate_config()  # Aristocrats
+  validate_monthly_dividend_config()  # Monthly Dividend
   validate_zero_dividend_config()  # Zero Dividend
   validate_dynamic_config()  # Dynamic Covered Calls
   validate_collar_config()  # Collar Strategy
@@ -116,6 +117,7 @@ run_app <- function(
       # Define pages
       page_home(),
       page_aristocrats(),
+      page_monthly_dividend(),
       page_zero_dividend(),
       page_dynamic_covered_calls(),
       page_etf_covered_calls(),
