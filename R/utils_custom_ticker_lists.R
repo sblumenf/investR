@@ -737,6 +737,131 @@ fetch_finviz_call_skew_nodiv_tickers <- function(force_refresh = FALSE) {
 }
 
 ################################################################################
+# MONTHLY DIVIDEND STOCKS
+################################################################################
+
+# Session-level cache for monthly dividend stocks
+.monthly_dividend_cache <- new.env(parent = emptyenv())
+
+#' Parse monthly dividend HTML table into tibble
+#'
+#' @param page rvest html_document object
+#' @return Tibble with columns: ticker, company_name, dividend_yield, market_cap
+#' @noRd
+parse_monthly_dividend_page <- function(page) {
+  tbl <- tryCatch(
+    page %>% rvest::html_node("table") %>% rvest::html_table(),
+    error = function(e) NULL
+  )
+
+  if (is.null(tbl) || nrow(tbl) == 0) {
+    log_warn("No table found on monthly dividend stocks page")
+    return(tibble::tibble())
+  }
+
+  names(tbl) <- tolower(gsub("[^a-zA-Z0-9]", "_", names(tbl)))
+
+  ticker_col  <- grep("^symbol$|^ticker$", names(tbl), value = TRUE)[1]
+  name_col    <- grep("^company", names(tbl), value = TRUE)[1]
+  yield_col   <- grep("yield", names(tbl), value = TRUE)[1]
+  mktcap_col  <- grep("market_cap|mktcap|cap", names(tbl), value = TRUE)[1]
+
+  if (is.na(ticker_col)) {
+    log_warn("Could not find ticker column in monthly dividend table. Columns: {paste(names(tbl), collapse = ', ')}")
+    return(tibble::tibble())
+  }
+
+  result <- tibble::tibble(
+    ticker         = toupper(tbl[[ticker_col]]),
+    company_name   = if (!is.na(name_col)) tbl[[name_col]] else NA_character_,
+    dividend_yield = if (!is.na(yield_col)) tbl[[yield_col]] else NA_character_,
+    market_cap     = if (!is.na(mktcap_col)) tbl[[mktcap_col]] else NA_character_
+  )
+
+  result[nchar(result$ticker) >= 1 & nchar(result$ticker) <= 5, ]
+}
+
+#' Scrape monthly dividend stocks from stockanalysis.com
+#'
+#' Fetches the full table from stockanalysis.com/list/monthly-dividend-stocks/
+#' and returns a tibble with ticker, company name, yield, and market cap.
+#'
+#' @return Tibble with columns: ticker, company_name, dividend_yield, market_cap
+#' @noRd
+scrape_monthly_dividend_stocks <- function() {
+  url <- get_golem_config_value(
+    "custom_ticker_lists",
+    "monthly_dividend_url",
+    "https://stockanalysis.com/list/monthly-dividend-stocks/"
+  )
+  parse_monthly_dividend_page(rvest::read_html(url))
+}
+
+#' Test helper: parse monthly dividend HTML from a raw HTML string
+#'
+#' Allows unit tests to exercise the parse logic without a network call.
+#'
+#' @param html Character string of raw HTML
+#' @return Tibble with columns: ticker, company_name, dividend_yield, market_cap
+#' @noRd
+scrape_monthly_dividend_stocks.__test_parse <- function(html) {
+  parse_monthly_dividend_page(rvest::read_html(html))
+}
+
+#' Fetch monthly dividend stocks
+#'
+#' Scrapes stockanalysis.com for the current list of monthly dividend-paying
+#' stocks. Returns a tibble with ticker, company name, dividend yield, and
+#' market cap. Results are cached for 24 hours (configurable).
+#'
+#' @param force_refresh Logical. If TRUE, ignores cache and fetches fresh data.
+#' @return Tibble with columns: ticker, company_name, dividend_yield, market_cap
+#'   Returns empty tibble if scraping fails.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#'   stocks <- fetch_monthly_dividend_stocks()
+#'   tickers <- fetch_monthly_dividend_stocks()$ticker
+#'   stocks <- fetch_monthly_dividend_stocks(force_refresh = TRUE)
+#' }
+fetch_monthly_dividend_stocks <- function(force_refresh = FALSE) {
+  cache_hours <- get_golem_config_value("custom_ticker_lists", "ticker_cache_hours", 24)
+
+  cache_valid <- !force_refresh &&
+    exists("data", envir = .monthly_dividend_cache) &&
+    exists("timestamp", envir = .monthly_dividend_cache) &&
+    as.numeric(difftime(Sys.time(), .monthly_dividend_cache$timestamp, units = "hours")) < cache_hours
+
+  if (cache_valid) {
+    log_info("Using cached monthly dividend stocks ({nrow(.monthly_dividend_cache$data)} stocks)")
+    return(.monthly_dividend_cache$data)
+  }
+
+  log_info("Fetching monthly dividend stocks from stockanalysis.com...")
+
+  data <- tryCatch(
+    scrape_monthly_dividend_stocks(),
+    error = function(e) {
+      log_error("Failed to fetch monthly dividend stocks: {e$message}")
+      tibble::tibble()
+    }
+  )
+
+  if (nrow(data) == 0) {
+    log_warn("No monthly dividend stocks fetched")
+    return(tibble::tibble())
+  }
+
+  .monthly_dividend_cache$data      <- data
+  .monthly_dividend_cache$timestamp <- Sys.time()
+
+  log_info("Successfully fetched {nrow(data)} monthly dividend stocks")
+
+  data
+}
+
+################################################################################
 # DRIP INVESTING
 ################################################################################
 
