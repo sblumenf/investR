@@ -21,6 +21,15 @@ page_home <- function() {
         button_text = "Analyze Aristocrats"
       ),
       list(
+        title = "Monthly Dividend Stocks",
+        description = c(
+          "Deep ITM covered call strategy for US-listed stocks that pay monthly dividends.",
+          "Dynamically fetched from stockanalysis.com. Covers REITs, BDCs, mortgage REITs, and royalty trusts with options."
+        ),
+        href = "/monthly-dividend",
+        button_text = "Analyze Monthly Dividend"
+      ),
+      list(
         title = "Zero-Dividend Stocks",
         description = c(
           "Deep ITM covered call strategy for S&P 500 growth stocks that don't pay dividends.",
