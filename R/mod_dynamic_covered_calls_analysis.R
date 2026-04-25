@@ -14,6 +14,20 @@ mod_dynamic_covered_calls_analysis_ui <- function(id){
       width = 3,
       h3("Strategy Parameters"),
 
+      # Stock universe selector
+      selectInput(
+        ns("universe"),
+        "Stock Universe",
+        choices = c(
+          "S&P 500" = "sp500",
+          "Russell 1000" = "russell1000"
+        ),
+        selected = "sp500"
+      ),
+      helpText("Universe of stocks to scan for covered call opportunities"),
+
+      hr(),
+
       # Quote source toggle
       quote_source_toggle_ui(ns),
 
