@@ -191,7 +191,10 @@ test_that("clear_stock_cache 'all' removes russell 1000 cache files", {
 # ------------------------------------------------------------------------------
 
 test_that("resolve_ticker_from_name returns ticker for equity result", {
-  fake_response <- list()
+  fake_response <- structure(
+    list(status_code = 200L),
+    class = "response"
+  )
 
   fake_json <- jsonlite::toJSON(list(
     finance = list(
@@ -208,6 +211,7 @@ test_that("resolve_ticker_from_name returns ticker for equity result", {
 
   with_mocked_bindings(
     GET = function(...) fake_response,
+    stop_for_status = function(...) invisible(NULL),
     content = function(...) fake_json,
     .package = "httr",
     {
@@ -219,7 +223,10 @@ test_that("resolve_ticker_from_name returns ticker for equity result", {
 })
 
 test_that("resolve_ticker_from_name returns NA_character_ when no equity results", {
-  fake_response <- list()
+  fake_response <- structure(
+    list(status_code = 200L),
+    class = "response"
+  )
 
   fake_json <- jsonlite::toJSON(list(
     finance = list(
@@ -236,6 +243,7 @@ test_that("resolve_ticker_from_name returns NA_character_ when no equity results
 
   with_mocked_bindings(
     GET = function(...) fake_response,
+    stop_for_status = function(...) invisible(NULL),
     content = function(...) fake_json,
     .package = "httr",
     {
