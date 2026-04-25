@@ -520,3 +520,249 @@ clear_stock_cache <- function(cache_type = "all") {
 
   invisible(TRUE)
 }
+
+#' Resolve company name to ticker via Yahoo Finance search
+#'
+#' @param company_name Company name to look up
+#' @return Ticker symbol string, or NA_character_ on failure
+#' @noRd
+resolve_ticker_from_name <- function(company_name) {
+  tryCatch({
+    Sys.sleep(0.3)
+
+    url <- paste0(
+      "https://query2.finance.yahoo.com/v1/finance/search?q=",
+      utils::URLencode(company_name, reserved = TRUE),
+      "&quotesCount=1&newsCount=0&enableFuzzyQuery=false&region=US&lang=en-US"
+    )
+
+    response <- httr::GET(
+      url,
+      httr::user_agent("Mozilla/5.0"),
+      httr::timeout(10)
+    )
+
+    parsed <- jsonlite::fromJSON(httr::content(response, as = "text", encoding = "UTF-8"))
+
+    results <- parsed$finance$result[[1]]
+
+    if (is.null(results) || nrow(results) == 0) {
+      return(NA_character_)
+    }
+
+    equity_results <- results[!is.na(results$quoteType) & results$quoteType == "EQUITY", ]
+
+    if (nrow(equity_results) == 0) {
+      return(NA_character_)
+    }
+
+    return(as.character(equity_results$symbol[[1]]))
+
+  }, error = function(e) {
+    return(NA_character_)
+  })
+}
+
+#' Get Russell 1000 stock list with caching
+#'
+#' Downloads the official FTSE Russell 1000 PDF, parses company names, and
+#' maps them to ticker symbols via Yahoo Finance search. Results are cached
+#' for 30 days to minimize expensive API calls.
+#'
+#' @return Character vector of Russell 1000 ticker symbols
+#' @export
+#' @examples
+#' \dontrun{
+#'   r1000_stocks <- get_russell_1000_stocks()
+#'   length(r1000_stocks)  # Should be ~1000
+#' }
+get_russell_1000_stocks <- function() {
+  cache_file <- "russell_1000_stocks.rds"
+
+  if (is_cache_fresh(cache_file, max_age_days = 30)) {
+    log_info("Using cached Russell 1000 list")
+    return(load_from_cache(cache_file))
+  }
+
+  pdf_url <- "https://research.ftserussell.com/analytics/factsheets/Home/DownloadConstituentsWeights/?indexdetails=US1000"
+
+  tryCatch({
+    tmp <- tempfile(fileext = ".pdf")
+    on.exit(unlink(tmp), add = TRUE)
+
+    httr::GET(
+      pdf_url,
+      httr::user_agent("Mozilla/5.0"),
+      httr::write_disk(tmp, overwrite = TRUE),
+      httr::timeout(60)
+    )
+
+    pages <- pdftools::pdf_text(tmp)
+    full_text <- paste(pages, collapse = "\n")
+
+    lines <- strsplit(full_text, "\n")[[1]]
+    lines <- trimws(lines)
+
+    name_pattern <- "^(.+?)\\s+\\d+\\.\\d+\\s+(United States|United Kingdom|Ireland|Canada|Switzerland|Netherlands|Luxembourg|Bermuda|Cayman Islands|Israel|Australia|Brazil|South Korea|France|Germany|Japan|Sweden|Denmark|Norway|Finland|Belgium|Spain|Italy|Portugal|Greece|Austria|New Zealand|Singapore|Hong Kong|China|India|Taiwan|Mexico|Chile|Colombia|Peru|Argentina|Poland|Czech Republic|Hungary|Turkey|South Africa|Egypt|Nigeria|Kenya|Ghana|Morocco|Saudi Arabia|UAE|Qatar|Kuwait|Bahrain|Oman|Jordan|Lebanon|Pakistan|Bangladesh|Sri Lanka|Vietnam|Thailand|Malaysia|Indonesia|Philippines)$"
+
+    matched <- regmatches(lines, regexpr(name_pattern, lines, perl = TRUE))
+    company_names <- gsub("\\s+\\d+\\.\\d+\\s+\\S.*$", "", matched)
+    company_names <- unique(trimws(company_names))
+    company_names <- company_names[nzchar(company_names)]
+
+    company_names <- company_names[!grepl("^Russell 1000", company_names)]
+    company_names <- company_names[!grepl("^Weight", company_names)]
+    company_names <- company_names[!grepl("^Country", company_names)]
+
+    log_info("Parsed {length(company_names)} company names from Russell 1000 PDF")
+
+    if (length(company_names) < 800) {
+      stop("Too few companies parsed from PDF ({length(company_names)}), expected ~1000")
+    }
+
+    log_info("Resolving {length(company_names)} company names to tickers via Yahoo Finance...")
+    log_info("This will take several minutes due to rate limiting.")
+
+    tickers <- purrr::map_chr(company_names, resolve_ticker_from_name)
+
+    valid_idx <- !is.na(tickers) & nzchar(tickers)
+    tickers <- unique(tickers[valid_idx])
+
+    failed_count <- sum(!valid_idx)
+    if (failed_count > 0) {
+      log_warn("Failed to resolve {failed_count} company names to tickers")
+    }
+
+    log_success("Resolved {length(tickers)} Russell 1000 tickers")
+
+    if (length(tickers) < 700) {
+      stop("Too few tickers resolved ({length(tickers)}), expected ~1000")
+    }
+
+    clear_stock_cache("russell_1000_dividend")
+    clear_stock_cache("russell_1000_zero_dividend")
+    save_to_cache(cache_file, tickers)
+    return(tickers)
+
+  }, error = function(e) {
+    log_warn("Russell 1000 PDF fetch/parse failed: {e$message}")
+    log_warn("Returning empty vector.")
+    return(character(0))
+  })
+}
+
+#' Get dividend-paying Russell 1000 stocks with caching
+#'
+#' Filters Russell 1000 for stocks that pay dividends. Results are cached
+#' for 30 days to avoid expensive repeated scans.
+#'
+#' @param limit Optional limit on number of stocks to check (for testing)
+#' @param max_workers Number of parallel workers to use (default 10)
+#' @return Character vector of dividend-paying ticker symbols
+#' @export
+#' @examples
+#' \dontrun{
+#'   div_stocks <- get_russell_1000_dividend_paying()
+#'   length(div_stocks)  # Should be ~600-700
+#'
+#'   # Test with limit
+#'   div_stocks <- get_russell_1000_dividend_paying(limit = 50)
+#' }
+get_russell_1000_dividend_paying <- function(limit = NULL, max_workers = 10) {
+  cache_file <- "russell_1000_dividend_paying_stocks.rds"
+
+  if (is.null(limit) && is_cache_fresh(cache_file, max_age_days = 30)) {
+    log_info("Using cached Russell 1000 dividend-paying stocks list")
+    return(load_from_cache(cache_file))
+  }
+
+  r1000_stocks <- get_russell_1000_stocks()
+
+  if (!is.null(limit)) {
+    r1000_stocks <- head(r1000_stocks, limit)
+    log_info("Limiting scan to first {limit} Russell 1000 stocks (testing mode)")
+  } else {
+    log_info("Scanning {length(r1000_stocks)} Russell 1000 stocks for dividend status...")
+    log_info("This may take 5-10 minutes. Results will be cached for 30 days.")
+  }
+
+  log_info("Setting up {max_workers} parallel workers for dividend status check")
+  oplan <- future::plan(future::multisession, workers = max_workers)
+  on.exit(future::plan(oplan), add = TRUE)
+
+  log_info("Checking dividend status in parallel...")
+  dividend_status <- furrr::future_map_lgl(
+    r1000_stocks,
+    stock_pays_dividend,
+    .options = furrr::furrr_options(seed = TRUE),
+    .progress = TRUE
+  )
+
+  dividend_paying_stocks <- r1000_stocks[!is.na(dividend_status) & dividend_status]
+
+  log_success("Found {length(dividend_paying_stocks)} dividend-paying Russell 1000 stocks")
+
+  if (is.null(limit)) {
+    save_to_cache(cache_file, dividend_paying_stocks)
+  }
+
+  return(dividend_paying_stocks)
+}
+
+#' Get zero-dividend Russell 1000 stocks with caching
+#'
+#' Filters Russell 1000 for stocks that don't pay dividends. Results are cached
+#' for 30 days to avoid expensive repeated scans.
+#'
+#' @param limit Optional limit on number of stocks to check (for testing)
+#' @param max_workers Number of parallel workers to use (default 10)
+#' @return Character vector of zero-dividend ticker symbols
+#' @export
+#' @examples
+#' \dontrun{
+#'   zero_div_stocks <- get_russell_1000_zero_dividend()
+#'   length(zero_div_stocks)  # Should be ~300-400
+#'
+#'   # Test with limit
+#'   zero_div_stocks <- get_russell_1000_zero_dividend(limit = 50)
+#' }
+get_russell_1000_zero_dividend <- function(limit = NULL, max_workers = 10) {
+  cache_file <- "russell_1000_zero_dividend_stocks.rds"
+
+  if (is.null(limit) && is_cache_fresh(cache_file, max_age_days = 30)) {
+    log_info("Using cached Russell 1000 zero-dividend stocks list")
+    return(load_from_cache(cache_file))
+  }
+
+  r1000_stocks <- get_russell_1000_stocks()
+
+  if (!is.null(limit)) {
+    r1000_stocks <- head(r1000_stocks, limit)
+    log_info("Limiting scan to first {limit} Russell 1000 stocks (testing mode)")
+  } else {
+    log_info("Scanning {length(r1000_stocks)} Russell 1000 stocks for dividend status...")
+    log_info("This may take 5-10 minutes. Results will be cached for 30 days.")
+  }
+
+  log_info("Setting up {max_workers} parallel workers for dividend status check")
+  oplan <- future::plan(future::multisession, workers = max_workers)
+  on.exit(future::plan(oplan), add = TRUE)
+
+  log_info("Checking dividend status in parallel...")
+  dividend_status <- furrr::future_map_lgl(
+    r1000_stocks,
+    stock_pays_dividend,
+    .options = furrr::furrr_options(seed = TRUE),
+    .progress = TRUE
+  )
+
+  zero_div_stocks <- r1000_stocks[!is.na(dividend_status) & !dividend_status]
+
+  log_success("Found {length(zero_div_stocks)} zero-dividend Russell 1000 stocks")
+
+  if (is.null(limit)) {
+    save_to_cache(cache_file, zero_div_stocks)
+  }
+
+  return(zero_div_stocks)
+}
