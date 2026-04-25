@@ -196,7 +196,8 @@ mod_dynamic_covered_calls_analysis_server <- function(id){
         min_strike_pct = min_strike,
         max_strike_pct = max_strike,
         max_workers = input$max_workers,
-        limit = if (is.na(input$limit)) NULL else input$limit
+        limit = if (is.na(input$limit)) NULL else input$limit,
+        universe = input$universe
       )
     })
 
