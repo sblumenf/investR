@@ -122,3 +122,158 @@ test_that("cache freshness check handles corrupted cache", {
     file.remove(corrupted_cache_path)
   }
 })
+
+# ------------------------------------------------------------------------------
+# Russell 1000 cache types: clear_stock_cache
+# ------------------------------------------------------------------------------
+
+test_that("clear_stock_cache accepts russell_1000 cache type", {
+  cache_dir <- get_cache_dir()
+  cache_path <- file.path(cache_dir, "russell_1000_stocks.rds")
+
+  # Create a dummy cache file so removal can be verified
+  saveRDS(list(data = c("AAPL", "MSFT"), timestamp = Sys.time()), cache_path)
+  expect_true(file.exists(cache_path))
+
+  # Should not error
+  expect_no_error(clear_stock_cache("russell_1000"))
+
+  # File should be gone
+  expect_false(file.exists(cache_path))
+})
+
+test_that("clear_stock_cache accepts russell_1000_dividend cache type", {
+  cache_dir <- get_cache_dir()
+  cache_path <- file.path(cache_dir, "russell_1000_dividend_paying_stocks.rds")
+
+  saveRDS(list(data = c("AAPL", "MSFT"), timestamp = Sys.time()), cache_path)
+  expect_true(file.exists(cache_path))
+
+  expect_no_error(clear_stock_cache("russell_1000_dividend"))
+
+  expect_false(file.exists(cache_path))
+})
+
+test_that("clear_stock_cache accepts russell_1000_zero_dividend cache type", {
+  cache_dir <- get_cache_dir()
+  cache_path <- file.path(cache_dir, "russell_1000_zero_dividend_stocks.rds")
+
+  saveRDS(list(data = c("GOOGL", "META"), timestamp = Sys.time()), cache_path)
+  expect_true(file.exists(cache_path))
+
+  expect_no_error(clear_stock_cache("russell_1000_zero_dividend"))
+
+  expect_false(file.exists(cache_path))
+})
+
+test_that("clear_stock_cache 'all' removes russell 1000 cache files", {
+  cache_dir <- get_cache_dir()
+
+  r1000_path <- file.path(cache_dir, "russell_1000_stocks.rds")
+  r1000_div_path <- file.path(cache_dir, "russell_1000_dividend_paying_stocks.rds")
+  r1000_zero_path <- file.path(cache_dir, "russell_1000_zero_dividend_stocks.rds")
+
+  # Create dummy files for all three russell cache types
+  dummy <- list(data = c("AAPL"), timestamp = Sys.time())
+  saveRDS(dummy, r1000_path)
+  saveRDS(dummy, r1000_div_path)
+  saveRDS(dummy, r1000_zero_path)
+
+  expect_no_error(clear_stock_cache("all"))
+
+  expect_false(file.exists(r1000_path))
+  expect_false(file.exists(r1000_div_path))
+  expect_false(file.exists(r1000_zero_path))
+})
+
+# ------------------------------------------------------------------------------
+# resolve_ticker_from_name: mocked HTTP
+# ------------------------------------------------------------------------------
+
+test_that("resolve_ticker_from_name returns ticker for equity result", {
+  fake_response <- list()
+
+  fake_json <- jsonlite::toJSON(list(
+    finance = list(
+      result = list(
+        data.frame(
+          symbol = "AAPL",
+          quoteType = "EQUITY",
+          shortname = "Apple Inc.",
+          stringsAsFactors = FALSE
+        )
+      )
+    )
+  ), auto_unbox = TRUE)
+
+  with_mocked_bindings(
+    GET = function(...) fake_response,
+    content = function(...) fake_json,
+    .package = "httr",
+    {
+      result <- resolve_ticker_from_name("Apple Inc")
+      expect_type(result, "character")
+      expect_equal(result, "AAPL")
+    }
+  )
+})
+
+test_that("resolve_ticker_from_name returns NA_character_ when no equity results", {
+  fake_response <- list()
+
+  fake_json <- jsonlite::toJSON(list(
+    finance = list(
+      result = list(
+        data.frame(
+          symbol = "AAPL-USD",
+          quoteType = "CRYPTOCURRENCY",
+          shortname = "Apple Crypto",
+          stringsAsFactors = FALSE
+        )
+      )
+    )
+  ), auto_unbox = TRUE)
+
+  with_mocked_bindings(
+    GET = function(...) fake_response,
+    content = function(...) fake_json,
+    .package = "httr",
+    {
+      result <- resolve_ticker_from_name("Some Crypto Company")
+      expect_identical(result, NA_character_)
+    }
+  )
+})
+
+# ------------------------------------------------------------------------------
+# get_russell_1000_stocks: cache hit
+# ------------------------------------------------------------------------------
+
+test_that("get_russell_1000_stocks returns from cache without network call", {
+  cache_file <- "russell_1000_stocks.rds"
+  cache_dir <- get_cache_dir()
+  cache_path <- file.path(cache_dir, cache_file)
+
+  # Remove any existing cache so we start clean
+  if (file.exists(cache_path)) {
+    file.remove(cache_path)
+  }
+
+  # Pre-populate with a small fake ticker vector
+  fake_tickers <- c("AAPL", "MSFT", "GOOGL", "AMZN", "TSLA")
+  save_to_cache(cache_file, fake_tickers)
+
+  # Confirm the cache is fresh
+  expect_true(is_cache_fresh(cache_file, max_age_days = 30))
+
+  # get_russell_1000_stocks should return the cached data without a network call
+  result <- get_russell_1000_stocks()
+
+  expect_type(result, "character")
+  expect_equal(result, fake_tickers)
+
+  # Clean up
+  if (file.exists(cache_path)) {
+    file.remove(cache_path)
+  }
+})
