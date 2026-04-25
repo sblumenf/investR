@@ -546,6 +546,7 @@ resolve_ticker_from_name <- function(company_name) {
       httr::timeout(10)
     )
 
+    httr::stop_for_status(response)
     parsed <- jsonlite::fromJSON(httr::content(response, as = "text", encoding = "UTF-8"))
 
     results <- parsed$finance$result[[1]]
