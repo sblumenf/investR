@@ -285,13 +285,19 @@ mod_dynamic_covered_calls_analysis_server <- function(id){
         # SYNCHRONOUS EXECUTION (fallback)
         results <- tryCatch({
           withProgress(message = "Analyzing stocks...", value = 0, {
+            tickers <- switch(params$universe,
+              "russell1000" = get_russell_1000_stocks(),
+              NULL  # NULL causes analyze_dynamic_covered_calls to use S&P 500 default
+            )
+
             analyze_dynamic_covered_calls(
               limit = params$limit,
               max_price = params$max_price,
               lookback_years = params$lookback_years,
               min_strike_pct = params$min_strike_pct,
               max_strike_pct = params$max_strike_pct,
-              max_workers = params$max_workers
+              max_workers = params$max_workers,
+              tickers = tickers
             )
           })
         }, error = function(e) {
