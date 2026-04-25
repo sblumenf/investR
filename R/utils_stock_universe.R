@@ -683,6 +683,11 @@ get_russell_1000_dividend_paying <- function(limit = NULL, max_workers = 10) {
 
   r1000_stocks <- get_russell_1000_stocks()
 
+  if (length(r1000_stocks) == 0) {
+    log_warn("Russell 1000 stock list is empty, skipping dividend scan")
+    return(character(0))
+  }
+
   if (!is.null(limit)) {
     r1000_stocks <- head(r1000_stocks, limit)
     log_info("Limiting scan to first {limit} Russell 1000 stocks (testing mode)")
