@@ -28,6 +28,7 @@ Imports:
     lubridate,
     plotly,
     promises,
+    pdftools,
     purrr,
     quantmod,
     RQuantLib,
