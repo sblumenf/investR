@@ -1,0 +1,15 @@
+{
+  "allowed_files": [
+    "R/fct_aristocrats_analysis.R",
+    "R/utils_dynamic_covered_calls_helpers.R",
+    "R/utils_dynamic_covered_calls_config.R",
+    "tests/testthat/test-fct_aristocrats_analysis.R"
+  ],
+  "denied_files": [],
+  "allow_new_files": false,
+  "allowed_new_dirs": [],
+  "allow_new_deps": false,
+  "created_by": "pm",
+  "spec_file": "inline",
+  "created_at": "2026-04-24T00:00:00Z"
+}

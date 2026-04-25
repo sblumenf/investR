@@ -314,3 +314,22 @@ test_that("finalize_results sorts non-empty results by annualized return", {
   expect_equal(results$ticker[1], "MSFT")
   expect_equal(results$ticker[2], "AAPL")
 })
+
+test_that("select_optimal_option returns NULL when all strikes are above threshold", {
+  options_df <- tibble::tibble(
+    Strike = c(90, 95),
+    Bid = c(5, 3),
+    OI = c(100, 200),
+    days_to_expiry = c(60, 90),
+    expiration = as.Date(c("2025-06-30", "2025-09-30"))
+  )
+
+  result <- select_optimal_option(
+    ticker = "TEST",
+    current_price = 100,
+    options_df = options_df,
+    strike_threshold_pct = 0.80  # threshold = 80, all strikes above
+  )
+
+  expect_null(result)
+})

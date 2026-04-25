@@ -559,11 +559,6 @@ select_optimal_option <- function(ticker, current_price, options_df,
 
   # Fallback if no options meet threshold
   if (nrow(filtered_options) == 0) {
-    filtered_options <- options_df
-    warning_flag <- TRUE
-  }
-
-  if (nrow(filtered_options) == 0) {
     return(NULL)
   }
 

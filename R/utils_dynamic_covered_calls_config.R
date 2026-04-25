@@ -25,7 +25,7 @@ DYNAMIC_CONFIG <- list(
 
   # Strike Bounds (from golem-config.yml)
   default_min_strike_pct = get_golem_config_value("dynamic_covered_calls", "default_min_strike_pct", 0.50),
-  default_max_strike_pct = get_golem_config_value("dynamic_covered_calls", "default_max_strike_pct", 0.95),
+  default_max_strike_pct = get_golem_config_value("dynamic_covered_calls", "default_max_strike_pct", 0.85),
 
   # Target Days Bounds (from golem-config.yml)
   min_target_days = get_golem_config_value("dynamic_covered_calls", "min_target_days", 30),

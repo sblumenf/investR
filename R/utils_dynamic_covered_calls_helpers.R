@@ -103,23 +103,23 @@ calculate_drawdown_metrics <- function(price_history) {
 #'
 #' @param max_drawdown Maximum drawdown as negative decimal (e.g., -0.30)
 #' @param min_bound Minimum strike percentage (default 0.50)
-#' @param max_bound Maximum strike percentage (default 0.95)
+#' @param max_bound Maximum strike percentage (default 0.85)
 #' @return Strike threshold percentage between bounds
 #' @export
 #' @examples
 #' \dontrun{
 #'   # Stock with -30% drawdown
-#'   calculate_dynamic_strike_pct(-0.30, 0.50, 0.95)  # Returns 0.70
+#'   calculate_dynamic_strike_pct(-0.30, 0.50, 0.85)  # Returns 0.70
 #'
 #'   # Stock with -60% drawdown (hits floor)
-#'   calculate_dynamic_strike_pct(-0.60, 0.50, 0.95)  # Returns 0.50
+#'   calculate_dynamic_strike_pct(-0.60, 0.50, 0.85)  # Returns 0.50
 #'
 #'   # Stock with no drawdown (always rising)
-#'   calculate_dynamic_strike_pct(0, 0.50, 0.95)  # Returns 0.95 (ceiling)
+#'   calculate_dynamic_strike_pct(0, 0.50, 0.85)  # Returns 0.85 (ceiling)
 #' }
 calculate_dynamic_strike_pct <- function(max_drawdown,
                                         min_bound = 0.50,
-                                        max_bound = 0.95) {
+                                        max_bound = 0.85) {
   # Handle NA or missing drawdown
   if (is.na(max_drawdown)) {
     log_debug("No drawdown data, using max bound: {max_bound}")
