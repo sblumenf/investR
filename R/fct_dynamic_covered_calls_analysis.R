@@ -71,13 +71,11 @@ NULL
 #'   tickers <- get_sp500_under_price(250)
 #' }
 get_sp500_under_price <- function(max_price = 250) {
-  # Get full S&P 500 universe
   sp500_stocks <- get_sp500_stocks()
 
-  # Pre-filter by price
-  filtered_stocks <- pre_filter_stocks_by_price(sp500_stocks, max_price)
+  filtered <- pre_filter_stocks_by_price(sp500_stocks, max_price)
 
-  return(filtered_stocks)
+  return(filtered)
 }
 
 ################################################################################
@@ -105,7 +103,8 @@ analyze_single_stock_dynamic <- function(ticker,
                                         min_strike_pct = 0.50,
                                         max_strike_pct = 0.95,
                                         min_target_days = 30,
-                                        max_target_days = 730) {
+                                        max_target_days = 730,
+                                        max_price = Inf) {
   validate_ticker(ticker)
 
   tryCatch({
@@ -247,6 +246,11 @@ analyze_single_stock_dynamic <- function(ticker,
       return(NULL)
     }
 
+    if (selection$Strike > max_price) {
+      log_debug("{ticker}: Strike {selection$Strike} exceeds max strike price {max_price}, skipping")
+      return(NULL)
+    }
+
     # Step 9: Calculate all metrics (reuse existing function)
     metrics <- calculate_metrics(
       ticker,
@@ -376,7 +380,8 @@ analyze_dynamic_covered_calls <- function(limit = NULL,
       min_strike_pct = min_strike_pct,
       max_strike_pct = max_strike_pct,
       min_target_days = min_target_days,
-      max_target_days = max_target_days
+      max_target_days = max_target_days,
+      max_price = max_price
     )
   }, .options = furrr_options(
     seed = TRUE,

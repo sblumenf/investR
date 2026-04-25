@@ -1,9 +1,7 @@
 {
   "allowed_files": [
-    "R/fct_aristocrats_analysis.R",
-    "R/utils_dynamic_covered_calls_helpers.R",
-    "R/utils_dynamic_covered_calls_config.R",
-    "tests/testthat/test-fct_aristocrats_analysis.R"
+    "R/mod_dynamic_covered_calls_analysis.R",
+    "R/fct_dynamic_covered_calls_analysis.R"
   ],
   "denied_files": [],
   "allow_new_files": false,

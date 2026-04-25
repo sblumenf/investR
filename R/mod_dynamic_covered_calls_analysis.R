@@ -22,13 +22,13 @@ mod_dynamic_covered_calls_analysis_ui <- function(id){
       # Price threshold slider
       sliderInput(
         ns("max_price"),
-        "Max Stock Price ($)",
+        "Max Strike Price ($)",
         min = 50,
         max = 500,
         value = get_dynamic_config("default_max_price"),
         step = 10
       ),
-      helpText("Filter S&P 500 stocks by maximum price"),
+      helpText("Filter results by maximum strike price of the selected option"),
 
       hr(),
 
