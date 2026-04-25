@@ -3,7 +3,8 @@
     "R/utils_stock_universe.R",
     "R/fct_dynamic_covered_calls_analysis.R",
     "R/mod_dynamic_covered_calls_analysis.R",
-    "tests/testthat/test-utils_stock_universe.R"
+    "tests/testthat/test-utils_stock_universe.R",
+    "DESCRIPTION"
   ],
   "denied_files": [],
   "allow_new_files": false,
