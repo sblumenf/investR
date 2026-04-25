@@ -7,9 +7,9 @@ test_that("get_sp500_stocks returns valid tickers", {
   # Should return a character vector
   expect_type(stocks, "character")
 
-  # Should have ~1000 stocks
-  expect_gte(length(stocks), 800)
-  expect_lte(length(stocks), 1100)
+  # Should have ~500 stocks
+  expect_gte(length(stocks), 400)
+  expect_lte(length(stocks), 600)
 
   # All tickers should be uppercase letters or dots
   expect_true(all(grepl("^[A-Z.]+$", stocks)))
@@ -19,18 +19,18 @@ test_that("get_sp500_stocks returns valid tickers", {
   expect_true("MSFT" %in% stocks)
 })
 
-test_that("RUSSELL1000_FALLBACK_TICKERS is valid", {
+test_that("SP500_FALLBACK_TICKERS is valid", {
   # Fallback list should exist
-  expect_true(length(RUSSELL1000_FALLBACK_TICKERS) > 0)
+  expect_true(length(SP500_FALLBACK_TICKERS) > 0)
 
   # Should be character vector
-  expect_type(RUSSELL1000_FALLBACK_TICKERS, "character")
+  expect_type(SP500_FALLBACK_TICKERS, "character")
 
-  # Should have ~1000 stocks
-  expect_gte(length(RUSSELL1000_FALLBACK_TICKERS), 800)
+  # Should have reasonable number of stocks
+  expect_gte(length(SP500_FALLBACK_TICKERS), 50)
 
   # All tickers should be valid format
-  expect_true(all(grepl("^[A-Z.]+$", RUSSELL1000_FALLBACK_TICKERS)))
+  expect_true(all(grepl("^[A-Z.]+$", SP500_FALLBACK_TICKERS)))
 })
 
 test_that("cache functions work correctly", {

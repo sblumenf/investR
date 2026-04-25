@@ -632,7 +632,53 @@ truncate_error <- function(message, max_length = COLLAR_CONFIG$error_truncate_le
 #'   tickers <- fetch_iwb_holdings()
 #' }
 fetch_iwb_holdings <- function() {
-  get_sp500_stocks()
+  fallback_path <- system.file("cache", "IWB_holdings.csv", package = "investR")
+  if (!nzchar(fallback_path)) {
+    fallback_path <- file.path("inst", "cache", "IWB_holdings.csv")
+  }
+
+  parse_iwb_csv <- function(path) {
+    df <- suppressWarnings(readr::read_csv(
+      path,
+      skip = 9,
+      col_types = readr::cols(.default = readr::col_character()),
+      show_col_types = FALSE,
+      name_repair = "minimal"
+    ))
+    # Keep only rows where Asset Class is Equity
+    equity_rows <- df[!is.na(df[["Asset Class"]]) & df[["Asset Class"]] == "Equity", ]
+    tickers <- equity_rows[["Ticker"]]
+    tickers <- tickers[!is.na(tickers) & nzchar(trimws(tickers))]
+    trimws(tickers)
+  }
+
+  # Try to download fresh CSV
+  holdings_url <- COLLAR_CONFIG$iv_skew_holdings_url
+  tickers <- tryCatch({
+    tmp <- tempfile(fileext = ".csv")
+    on.exit(unlink(tmp), add = TRUE)
+    httr::GET(
+      holdings_url,
+      httr::user_agent("Mozilla/5.0"),
+      httr::write_disk(tmp, overwrite = TRUE),
+      httr::timeout(30)
+    )
+    result <- parse_iwb_csv(tmp)
+    if (length(result) == 0) stop("Parsed empty ticker list from downloaded CSV")
+    log_info("Fetched {length(result)} Russell 1000 equity tickers from iShares")
+    result
+  }, error = function(e) {
+    log_warn("IWB holdings download failed ({e$message}); falling back to cached CSV")
+    if (!file.exists(fallback_path)) {
+      stop("IWB holdings download failed and no fallback CSV found at: ", fallback_path)
+    }
+    result <- parse_iwb_csv(fallback_path)
+    if (length(result) == 0) stop("Fallback CSV parsed empty ticker list")
+    log_info("Loaded {length(result)} Russell 1000 equity tickers from fallback cache")
+    result
+  })
+
+  tickers
 }
 
 #' Compute collar net credit for a single ticker

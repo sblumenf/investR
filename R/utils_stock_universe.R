@@ -9,113 +9,21 @@
 #' @importFrom dplyr filter %>%
 #' @importFrom purrr map_lgl compact
 #' @importFrom logger log_info log_warn log_debug log_success
-#' @importFrom httr GET user_agent write_disk timeout
 NULL
 
-# Russell 1000 fallback list (iShares IWB holdings as of 2026-04-23)
-# Used when the live IWB download fails (network outage, URL change, etc.)
-RUSSELL1000_FALLBACK_TICKERS <- c(
-  "NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "AVGO", "GOOG", "META", "TSLA", "BRK.B",
-  "JPM", "LLY", "XOM", "WMT", "JNJ", "MU", "V", "AMD", "COST", "MA",
-  "NFLX", "CAT", "ABBV", "CSCO", "CVX", "BAC", "PG", "HD", "LRCX", "UNH",
-  "AMAT", "GEV", "PLTR", "ORCL", "KO", "INTC", "GE", "MRK", "GS", "PM",
-  "TXN", "WFC", "RTX", "KLAC", "LIN", "C", "MCD", "IBM", "MS", "PEP",
-  "NEE", "VZ", "ADI", "AMGN", "DIS", "T", "APH", "ANET", "TJX", "BA",
-  "TMO", "AXP", "ISRG", "GILD", "ETN", "UNP", "BLK", "ABT", "CRM", "COP",
-  "PFE", "UBER", "SCHW", "DE", "BKNG", "QCOM", "WELL", "MRVL", "PANW", "LOW",
-  "WDC", "HON", "SNDK", "SPGI", "GLW", "PLD", "PH", "VRT", "NEM", "CB",
-  "COF", "BMY", "PGR", "CMCSA", "SYK", "MO", "SBUX", "DHR", "VRTX", "CRWD",
-  "ACN", "LMT", "EQIX", "APP", "TT", "MDT", "INTU", "SO", "MCK", "CME",
-  "DUK", "HWM", "CVS", "ADBE", "BSX", "TMUS", "PWR", "BK", "CEG", "BX",
-  "CMI", "ICE", "NOW", "USB", "FCX", "PNC", "SNPS", "WMB", "JCI", "CSX",
-  "WM", "CDNS", "MRSH", "FDX", "AMT", "SLB", "MAR", "GD", "EMR", "ADP",
-  "SPOT", "ITW", "UPS", "NOC", "ORLY", "CRH", "SHW", "REGN", "MMM", "HCA",
-  "ELV", "HLT", "MDLZ", "MSI", "MPWR", "CI", "EOG", "CIEN", "NSC", "AEP",
-  "ROST", "VLO", "GM", "MCO", "DLR", "KKR", "ECL", "AON", "APD", "CL",
-  "TRV", "MPC", "DELL", "RCL", "SPG", "PCAR", "TFC", "DASH", "PSX", "TDG",
-  "NET", "BKR", "HOOD", "WBD", "TER", "URI", "FIX", "LHX", "KMI", "SRE",
-  "CTAS", "AZO", "KEYS", "LITE", "ABNB", "TGT", "COHR", "O", "COR", "ALL",
-  "AJG", "LNG", "OKE", "CVNA", "AME", "MNST", "AFL", "CTVA", "MSTR", "D",
-  "VST", "APO", "NKE", "FAST", "FTNT", "ZTS", "EA", "ETR", "TRGP", "GWW",
-  "FERG", "ADSK", "NUE", "PSA", "CAH", "AU", "F", "SNOW", "CARR", "NU",
-  "MCHP", "EXC", "XEL", "PYPL", "EBAY", "ROK", "EW", "WAB", "FITB", "YUM",
-  "DAL", "IDXX", "CMG", "CBRE", "BDX", "COIN", "RSG", "AMP", "DHI", "MSCI",
-  "GRMN", "MET", "STT", "RKLB", "ODFL", "AIG", "OXY", "KR", "PEG", "ON",
-  "DDOG", "ED", "ALNY", "NDAQ", "HIG", "ROP", "EME", "VTR", "VMC", "FANG",
-  "CCI", "TTWO", "XYZ", "WEC", "MLM", "HPE", "KDP", "PCG", "SYY", "JBL",
-  "EQT", "ACGL", "RBLX", "IRM", "HBAN", "IR", "MTB", "ADM", "KVUE", "PRU",
-  "FISV", "HAL", "A", "IBKR", "KMB", "FLEX", "GEHC", "RMD", "NRG", "NTRS",
-  "OTIS", "CBOE", "DOV", "WAT", "STLD", "VICI", "CCL", "DTE", "TDY", "EXR",
-  "TPR", "AEE", "INSM", "HUBB", "ATO", "UAL", "CPRT", "DVN", "AXON", "XYL",
-  "FTI", "EXPE", "Q", "PAYX", "CASY", "PPL", "CNP", "CFG", "HSY", "WTW",
-  "QSR", "BIIB", "FE", "DOW", "RJF", "IQV", "CPNG", "DG", "EIX", "CW",
-  "SYF", "CTSH", "NTRA", "MTD", "AWK", "CINF", "ES", "HUM", "LPLA", "PHM",
-  "ALAB", "XPO", "ULTA", "TPL", "CTRA", "PPG", "WDAY", "RF", "VRSK", "OMC",
-  "AVB", "DXCM", "LYV", "UTHR", "FIS", "FTAI", "ZM", "MKL", "SBAC", "EQR",
-  "MTZ", "DRI", "VEEV", "VRSN", "CMS", "RVMD", "NI", "FICO", "TROW", "CHD",
-  "NVT", "WSM", "STZ", "ALB", "DGX", "ENTG", "SOFI", "LH", "VLTO", "WST",
-  "WWD", "EXE", "STE", "P", "CHRW", "NTAP", "ARES", "CPAY", "EFX", "RGLD",
-  "PFG", "SW", "BURL", "USFD", "KEY", "ATI", "CRS", "EXPD", "BWXT", "MDB",
-  "TSCO", "SNA", "CHTR", "CNC", "TWLO", "FSLR", "RDDT", "JBHT", "DLTR", "RBA",
-  "CF", "BRO", "FTV", "DD", "RPRX", "LEN", "ILMN", "L", "MKSI", "GIS",
-  "PKG", "HPQ", "MTSI", "EVRG", "LDOS", "EL", "KHC", "MRNA", "LNT", "FWONK",
-  "RBC", "ITT", "ZBH", "BAM", "BR", "IFF", "WY", "TSN", "RS", "APG",
-  "LYB", "AMCR", "NVR", "CDW", "FCNCA", "IP", "LUV", "ASTS", "FFIV", "VTRS",
-  "BALL", "AFRM", "ROL", "SNX", "AA", "EWBC", "BG", "FLUT", "INVH", "THC",
-  "GPN", "PTC", "ESS", "OVV", "LVS", "LSCC", "WPC", "WCC", "SGI", "TRMB",
-  "NLY", "DECK", "SUI", "TXT", "JLL", "MAS", "IEX", "KIM", "LII", "TLN",
-  "CSGP", "CLH", "HEIA", "WRB", "SCCO", "NDSN", "INCY", "WSO", "GPC", "J",
-  "CSL", "MDLN", "LULU", "PR", "EG", "MAA", "SSNC", "PNR", "MLI", "ROKU",
-  "REG", "PNFP", "TYL", "HII", "HST", "RKT", "TOL", "ONTO", "QXO", "LECO",
-  "FNF", "DKS", "TRU", "RRX", "RNR", "VIK", "RL", "PFGC", "RGA", "AKAM",
-  "OHI", "SMCI", "GGG", "FOXA", "APA", "HAS", "DTM", "PODD", "RPM", "ZS",
-  "TW", "BLD", "MKC", "UNM", "RIVN", "APTV", "ALGN", "AVY", "FIVE", "NYT",
-  "EQH", "SOLS", "COO", "BJ", "TOST", "CG", "TKO", "GLPI", "GNRC", "ALLY",
-  "NBIX", "EVR", "ALLE", "PEN", "OKTA", "FHN", "EXEL", "PNW", "GL", "BWA",
-  "ARMK", "CLX", "SCI", "ELS", "AGNC", "CCK", "ROIV", "WBS", "BBY", "DPZ",
-  "SWK", "JAZZ", "LAMR", "PINS", "GDDY", "ZBRA", "SAIA", "CACI", "UDR", "AIZ",
-  "WTRG", "IONS", "SF", "CRCL", "DOC", "HEI", "ALSN", "TEAM", "AIT", "JKHY",
-  "GWRE", "CPT", "AR", "ELAN", "COKE", "HUBS", "IT", "WMS", "TXRH", "ACM",
-  "DKNG", "GMED", "OC", "AES", "EGP", "FLS", "AMH", "GEN", "RVTY", "DCI",
-  "GME", "KNX", "SOLV", "DT", "TTD", "BMRN", "NWSA", "NTNX", "ARW", "RRC",
-  "EHC", "UHS", "WTFC", "OSK", "SJM", "SSB", "ZION", "BLDR", "R", "OGE",
-  "VMI", "BPOP", "LFUS", "DAR", "BAH", "FRT", "DINO", "TTC", "SN", "BRX",
-  "CNM", "SWKS", "BAX", "IVZ", "CGNX", "SEIC", "PRI", "CAVA", "CNH", "IOT",
-  "ORI", "MUSA", "AMKR", "MP", "DOCU", "AYI", "VNOM", "BXP", "MOH", "CUBE",
-  "CRUS", "MTCH", "ADC", "COLB", "CR", "AFG", "MEDP", "FDS", "TIGO", "FOX",
-  "ESI", "REXR", "HLI", "WAL", "CFR", "NFG", "KEX", "ATR", "TECH", "TTEK",
-  "MANH", "EMN", "NNN", "LKQ", "HSIC", "NCLH", "CRL", "UGI", "MASI", "AXS",
-  "WYNN", "CHRD", "XP", "MGM", "ONON", "FR", "AMG", "ARE", "IDA", "SSD",
-  "AAL", "QGEN", "MOS", "HALO", "U", "AWI", "AGCO", "KNSL", "VOYA", "GFS",
-  "POOL", "NOV", "AOS", "WFRD", "W", "CART", "RBRK", "TAP", "STAG", "DOX",
-  "HXL", "AM", "Z", "BEN", "INGR", "MTDR", "QRVO", "CE", "SFM", "VFC",
-  "ECG", "JEF", "MIDD", "CAG", "EXP", "OMF", "LEA", "CBSH", "BROS", "H",
-  "AAON", "TKR", "PCOR", "EPAM", "FAF", "JHG", "LAD", "GXO", "SITE", "WH",
-  "MSA", "THG", "LNC", "PAYC", "FNB", "GTES", "LSTR", "AXTA", "RYN", "MKTX",
-  "HRL", "PB", "CHDN", "MTG", "AVT", "LBRDK", "STWD", "ETSY", "TFX", "HR",
-  "RGEN", "LW", "ACI", "CHWY", "ST", "KMX", "VSNT", "ESAB", "GAP", "FCN",
-  "NXST", "PLNT", "OWL", "CZR", "MHK", "AUR", "TPG", "LYFT", "SARO", "AN",
-  "WEX", "CELH", "G", "DVA", "BEPC", "CHE", "M", "WTM", "OZK", "VNT",
-  "BIO", "FND", "ALGM", "GNTX", "AS", "MSGS", "SIRI", "OLLI", "CROX", "RITM",
-  "WING", "PRMB", "BYD", "RAL", "VNO", "BSY", "BC", "AVTR", "FBIN", "POST",
-  "CLF", "SLM", "UHALB", "TEM", "SON", "EXLS", "LPX", "ENPH", "MAT", "ALK",
-  "MRP", "BFAM", "RLI", "TREX", "SAIC", "KBR", "LOPE", "MDU", "PVH", "NVST",
-  "DBX", "BBWI", "MTN", "PCTY", "UI", "LAZ", "OLED", "LLYVK", "MSM", "APLS",
-  "CORT", "VVV", "BFB", "MORN", "S", "HLNE", "AMTM", "EPR", "HRB", "THO",
-  "CPB", "CAR", "CUZ", "VIRT", "TNL", "PATH", "NEU", "ESTC", "WSC", "KRMN",
-  "DLB", "NWS", "IRDM", "AGO", "DUOL", "SHC", "BRKR", "ADT", "WLK", "BHF",
-  "RYAN", "KRC", "COLD", "ELF", "VKTX", "YETI", "FHB", "SLGN", "APPF", "RNG",
-  "JHX", "CWEN", "IAC", "DRS", "CHH", "KD", "FOUR", "IPGP", "QS", "FRPT",
-  "BOKF", "HAYW", "PEGA", "DOCS", "OLN", "NSA", "BILL", "EEFT", "WHR", "CCC",
-  "PAG", "SMG", "RHI", "GPK", "PSN", "HOG", "GTLB", "PENN", "TDC", "WU",
-  "MPT", "SMMT", "HIW", "FRHC", "ASH", "LINE", "LOAR", "VGNT", "ACHC", "XRAY",
-  "CACC", "PK", "HUN", "OGN", "CXT", "BIRK", "BRBR", "DXC", "HHH", "RARE",
-  "ZG", "KMPR", "FWONA", "RH", "LBTYA", "SAM", "SRPT", "DDS", "GLOB", "NCNO",
-  "CAI", "FMC", "NWL", "LLYVA", "SEB", "INSP", "LBTYK", "GTM", "FLO", "COLM",
-  "PRGO", "DJT", "DV", "BFA", "SNDR", "BLSH", "MAN", "CWENA", "SFD", "PPC",
-  "UAA", "WEN", "UA", "CNXC", "CNA", "GLIBK", "FIGR", "REYN", "CLVT", "LBRDA",
-  "COTY", "TFSL", "LENB", "LCID", "SAIL", "CERT", "UWMC", "INGM", "NIQ", "CBC",
-  "UHAL", "FRMI", "GLIBA"
+# S&P 500 fallback list (current as of 2025)
+SP500_FALLBACK_TICKERS <- c(
+  "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "GOOG", "META", "TSLA", "BRK.B", "UNH",
+  "XOM", "LLY", "JPM", "JNJ", "V", "PG", "MA", "AVGO", "HD", "CVX",
+  "MRK", "ABBV", "COST", "PEP", "ADBE", "KO", "WMT", "CRM", "TMO", "MCD",
+  "CSCO", "ACN", "ABT", "BAC", "NFLX", "LIN", "AMD", "DIS", "PM", "DHR",
+  "TXN", "VZ", "CMCSA", "INTC", "NKE", "ORCL", "WFC", "INTU", "COP", "UNP",
+  "NEE", "PFE", "T", "LOW", "UPS", "HON", "BMY", "QCOM", "RTX", "MS",
+  "CAT", "SPGI", "AMGN", "BA", "NOW", "GE", "IBM", "AMAT", "DE", "BLK",
+  "ELV", "PLD", "GS", "AXP", "SYK", "ISRG", "BKNG", "TJX", "LMT", "GILD",
+  "MMC", "VRTX", "ADI", "REGN", "CVS", "ADP", "C", "MDLZ", "AMT", "SBUX",
+  "TMUS", "ZTS", "MO", "CI", "CB", "PGR", "SO", "DUK", "ETN", "EOG",
+  "SCHW", "MMM", "SLB", "BDX", "FI", "ITW", "MU", "CME", "LRCX", "BSX"
 )
 
 #' Cache directory path
@@ -294,53 +202,6 @@ fetch_sp500_from_datahub <- function() {
   )
 }
 
-#' Fetch Russell 1000 constituents from iShares IWB ETF holdings CSV
-#'
-#' @return Character vector of tickers, or NULL on failure
-#' @noRd
-fetch_russell1000_from_iwb <- function() {
-  safely_fetch(
-    expr = {
-      url <- "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/1467271812596.ajax?fileType=csv&fileName=IWB_holdings&dataType=fund"
-      log_debug("Fetching Russell 1000 constituent list from iShares IWB...")
-
-      tmp <- tempfile(fileext = ".csv")
-      on.exit(unlink(tmp), add = TRUE)
-
-      resp <- httr::GET(
-        url,
-        httr::user_agent("Mozilla/5.0"),
-        httr::write_disk(tmp, overwrite = TRUE),
-        httr::timeout(30)
-      )
-      httr::stop_for_status(resp)
-
-      df <- suppressWarnings(readr::read_csv(
-        tmp,
-        skip = 9,
-        col_types = readr::cols(.default = readr::col_character()),
-        show_col_types = FALSE,
-        name_repair = "minimal"
-      ))
-
-      equity_rows <- df[!is.na(df[["Asset Class"]]) & df[["Asset Class"]] == "Equity", ]
-      tickers <- equity_rows[["Ticker"]]
-      tickers <- tickers[!is.na(tickers) & nzchar(trimws(tickers)) & tickers != "-"]
-      tickers <- trimws(tickers)
-
-      if (length(tickers) < 800) {
-        stop("Too few tickers from IWB ({length(tickers)}), expected ~1000")
-      }
-
-      log_success("Found {length(tickers)} Russell 1000 stocks from iShares IWB")
-      return(tickers)
-    },
-    error_msg = "IWB holdings fetch failed",
-    default = NULL,
-    log_level = "warn"
-  )
-}
-
 #' Get S&P 500 stock list with caching and fallback
 #'
 #' Fetches the current list of S&P 500 constituent stocks. Uses Wikipedia as
@@ -359,35 +220,28 @@ get_sp500_stocks <- function() {
 
   # Check cache first
   if (is_cache_fresh(cache_file, max_age_days = 30)) {
-    log_info("Using cached Russell 1000 stock list")
+    log_info("Using cached S&P 500 list")
     return(load_from_cache(cache_file))
   }
 
-  # Load current cached list for diff comparison (may be NULL if cache absent)
-  cached_tickers <- tryCatch(load_from_cache(cache_file), error = function(e) NULL)
-
-  # Try IWB (Russell 1000) — primary source
-  tickers <- fetch_russell1000_from_iwb()
-
+  # Try Wikipedia
+  tickers <- fetch_sp500_from_wikipedia()
   if (!is.null(tickers)) {
-    # Log diff vs cached list when updating
-    if (!is.null(cached_tickers)) {
-      added   <- setdiff(tickers, cached_tickers)
-      removed <- setdiff(cached_tickers, tickers)
-      if (length(added) > 0 || length(removed) > 0) {
-        log_info("Stock universe updated: +{length(added)} added, -{length(removed)} removed")
-      } else {
-        log_info("Stock universe unchanged ({length(tickers)} stocks)")
-      }
-    }
     save_to_cache(cache_file, tickers)
     return(tickers)
   }
 
-  # IWB unavailable — use hardcoded Russell 1000 fallback (not S&P 500 fallbacks)
-  log_warn("IWB download failed — using hardcoded Russell 1000 fallback list")
-  log_info("Found {length(RUSSELL1000_FALLBACK_TICKERS)} stocks from fallback")
-  return(RUSSELL1000_FALLBACK_TICKERS)
+  # Try DataHub
+  tickers <- fetch_sp500_from_datahub()
+  if (!is.null(tickers)) {
+    save_to_cache(cache_file, tickers)
+    return(tickers)
+  }
+
+  # Use fallback
+  log_warn("Using fallback S&P 500 list - may be outdated")
+  log_info("Found {length(SP500_FALLBACK_TICKERS)} S&P 500 stocks from fallback")
+  return(SP500_FALLBACK_TICKERS)
 }
 
 #' Check if a stock pays dividends
