@@ -315,7 +315,8 @@ analyze_dynamic_covered_calls <- function(limit = NULL,
                                          lookback_years = get_dynamic_config("default_lookback_years"),
                                          min_strike_pct = get_dynamic_config("default_min_strike_pct"),
                                          max_strike_pct = get_dynamic_config("default_max_strike_pct"),
-                                         max_workers = get_dynamic_config("max_workers")) {
+                                         max_workers = get_dynamic_config("max_workers"),
+                                         tickers = NULL) {
 
   # Log analysis start
   log_analysis_header_generic("Dynamic Covered Calls")
