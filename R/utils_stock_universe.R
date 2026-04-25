@@ -227,6 +227,7 @@ get_sp500_stocks <- function() {
   # Try Wikipedia
   tickers <- fetch_sp500_from_wikipedia()
   if (!is.null(tickers)) {
+    clear_stock_cache("all")
     save_to_cache(cache_file, tickers)
     return(tickers)
   }
@@ -234,6 +235,7 @@ get_sp500_stocks <- function() {
   # Try DataHub
   tickers <- fetch_sp500_from_datahub()
   if (!is.null(tickers)) {
+    clear_stock_cache("all")
     save_to_cache(cache_file, tickers)
     return(tickers)
   }
