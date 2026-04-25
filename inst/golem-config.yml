@@ -292,7 +292,7 @@ default:
     default_max_price: 250  # Default maximum stock price filter
     default_lookback_years: 5  # Years of history for drawdown calculation
     default_min_strike_pct: 0.50  # Minimum strike as % of current price
-    default_max_strike_pct: 0.95  # Maximum strike as % of current price
+    default_max_strike_pct: 0.85  # Maximum strike as % of current price
     min_target_days: 30  # Minimum days to expiry
     max_target_days: 730  # Maximum days to expiry (2 years)
     expiration_filter_tolerance: 0.50  # +/- 50% tolerance for expiration filtering (reduced from 100%)
