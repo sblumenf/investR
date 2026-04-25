@@ -324,7 +324,7 @@ analyze_dynamic_covered_calls <- function(limit = NULL,
   log_info("Max strike filter: <=${max_price}, Strike bounds: {sprintf('%.0f', min_strike_pct*100)}%-{sprintf('%.0f', max_strike_pct*100)}%")
 
   # Get full S&P 500 universe (strike filter applied per-stock after option selection)
-  stock_universe <- get_sp500_under_price(max_price)
+  stock_universe <- if (!is.null(tickers)) tickers else get_sp500_under_price(max_price)
 
   if (length(stock_universe) == 0) {
     log_warn("No stocks found under ${max_price}")
