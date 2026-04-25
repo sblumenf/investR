@@ -225,13 +225,19 @@ mod_dynamic_covered_calls_analysis_server <- function(id){
         # ASYNC EXECUTION with promises
         future_promise({
           # This runs in a background R process
+          tickers <- switch(params$universe,
+            "russell1000" = get_russell_1000_stocks(),
+            NULL  # NULL causes analyze_dynamic_covered_calls to use S&P 500 default
+          )
+
           analyze_dynamic_covered_calls(
             limit = params$limit,
             max_price = params$max_price,
             lookback_years = params$lookback_years,
             min_strike_pct = params$min_strike_pct,
             max_strike_pct = params$max_strike_pct,
-            max_workers = params$max_workers
+            max_workers = params$max_workers,
+            tickers = tickers
           )
         }) %...>% {
           # On success - this runs in main thread when background process completes
