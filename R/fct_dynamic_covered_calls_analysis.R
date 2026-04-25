@@ -242,8 +242,8 @@ analyze_single_stock_dynamic <- function(ticker,
       return(NULL)
     }
 
-    if (selection$Strike > max_price) {
-      log_debug("{ticker}: Strike {selection$Strike} exceeds max strike price {max_price}, skipping")
+    if (selection$option$Strike > max_price) {
+      log_debug("{ticker}: Strike {selection$option$Strike} exceeds max strike price {max_price}, skipping")
       return(NULL)
     }
 
