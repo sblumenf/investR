@@ -496,8 +496,18 @@ clear_stock_cache <- function(cache_type = "all") {
     "sp500" = "sp500_stocks.rds",
     "zero_dividend" = "zero_dividend_stocks.rds",
     "dividend_paying" = "dividend_paying_stocks.rds",
-    "all" = c("sp500_stocks.rds", "zero_dividend_stocks.rds", "dividend_paying_stocks.rds"),
-    stop("Invalid cache_type. Use 'sp500', 'zero_dividend', 'dividend_paying', or 'all'")
+    "russell_1000" = "russell_1000_stocks.rds",
+    "russell_1000_dividend" = "russell_1000_dividend_paying_stocks.rds",
+    "russell_1000_zero_dividend" = "russell_1000_zero_dividend_stocks.rds",
+    "all" = c(
+      "sp500_stocks.rds",
+      "zero_dividend_stocks.rds",
+      "dividend_paying_stocks.rds",
+      "russell_1000_stocks.rds",
+      "russell_1000_dividend_paying_stocks.rds",
+      "russell_1000_zero_dividend_stocks.rds"
+    ),
+    stop("Invalid cache_type. Use 'sp500', 'zero_dividend', 'dividend_paying', 'russell_1000', 'russell_1000_dividend', 'russell_1000_zero_dividend', or 'all'")
   )
 
   for (file in files_to_remove) {
