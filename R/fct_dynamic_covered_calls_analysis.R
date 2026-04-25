@@ -71,11 +71,7 @@ NULL
 #'   tickers <- get_sp500_under_price(250)
 #' }
 get_sp500_under_price <- function(max_price = 250) {
-  sp500_stocks <- get_sp500_stocks()
-
-  filtered <- pre_filter_stocks_by_price(sp500_stocks, max_price)
-
-  return(filtered)
+  get_sp500_stocks()
 }
 
 ################################################################################
@@ -324,9 +320,9 @@ analyze_dynamic_covered_calls <- function(limit = NULL,
   # Log analysis start
   log_analysis_header_generic("Dynamic Covered Calls")
   log_info("Using historical {lookback_years}-year drawdown to calculate dynamic parameters")
-  log_info("Price filter: <=${max_price}, Strike bounds: {sprintf('%.0f', min_strike_pct*100)}%-{sprintf('%.0f', max_strike_pct*100)}%")
+  log_info("Max strike filter: <=${max_price}, Strike bounds: {sprintf('%.0f', min_strike_pct*100)}%-{sprintf('%.0f', max_strike_pct*100)}%")
 
-  # Get stock universe with price filter
+  # Get full S&P 500 universe (strike filter applied per-stock after option selection)
   stock_universe <- get_sp500_under_price(max_price)
 
   if (length(stock_universe) == 0) {
