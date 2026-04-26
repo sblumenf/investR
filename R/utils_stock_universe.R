@@ -525,51 +525,52 @@ clear_stock_cache <- function(cache_type = "all") {
   invisible(TRUE)
 }
 
-#' Resolve company name to ticker via Yahoo Finance search
+#' Clean PDF company name into search-friendly variants
 #'
-#' @param company_name Company name to look up
-#' @return Ticker symbol string, or NA_character_ on failure
+#' @param name Raw company name from PDF
+#' @return Character vector of name variants to try, most specific first
 #' @noRd
-resolve_ticker_from_name <- function(company_name) {
-  tryCatch({
-    Sys.sleep(0.3)
+pdf_name_variants <- function(name) {
+  # Strip country suffixes appended by FTSE for foreign-domiciled companies
+  name <- trimws(gsub("\\s+(Ireland|Plc Ireland|Ltd Ireland|N\\.v\\.|N\\.V\\.)\\s*$", "", name, ignore.case = TRUE))
 
-    url <- paste0(
-      "https://query2.finance.yahoo.com/v1/finance/search?q=",
-      utils::URLencode(company_name, reserved = TRUE),
-      "&quotesCount=1&newsCount=0&enableFuzzyQuery=false&region=US&lang=en-US"
-    )
+  # Expand common PDF abbreviations
+  name <- gsub("\\bIntl\\b", "International", name, ignore.case = TRUE)
+  name <- gsub("\\bWtr\\b",  "Water",         name, ignore.case = TRUE)
+  name <- gsub("\\bWks\\b",  "Works",         name, ignore.case = TRUE)
+  name <- gsub("\\bSvcs\\b", "Services",      name, ignore.case = TRUE)
+  name <- gsub("\\bFinl\\b", "Financial",     name, ignore.case = TRUE)
+  name <- gsub("\\bNatl\\b", "National",      name, ignore.case = TRUE)
+  name <- gsub("\\bMgmt\\b", "Management",    name, ignore.case = TRUE)
+  name <- gsub("\\bMgr\\b",  "Manager",       name, ignore.case = TRUE)
+  name <- gsub("\\bMgrp\\b", "Management",    name, ignore.case = TRUE)
+  name <- gsub("\\bGrp\\b",  "Group",         name, ignore.case = TRUE)
+  name <- gsub("\\bMkt\\b",  "Market",        name, ignore.case = TRUE)
+  name <- gsub("\\bMkts\\b", "Markets",       name, ignore.case = TRUE)
+  name <- gsub("\\bTech\\b", "Technologies",  name, ignore.case = TRUE)
+  name <- gsub("\\bTechnologi\\b", "Technologies", name, ignore.case = TRUE)
+  name <- gsub("\\bCmntys\\b", "Communities", name, ignore.case = TRUE)
+  name <- gsub("\\bPpty\\b", "Property",      name, ignore.case = TRUE)
+  name <- gsub("\\bPptys\\b","Properties",    name, ignore.case = TRUE)
+  name <- gsub("\\bEnts\\b", "Enterprises",   name, ignore.case = TRUE)
+  name <- gsub("\\bHldg\\b", "Holding",       name, ignore.case = TRUE)
+  name <- gsub("\\bHldgs\\b","Holdings",      name, ignore.case = TRUE)
+  name <- gsub("\\bMadi Sq Gard\\b", "Madison Square Garden", name, ignore.case = TRUE)
+  name <- trimws(name)
 
-    response <- httr::GET(
-      url,
-      httr::user_agent("Mozilla/5.0"),
-      httr::timeout(10)
-    )
+  # Build variants: full expanded name, then strip trailing legal suffixes
+  variants <- c(name)
+  stripped <- trimws(gsub("\\s+(Inc|Corp|Co|Ltd|Plc|Llc|Sa|Ag|Nv|Se|Lp|Trust|Group|Holdings|Company|Companies|Incorporated|Corporation|Limited)(\\.?)\\s*$", "", name, ignore.case = TRUE, perl = TRUE))
+  if (stripped != name && nzchar(stripped)) {
+    variants <- c(variants, stripped)
+  }
+  # Also try first two words as a last resort for truncated names
+  words <- strsplit(stripped, "\\s+")[[1]]
+  if (length(words) >= 3) {
+    variants <- c(variants, paste(words[1:2], collapse = " "))
+  }
 
-    httr::stop_for_status(response)
-    parsed <- jsonlite::fromJSON(httr::content(response, as = "text", encoding = "UTF-8"))
-
-    results <- parsed$quotes
-
-    if (is.null(results) || length(results) == 0) {
-      return(NA_character_)
-    }
-
-    if (is.list(results) && !is.data.frame(results)) {
-      return(NA_character_)
-    }
-
-    equity_results <- results[!is.na(results$quoteType) & results$quoteType == "EQUITY", ]
-
-    if (nrow(equity_results) == 0) {
-      return(NA_character_)
-    }
-
-    return(as.character(equity_results$symbol[[1]]))
-
-  }, error = function(e) {
-    return(NA_character_)
-  })
+  unique(variants)
 }
 
 #' Get Russell 1000 stock list with caching
