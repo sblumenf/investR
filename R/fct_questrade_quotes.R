@@ -131,9 +131,6 @@ search_questrade_symbol <- function(ticker, auth, retry_on_401 = TRUE) {
         NULL
       }
 
-      # Delete the stale cached token
-      delete_token_file(reason = "401 error on symbol search - access token invalid")
-
       # Get fresh authentication using preserved refresh token
       if (!is.null(preserved_refresh_token)) {
         log_info("Questrade Quotes: Using preserved refresh token (starts with {substring(preserved_refresh_token, 1, 10)}...)")
@@ -225,9 +222,6 @@ fetch_questrade_quote_raw <- function(symbol_id, auth, retry_on_401 = TRUE) {
       } else {
         NULL
       }
-
-      # Delete the stale cached token
-      delete_token_file(reason = "401 error on quote fetch - access token invalid")
 
       # Get fresh authentication using preserved refresh token
       if (!is.null(preserved_refresh_token)) {

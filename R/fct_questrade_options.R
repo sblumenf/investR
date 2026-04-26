@@ -138,9 +138,6 @@ fetch_questrade_options_structure <- function(symbol_id, auth, retry_on_401 = TR
         NULL
       }
 
-      # Delete the stale cached token
-      delete_token_file(reason = "401 error on options structure fetch - access token invalid")
-
       # Get fresh authentication using preserved refresh token
       if (!is.null(preserved_refresh_token)) {
         log_info("Questrade Options: Using preserved refresh token (starts with {substring(preserved_refresh_token, 1, 10)}...)")
@@ -256,9 +253,6 @@ fetch_questrade_option_quotes <- function(option_ids, auth, batch_size = 100, re
         } else {
           NULL
         }
-
-        # Delete the stale cached token
-        delete_token_file(reason = "401 error on option quotes fetch - access token invalid")
 
         # Get fresh authentication using preserved refresh token
         if (!is.null(preserved_refresh_token)) {
