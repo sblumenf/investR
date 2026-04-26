@@ -549,9 +549,13 @@ resolve_ticker_from_name <- function(company_name) {
     httr::stop_for_status(response)
     parsed <- jsonlite::fromJSON(httr::content(response, as = "text", encoding = "UTF-8"))
 
-    results <- parsed$finance$result[[1]]
+    results <- parsed$quotes
 
-    if (is.null(results) || nrow(results) == 0) {
+    if (is.null(results) || length(results) == 0) {
+      return(NA_character_)
+    }
+
+    if (is.list(results) && !is.data.frame(results)) {
       return(NA_character_)
     }
 
