@@ -609,7 +609,10 @@ resolve_ticker_from_name <- function(company_name) {
       results <- yahoo_search(variant)
       if (is.null(results)) next
       us_eq <- is_us_equity(results)
-      if (nrow(us_eq) > 0) return(as.character(us_eq$symbol[[1]]))
+      if (nrow(us_eq) > 0) {
+        ticker <- as.character(us_eq$symbol[[1]])
+        return(gsub("-", ".", ticker, fixed = TRUE))
+      }
     }
     return(NA_character_)
   }, error = function(e) {
