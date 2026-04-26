@@ -172,6 +172,7 @@ analyze_single_stock_dynamic <- function(ticker,
       log_debug("{ticker}: Fetched and cached full options chain")
     } else {
       log_debug("{ticker}: Using cached options chain")
+      set_options_source(ticker, "questrade")
     }
 
     # Step 6: Filter expiration names from the fetched data (NO API CALL)
@@ -265,6 +266,7 @@ analyze_single_stock_dynamic <- function(ticker,
     # Add dynamic strategy flag
     metrics$is_dynamic <- TRUE
     metrics$is_aristocrat <- FALSE  # Not filtering by aristocrat status
+    metrics$data_source <- get_options_source(ticker)
 
     log_success("{ticker}: Annualized return: {sprintf('%.2f%%', metrics$annualized_return * 100)}")
 

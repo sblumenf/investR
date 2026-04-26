@@ -11,6 +11,20 @@
 #' @importFrom tibble tibble
 NULL
 
+.options_source_tracker <- new.env(parent = emptyenv())
+
+set_options_source <- function(ticker, source) {
+  assign(ticker, source, envir = .options_source_tracker)
+}
+
+get_options_source <- function(ticker) {
+  if (exists(ticker, envir = .options_source_tracker, inherits = FALSE)) {
+    get(ticker, envir = .options_source_tracker)
+  } else {
+    "questrade"
+  }
+}
+
 ################################################################################
 # MAIN ENTRY POINT
 ################################################################################
@@ -37,6 +51,7 @@ fetch_questrade_options_chain <- function(ticker, expiration = NULL) {
   if (is.null(auth)) {
     log_warn("Questrade Options: Authentication failed for '{ticker}', falling back to Yahoo")
     record_fallback(ticker, "Options: Authentication failed")
+    set_options_source(ticker, "yahoo_fallback")
     return(fetch_options_chain_yahoo(ticker, expiration))
   }
 
@@ -45,6 +60,7 @@ fetch_questrade_options_chain <- function(ticker, expiration = NULL) {
   if (is.null(symbol_id)) {
     log_warn("Questrade Options: Symbol lookup failed for '{ticker}', falling back to Yahoo")
     record_fallback(ticker, "Options: Symbol not found")
+    set_options_source(ticker, "yahoo_fallback")
     return(fetch_options_chain_yahoo(ticker, expiration))
   }
   log_info("Questrade Options: Step 2 complete - Found symbolId {symbol_id} for '{ticker}'")
@@ -55,6 +71,7 @@ fetch_questrade_options_chain <- function(ticker, expiration = NULL) {
   if (is.null(structure)) {
     log_warn("Questrade Options: Step 3 FAILED - Structure is NULL for '{ticker}', falling back to Yahoo")
     record_fallback(ticker, "Options: Structure fetch failed")
+    set_options_source(ticker, "yahoo_fallback")
     return(fetch_options_chain_yahoo(ticker, expiration))
   }
   log_info("Questrade Options: Step 3 complete - Structure has {length(structure)} expiration dates for '{ticker}'")
@@ -65,6 +82,7 @@ fetch_questrade_options_chain <- function(ticker, expiration = NULL) {
   if (length(option_ids) == 0) {
     log_warn("Questrade Options: Step 4 FAILED - No option IDs extracted for '{ticker}', falling back to Yahoo")
     record_fallback(ticker, "Options: No options available")
+    set_options_source(ticker, "yahoo_fallback")
     return(fetch_options_chain_yahoo(ticker, expiration))
   }
   log_info("Questrade Options: Step 4 complete - Extracted {length(option_ids)} option IDs for '{ticker}'")
@@ -76,6 +94,7 @@ fetch_questrade_options_chain <- function(ticker, expiration = NULL) {
   if (is.null(quotes)) {
     log_warn("Questrade Options: Pricing fetch failed for '{ticker}', falling back to Yahoo")
     record_fallback(ticker, "Options: Pricing fetch failed")
+    set_options_source(ticker, "yahoo_fallback")
     return(fetch_options_chain_yahoo(ticker, expiration))
   }
 
@@ -89,10 +108,12 @@ fetch_questrade_options_chain <- function(ticker, expiration = NULL) {
   })
 
   if (is.null(result)) {
+    set_options_source(ticker, "yahoo_fallback")
     return(fetch_options_chain_yahoo(ticker, expiration))
   }
 
   log_info("Questrade Options: Successfully fetched options chain for '{ticker}'")
+  set_options_source(ticker, "questrade")
   return(result)
 }
 

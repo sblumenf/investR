@@ -176,8 +176,20 @@ create_opportunity_card_with_risk <- function(row, ns, risk_id) {
     secondary_text = format_currency(row$current_price)
   )
 
+  # Yahoo fallback warning banner
+  yahoo_warning <- if ("data_source" %in% names(row) && identical(row$data_source, "yahoo_fallback")) {
+    tags$div(
+      class = "alert alert-warning",
+      style = "margin-bottom: 10px; padding: 6px 10px; font-size: 0.85em;",
+      tags$strong("Data source: Yahoo Finance (Questrade unavailable)")
+    )
+  } else {
+    NULL
+  }
+
   # Card body with sections
   body <- bslib::card_body(
+    yahoo_warning,
     # Action Buttons row (at top)
     tags$div(
       style = "margin-bottom: 15px; display: flex; gap: 8px;",

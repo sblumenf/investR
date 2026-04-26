@@ -649,7 +649,8 @@ finalize_results <- function(results) {
       intrinsic_value = numeric(),
       extrinsic_value = numeric(),
       annual_dividend = numeric(),
-      warning_flag = logical()
+      warning_flag = logical(),
+      data_source = character()
     ))
   }
 
