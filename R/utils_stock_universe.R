@@ -573,6 +573,50 @@ pdf_name_variants <- function(name) {
   unique(variants)
 }
 
+#' Resolve company name to ticker via Yahoo Finance search
+#'
+#' Tries multiple name variants (expanded abbreviations, stripped suffixes)
+#' and filters to US-listed equities only (no foreign exchange suffixes).
+#'
+#' @param company_name Company name to look up
+#' @return Ticker symbol string, or NA_character_ on failure
+#' @noRd
+resolve_ticker_from_name <- function(company_name) {
+  is_us_equity <- function(df) {
+    df[!is.na(df$quoteType) &
+       df$quoteType == "EQUITY" &
+       !grepl("\\.", df$symbol), ]
+  }
+
+  yahoo_search <- function(query) {
+    Sys.sleep(0.3)
+    url <- paste0(
+      "https://query2.finance.yahoo.com/v1/finance/search?q=",
+      utils::URLencode(query, reserved = TRUE),
+      "&quotesCount=5&newsCount=0&enableFuzzyQuery=false&region=US&lang=en-US"
+    )
+    response <- httr::GET(url, httr::user_agent("Mozilla/5.0"), httr::timeout(10))
+    httr::stop_for_status(response)
+    parsed <- jsonlite::fromJSON(httr::content(response, as = "text", encoding = "UTF-8"))
+    results <- parsed$quotes
+    if (is.null(results) || !is.data.frame(results) || nrow(results) == 0) return(NULL)
+    results
+  }
+
+  tryCatch({
+    variants <- pdf_name_variants(company_name)
+    for (variant in variants) {
+      results <- yahoo_search(variant)
+      if (is.null(results)) next
+      us_eq <- is_us_equity(results)
+      if (nrow(us_eq) > 0) return(as.character(us_eq$symbol[[1]]))
+    }
+    return(NA_character_)
+  }, error = function(e) {
+    return(NA_character_)
+  })
+}
+
 #' Get Russell 1000 stock list with caching
 #'
 #' Downloads the official FTSE Russell 1000 PDF, parses company names, and
