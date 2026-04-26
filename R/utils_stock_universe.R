@@ -602,22 +602,32 @@ get_russell_1000_stocks <- function() {
       httr::timeout(60)
     )
 
-    pages <- pdftools::pdf_text(tmp)
-    full_text <- paste(pages, collapse = "\n")
+    # Only parse data pages — pages 18+ are legal boilerplate
+    all_pages <- pdftools::pdf_text(tmp)
+    data_pages <- all_pages[seq_len(min(17L, length(all_pages)))]
+    full_text <- paste(data_pages, collapse = "\n")
 
     lines <- strsplit(full_text, "\n")[[1]]
     lines <- trimws(lines)
 
-    name_pattern <- "^(.+?)\\s+\\d+\\.\\d+\\s+(United States|United Kingdom|Ireland|Canada|Switzerland|Netherlands|Luxembourg|Bermuda|Cayman Islands|Israel|Australia|Brazil|South Korea|France|Germany|Japan|Sweden|Denmark|Norway|Finland|Belgium|Spain|Italy|Portugal|Greece|Austria|New Zealand|Singapore|Hong Kong|China|India|Taiwan|Mexico|Chile|Colombia|Peru|Argentina|Poland|Czech Republic|Hungary|Turkey|South Africa|Egypt|Nigeria|Kenya|Ghana|Morocco|Saudi Arabia|UAE|Qatar|Kuwait|Bahrain|Oman|Jordan|Lebanon|Pakistan|Bangladesh|Sri Lanka|Vietnam|Thailand|Malaysia|Indonesia|Philippines)$"
+    # PDF is 3-column: company name and weight/country are on separate lines.
+    # Company name lines: non-empty, don't start with a digit, not a header.
+    header_words <- c("Russell 1000", "Weight", "Country", "FTSE Russell",
+                      "ESMA", "December", "Page", "Compliance", "Quarterly", "Membership")
 
-    matched <- regmatches(lines, regexpr(name_pattern, lines, perl = TRUE))
-    company_names <- gsub("\\s+\\d+\\.\\d+\\s+\\S.*$", "", matched)
+    is_company_line <- function(line) {
+      if (!nzchar(line)) return(FALSE)
+      if (grepl("^[0-9]", line)) return(FALSE)
+      for (w in header_words) {
+        if (grepl(w, line, fixed = TRUE)) return(FALSE)
+      }
+      TRUE
+    }
+
+    company_lines <- lines[vapply(lines, is_company_line, logical(1))]
+    company_names <- unlist(strsplit(company_lines, "  +"))
     company_names <- unique(trimws(company_names))
     company_names <- company_names[nzchar(company_names)]
-
-    company_names <- company_names[!grepl("^Russell 1000", company_names)]
-    company_names <- company_names[!grepl("^Weight", company_names)]
-    company_names <- company_names[!grepl("^Country", company_names)]
 
     log_info("Parsed {length(company_names)} company names from Russell 1000 PDF")
 
