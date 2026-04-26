@@ -27,8 +27,16 @@ NULL
 #' @return List with access_token and api_server, or NULL on failure
 #' @noRd
 get_questrade_auth <- function(override_refresh_token = NULL) {
-  # Step 1: Try to read cached token from file (fast path, no lock needed)
   token_file_path <- get_token_file_path()
+
+  # If an override token was supplied (e.g. from 401 recovery), skip the cache
+  # check entirely — the caller knows the current token is already rejected.
+  if (!is.null(override_refresh_token)) {
+    log_info("Questrade API: Using override refresh token for authentication")
+    return(.do_token_exchange(override_refresh_token))
+  }
+
+  # Step 1: Try to read cached token from file (fast path, no lock needed)
   log_debug("Questrade API: Token cache check - file: {token_file_path}, exists: {file.exists(token_file_path)}")
 
   cached_token <- read_token_file()
@@ -47,14 +55,6 @@ get_questrade_auth <- function(override_refresh_token = NULL) {
     } else {
       log_info("Questrade API: Cached access token expired or expiring soon, refreshing...")
     }
-  }
-
-  # Step 3: Need to refresh.
-  # If an override token was supplied (e.g. from 401 recovery), skip the lock and
-  # go straight to the exchange — the caller already owns the decision to refresh.
-  if (!is.null(override_refresh_token)) {
-    log_info("Questrade API: Using override refresh token for authentication")
-    return(.do_token_exchange(override_refresh_token))
   }
 
   # Otherwise, acquire a file lock so that only one concurrent worker exchanges
