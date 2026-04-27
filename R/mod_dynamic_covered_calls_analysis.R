@@ -223,7 +223,9 @@ mod_dynamic_covered_calls_analysis_server <- function(id){
 
       if (enable_async) {
         # ASYNC EXECUTION with promises
+        quote_source <- get_quote_source()
         future_promise({
+          options(investR.quote_source = quote_source)
           # This runs in a background R process
           tickers <- switch(params$universe,
             "russell1000" = get_russell_1000_stocks(),
@@ -285,6 +287,7 @@ mod_dynamic_covered_calls_analysis_server <- function(id){
         # SYNCHRONOUS EXECUTION (fallback)
         results <- tryCatch({
           withProgress(message = "Analyzing stocks...", value = 0, {
+            options(investR.quote_source = get_quote_source())
             tickers <- switch(params$universe,
               "russell1000" = get_russell_1000_stocks(),
               NULL  # NULL causes analyze_dynamic_covered_calls to use S&P 500 default

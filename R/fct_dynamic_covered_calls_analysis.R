@@ -328,6 +328,12 @@ analyze_dynamic_covered_calls <- function(limit = NULL,
   # Get full S&P 500 universe (strike filter applied per-stock after option selection)
   stock_universe <- if (!is.null(tickers)) tickers else get_sp500_under_price(max_price)
 
+  if (is.null(tickers)) {
+    log_warn("tickers argument is NULL; using get_sp500_under_price() to build universe")
+  } else {
+    log_info("tickers argument provided with {length(tickers)} ticker(s); skipping get_sp500_under_price()")
+  }
+
   if (length(stock_universe) == 0) {
     log_warn("No stocks found under ${max_price}")
     return(tibble())

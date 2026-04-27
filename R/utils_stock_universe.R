@@ -713,8 +713,8 @@ get_russell_1000_stocks <- function() {
 
   }, error = function(e) {
     log_warn("Russell 1000 PDF fetch/parse failed: {e$message}")
-    log_warn("Returning empty vector.")
-    return(character(0))
+    log_warn("Falling back to NULL.")
+    return(NULL)
   })
 }
 
