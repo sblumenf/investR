@@ -352,33 +352,16 @@ analyze_dynamic_covered_calls <- function(limit = NULL,
   min_target_days <- get_dynamic_config("min_target_days")
   max_target_days <- get_dynamic_config("max_target_days")
 
-  # Setup parallel processing with cleanup guarantee
-  oplan <- setup_parallel_processing(max_workers)
-  on.exit(plan(oplan), add = TRUE)
-
-  # Capture quote source setting to pass to workers
-  quote_source <- get_quote_source()
-  log_info("Quote source for this analysis: {toupper(quote_source)}")
-
-  # Process stocks in parallel with rate limiting
-  log_info("Processing stocks in parallel...")
-
   rate_limit <- get_dynamic_config("rate_limit_seconds")
 
-  results <- future_map(stock_universe, function(ticker) {
-    # Ensure package is loaded in worker
-    if (!"investR" %in% loadedNamespaces()) {
-      suppressPackageStartupMessages(loadNamespace("investR"))
-    }
-
-    # Set quote source in this worker to match main process
-    options(investR.quote_source = quote_source)
-
-    log_info("Analyzing {ticker}...")
-
-    # Rate limiting: delay between stocks to respect API limits
+  # Adapter: wraps analyze_single_stock_dynamic to match process_stocks_parallel_generic's
+  # expected analyzer_func signature (ticker, strike_threshold_pct, min_days, max_days,
+  # expiry_month, target_days, result_flags, return_failure_reason).
+  # All dynamic params are captured from the enclosing environment.
+  dynamic_analyzer_adapter <- function(ticker, strike_threshold_pct, min_days, max_days,
+                                       expiry_month, target_days, result_flags,
+                                       return_failure_reason = FALSE) {
     Sys.sleep(rate_limit)
-
     analyze_single_stock_dynamic(
       ticker,
       lookback_years = lookback_years,
@@ -388,10 +371,18 @@ analyze_dynamic_covered_calls <- function(limit = NULL,
       max_target_days = max_target_days,
       max_price = max_price
     )
-  }, .options = furrr_options(
-    seed = TRUE,
-    packages = "investR"
-  ))
+  }
+
+  results <- process_stocks_parallel_generic(
+    stock_universe = stock_universe,
+    strike_threshold_pct = NULL,
+    min_days = NULL,
+    max_days = NULL,
+    expiry_month = NULL,
+    target_days = NULL,
+    result_flags = list(),
+    analyzer_func = dynamic_analyzer_adapter
+  )
 
   # Finalize and sort results (reuse existing function)
   results_df <- finalize_results(results)
