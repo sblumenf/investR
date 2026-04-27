@@ -226,6 +226,8 @@ mod_dynamic_covered_calls_analysis_server <- function(id){
         quote_source <- get_quote_source()
         future_promise({
           options(investR.quote_source = quote_source)
+          oplan <- setup_parallel_processing(params$max_workers)
+          on.exit(future::plan(oplan), add = TRUE)
           # This runs in a background R process
           tickers <- switch(params$universe,
             "russell1000" = get_russell_1000_stocks(),
