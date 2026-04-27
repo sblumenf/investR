@@ -92,7 +92,7 @@ set_cached_options <- function(ticker, options_data) {
     timestamp = Sys.time()
   )
 
-  assign(cache_key, cache_entry, envir = .options_cache)
+  base::assign(cache_key, cache_entry, envir = .options_cache)
   log_debug("{ticker}: Cached options data")
 
   invisible(NULL)

@@ -14,12 +14,12 @@ NULL
 .options_source_tracker <- new.env(parent = emptyenv())
 
 set_options_source <- function(ticker, source) {
-  assign(ticker, source, envir = .options_source_tracker)
+  base::assign(ticker, source, envir = .options_source_tracker)
 }
 
 get_options_source <- function(ticker) {
-  if (exists(ticker, envir = .options_source_tracker, inherits = FALSE)) {
-    get(ticker, envir = .options_source_tracker)
+  if (base::exists(ticker, envir = .options_source_tracker, inherits = FALSE)) {
+    base::get(ticker, envir = .options_source_tracker)
   } else {
     "questrade"
   }
