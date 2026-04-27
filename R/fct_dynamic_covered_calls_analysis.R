@@ -373,6 +373,19 @@ analyze_dynamic_covered_calls <- function(limit = NULL,
     )
   }
 
+  # DIAG: run first ticker sequentially so worker logs are visible
+  log_warn("DIAG: Running {stock_universe[1]} sequentially for diagnostics")
+  diag_result <- analyze_single_stock_dynamic(
+    stock_universe[1],
+    lookback_years = lookback_years,
+    min_strike_pct = min_strike_pct,
+    max_strike_pct = max_strike_pct,
+    min_target_days = min_target_days,
+    max_target_days = max_target_days,
+    max_price = max_price
+  )
+  log_warn("DIAG: Result for {stock_universe[1]}: {if (is.null(diag_result)) 'NULL' else 'SUCCESS'}")
+
   results <- process_stocks_parallel_generic(
     stock_universe = stock_universe,
     strike_threshold_pct = NULL,
