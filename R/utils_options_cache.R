@@ -54,12 +54,12 @@ get_cached_options <- function(ticker, ttl_hours = get_dynamic_config("cache_ttl
   cache_key <- get_cache_key(ticker)
 
   # Check if cache entry exists
-  if (!exists(cache_key, envir = .options_cache, inherits = FALSE)) {
+  if (!base::exists(cache_key, envir = .options_cache, inherits = FALSE)) {
     log_debug("{ticker}: No cache entry found")
     return(NULL)
   }
 
-  cache_entry <- get(cache_key, envir = .options_cache)
+  cache_entry <- base::get(cache_key, envir = .options_cache)
 
   # Validate cache freshness
   if (!is_cache_valid(cache_entry, ttl_hours)) {
@@ -112,7 +112,7 @@ clear_options_cache <- function(ticker = NULL) {
   } else {
     # Clear specific ticker
     cache_key <- get_cache_key(ticker)
-    if (exists(cache_key, envir = .options_cache, inherits = FALSE)) {
+    if (base::exists(cache_key, envir = .options_cache, inherits = FALSE)) {
       rm(list = cache_key, envir = .options_cache)
       log_info("{ticker}: Cleared cache entry")
     }
@@ -144,7 +144,7 @@ get_cache_stats <- function() {
   expired_count <- 0
 
   for (key in cache_keys) {
-    entry <- get(key, envir = .options_cache)
+    entry <- base::get(key, envir = .options_cache)
     if (is_cache_valid(entry, ttl_hours)) {
       valid_count <- valid_count + 1
     } else {
