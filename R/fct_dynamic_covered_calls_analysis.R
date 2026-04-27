@@ -118,7 +118,7 @@ analyze_single_stock_dynamic <- function(ticker,
     )
 
     if (is.null(price_history) || nrow(price_history) == 0) {
-      log_debug("{ticker}: No price history available")
+      log_warn("{ticker}: DIAG step1 - No price history available")
       return(NULL)
     }
 
@@ -126,7 +126,7 @@ analyze_single_stock_dynamic <- function(ticker,
     drawdown_metrics <- calculate_drawdown_metrics(price_history)
 
     if (is.na(drawdown_metrics$max_drawdown)) {
-      log_debug("{ticker}: Failed to calculate drawdown")
+      log_warn("{ticker}: DIAG step2 - Failed to calculate drawdown")
       return(NULL)
     }
 
@@ -143,12 +143,12 @@ analyze_single_stock_dynamic <- function(ticker,
       max_target_days
     )
 
-    log_debug("{ticker}: Dynamic params - strike={sprintf('%.2f', strike_threshold_pct)}, target_days={target_days}")
+    log_warn("{ticker}: DIAG step3 - strike={sprintf('%.2f', strike_threshold_pct)}, target_days={target_days}")
 
     # Step 4: Get current stock data (for options analysis)
     stock_data <- get_stock_data(ticker)
     if (is.null(stock_data)) {
-      log_debug("{ticker}: Failed to fetch current stock data")
+      log_warn("{ticker}: DIAG step4 - Failed to fetch current stock data")
       return(NULL)
     }
 
@@ -163,15 +163,15 @@ analyze_single_stock_dynamic <- function(ticker,
       })
 
       if (is.null(opt_chain_full) || length(opt_chain_full) == 0) {
-        log_debug("{ticker}: No option chain data available")
+        log_warn("{ticker}: DIAG step5 - No option chain data available")
         return(NULL)
       }
 
       # Store in cache for future use
       set_cached_options(ticker, opt_chain_full)
-      log_debug("{ticker}: Fetched and cached full options chain")
+      log_warn("{ticker}: DIAG step5 - Fetched and cached full options chain")
     } else {
-      log_debug("{ticker}: Using cached options chain")
+      log_warn("{ticker}: DIAG step5 - Using cached options chain")
       set_options_source(ticker, "questrade")
     }
 
@@ -182,7 +182,7 @@ analyze_single_stock_dynamic <- function(ticker,
       tolerance_pct = get_dynamic_config("expiration_filter_tolerance")
     )
 
-    log_debug("{ticker}: Filtered {length(opt_chain_full)} expirations to {length(filtered_expirations)}")
+    log_warn("{ticker}: DIAG step6 - Filtered {length(opt_chain_full)} expirations to {length(filtered_expirations)}")
 
     # Step 7: Extract options from already-fetched data (NO API CALLS)
     all_options <- list()
@@ -219,7 +219,7 @@ analyze_single_stock_dynamic <- function(ticker,
     }
 
     if (length(all_options) == 0) {
-      log_debug("{ticker}: No ITM options found in filtered expirations")
+      log_warn("{ticker}: DIAG step7 - No ITM options found in filtered expirations")
       return(NULL)
     }
 
@@ -239,12 +239,12 @@ analyze_single_stock_dynamic <- function(ticker,
     )
 
     if (is.null(selection)) {
-      log_debug("{ticker}: No suitable options selected")
+      log_warn("{ticker}: DIAG step8 - No suitable options selected")
       return(NULL)
     }
 
     if (selection$option$Strike > max_price) {
-      log_debug("{ticker}: Strike {selection$option$Strike} exceeds max strike price {max_price}, skipping")
+      log_warn("{ticker}: DIAG step8 - Strike {selection$option$Strike} exceeds max strike price {max_price}, skipping")
       return(NULL)
     }
 
@@ -259,7 +259,7 @@ analyze_single_stock_dynamic <- function(ticker,
 
     # Filter out negative returns
     if (metrics$annualized_return <= get_dynamic_config("negative_return_threshold")) {
-      log_debug("{ticker}: Negative return: {sprintf('%.2f%%', metrics$annualized_return * 100)}")
+      log_warn("{ticker}: DIAG step9 - Negative return: {sprintf('%.2f%%', metrics$annualized_return * 100)}")
       return(NULL)
     }
 
